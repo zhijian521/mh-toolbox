@@ -3,6 +3,7 @@ import Layout from '../components/Layout.vue'
 
 const OnlineRecord = () => import('../views/OnlineRecord.vue')
 const RecordList = () => import('../views/RecordList.vue')
+const TradeRecord = () => import('../views/TradeRecord.vue')
 const PlaceholderPage = () => import('../components/PlaceholderPage.vue')
 
 const DEFAULT_TITLE = '梦幻西游工具箱'
@@ -28,8 +29,7 @@ const routes = [
       {
         path: 'trade-record',
         name: 'TradeRecord',
-        component: PlaceholderPage,
-        props: { title: '交易记录' },
+        component: TradeRecord,
         meta: { title: '交易记录' }
       },
       {
