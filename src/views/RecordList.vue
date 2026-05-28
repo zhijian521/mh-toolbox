@@ -36,14 +36,14 @@
       <div class="stat-card">
         <div class="stat-icon-box"><AppIcon name="trend-charts" :size="20" /></div>
         <div class="stat-body">
-          <div class="stat-value">{{ totalIncome.toLocaleString() }}</div>
+          <div class="stat-value">{{ fmtW(totalIncome) }}</div>
           <div class="stat-label">总收益</div>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon-box"><AppIcon name="wallet" :size="20" /></div>
         <div class="stat-body">
-          <div class="stat-value">{{ totalBalance.toLocaleString() }}</div>
+          <div class="stat-value">{{ fmtW(totalBalance) }}</div>
           <div class="stat-label">总结余</div>
         </div>
       </div>
@@ -75,11 +75,11 @@
           <tr v-for="(row, idx) in allRecords" :key="idx">
             <td>{{ row.date }}</td>
             <td>{{ row.onlineTime.toFixed(2) }}h</td>
-            <td>{{ row.cardCost.toFixed(0) }}</td>
-            <td>{{ row.todaysIncome.toLocaleString() }}</td>
+            <td>{{ fmtW(row.cardCost) }}</td>
+            <td>{{ fmtW(row.todaysIncome) }}</td>
             <td>
               <span :class="row.todaysBalance >= 0 ? 'text-success' : 'text-danger'">
-                {{ row.todaysBalance.toLocaleString() }}
+                {{ fmtW(row.todaysBalance) }}
               </span>
             </td>
             <td>{{ row.loadList ? row.loadList.length : 0 }}</td>
@@ -104,16 +104,16 @@
           </div>
           <div class="detail-stat-item">
             <span class="detail-stat-label">点卡消耗</span>
-            <span class="detail-stat-value">{{ selectedRecord.cardCost.toFixed(0) }}</span>
+            <span class="detail-stat-value">{{ fmtW(selectedRecord.cardCost) }}</span>
           </div>
           <div class="detail-stat-item">
             <span class="detail-stat-label">当日收益</span>
-            <span class="detail-stat-value">{{ selectedRecord.todaysIncome.toFixed(0) }}</span>
+            <span class="detail-stat-value">{{ fmtW(selectedRecord.todaysIncome) }}</span>
           </div>
           <div class="detail-stat-item">
             <span class="detail-stat-label">当日结余</span>
             <span class="detail-stat-value" :class="selectedRecord.todaysBalance >= 0 ? 'text-success' : 'text-danger'">
-              {{ selectedRecord.todaysBalance.toFixed(0) }}
+              {{ fmtW(selectedRecord.todaysBalance) }}
             </span>
           </div>
         </div>
@@ -123,7 +123,7 @@
             <div v-for="(item, i) in selectedRecord.loadList" :key="i" class="detail-item-row">
               <img :src="getItemImage(item.itemId)" class="detail-item-icon" />
               <span class="detail-item-name">{{ getItemName(item.itemId) }}</span>
-              <span class="detail-item-price">¥{{ item.price.toLocaleString() }}</span>
+              <span class="detail-item-price">{{ fmtW(item.price) }}</span>
             </div>
           </div>
         </div>
@@ -213,6 +213,8 @@ const totalItemsData = [
   { id: 118, name: '瓶子',     image: img('瓶子.png') },
   { id: 200, name: '其他',     image: img('其他.png') },
 ]
+
+const fmtW = (v) => `${(v / 10000).toFixed(1)}W`
 
 const getItemImage = (id) => totalItemsData.find(i => i.id === id)?.image || ''
 const getItemName = (id) => totalItemsData.find(i => i.id === id)?.name || '未知'

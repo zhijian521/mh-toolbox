@@ -4,6 +4,7 @@
     <header class="page-header">
       <div class="header-info">
         <h1 class="page-title">收益记录</h1>
+        <button class="help-btn" @click="showHelp = true" title="使用帮助">?</button>
         <p class="page-subtitle">记录游戏时光，追踪点卡消耗与物品收益</p>
       </div>
       <div class="header-controls">
@@ -77,7 +78,7 @@
           <AppIcon name="money" :size="20" />
         </div>
         <div class="stat-body">
-          <div class="stat-value">{{ todaysData.cardCost.toFixed(0) }}</div>
+          <div class="stat-value">{{ fmtW(todaysData.cardCost) }}</div>
           <div class="stat-label">点卡消耗</div>
         </div>
       </div>
@@ -86,7 +87,7 @@
           <AppIcon name="trend-charts" :size="20" />
         </div>
         <div class="stat-body">
-          <div class="stat-value">{{ todaysData.todaysIncome.toLocaleString() }}</div>
+          <div class="stat-value">{{ fmtW(todaysData.todaysIncome) }}</div>
           <div class="stat-label">今日收益</div>
         </div>
       </div>
@@ -96,7 +97,7 @@
         </div>
         <div class="stat-body">
           <div class="stat-value" :class="{ negative: todaysData.todaysBalance < 0 }">
-            {{ todaysData.todaysBalance.toLocaleString() }}
+            {{ fmtW(todaysData.todaysBalance) }}
           </div>
           <div class="stat-label">今日结余</div>
         </div>
@@ -123,7 +124,7 @@
               <div class="item-img">
                 <img :src="item.image" :alt="item.name" />
               </div>
-              <span v-if="item.price > 0" class="item-price">{{ fmtPrice(item.price) }}</span>
+              <span v-if="item.price > 0" class="item-price">{{ fmtW(item.price) }}</span>
             </button>
           </div>
 
@@ -149,7 +150,7 @@
         <div class="panel-header">
           <h2 class="panel-title">今日战绩</h2>
           <span v-if="selectedItems.length > 0" class="panel-total">
-            合计 ¥{{ totalValue.toLocaleString() }}
+            合计 {{ fmtW(totalValue) }}
           </span>
         </div>
 
@@ -166,7 +167,7 @@
               <img :src="getItemById(item.itemId)?.image" :alt="getItemById(item.itemId)?.name" />
             </div>
             <span class="result-item-name">{{ item.customName || getItemById(item.itemId)?.name || '未知' }}</span>
-            <span class="result-item-price">¥{{ item.price.toLocaleString() }}</span>
+            <span class="result-item-price">{{ fmtW(item.price) }}</span>
             <button class="result-item-remove" @click="removeSelectedItem(idx)">
               <AppIcon name="close" :size="14" />
             </button>
@@ -188,6 +189,29 @@
       v-model="showPriceDialog"
       :item="currentItem"
       @confirm="handlePriceConfirm" />
+
+    <!-- 使用帮助 -->
+    <AppDialog v-model="showHelp" title="使用帮助" width="440px">
+      <div class="help-content">
+        <dl class="help-list">
+          <dt>开始游戏</dt>
+          <dd>点击后开始计时，记录在线时长和点卡消耗。切换页面不会中断计时。</dd>
+          <dt>角色数 / 点卡价格</dt>
+          <dd>设置在线角色数量和点卡单价（梦幻币/点），影响点卡成本计算。</dd>
+          <dt>物品选择</dt>
+          <dd>点击已有价格的物品直接添加到今日收益。右键任意物品可修改价格。</dd>
+          <dt>固定价格</dt>
+          <dd>价格会持久保存，下次点击直接使用。右键可随时修改。</dd>
+          <dt>非固定价格</dt>
+          <dd>每次需手动输入价格。最后一个「其他」可自定义物品名称。</dd>
+          <dt>今日战绩</dt>
+          <dd>展示今日所有收益物品和总价值。</dd>
+          <dt>结束游戏</dt>
+          <dd>停止计时并保存本次记录。关闭窗口也会自动保存。</dd>
+        </dl>
+        <p class="help-formula">点卡成本 = 在线时长 × 点卡单价 × 6点/小时 × 角色数</p>
+      </div>
+    </AppDialog>
   </div>
 </template>
 
@@ -202,6 +226,7 @@ import PriceDialog from '../components/PriceDialog.vue'
 import SettingPopover from '../components/SettingPopover.vue'
 import AppIcon from '../components/AppIcon.vue'
 import AppPopover from '../components/AppPopover.vue'
+import AppDialog from '../components/AppDialog.vue'
 import { toast } from '../utils/toast.js'
 
 const { currentSetData } = useSettings()
@@ -212,15 +237,13 @@ const cardPriceText = computed(() => {
   return v >= 10000 ? `${(v / 10000).toFixed(1)}万` : v.toLocaleString()
 })
 
-const fmtPrice = (v) => {
-  if (v >= 1000000) return `${(v / 10000).toFixed(0)}W`
-  return v.toLocaleString()
-}
+const fmtW = (v) => `${(v / 10000).toFixed(1)}W`
 const { todaysData, addOnlineRecord, updateIncome } = useTodayData()
 const { itemsData, unsetItemsData, getItemById } = useItems()
 
 const selectedItems = ref([])
 const showPriceDialog = ref(false)
+const showHelp = ref(false)
 const currentItem = ref(null)
 
 // 记录已保存的最后时间点，避免重复 save
@@ -298,7 +321,7 @@ const handlePriceConfirm = ({ price, name }) => {
     if (idx !== -1) {
       itemsData.value[idx].price = price
       addItemToSelected(itemsData.value[idx])
-      toast.success(`${itemsData.value[idx].name} 价格已设置为 ¥${price}`)
+      toast.success(`${itemsData.value[idx].name} 价格已设置为 ${fmtW(price)}`)
     }
   }
 }
@@ -362,6 +385,42 @@ onUnmounted(() => {
   font-size: 2rem;
   margin: 0;
   flex-shrink: 0;
+}
+
+.help-btn {
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid @color-border;
+  background: @bg-paper;
+  color: @text-muted;
+  font-size: 0.75rem; font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+  transition: all @transition-fast ease;
+
+  &:hover { border-color: @color-primary; color: @color-primary; }
+}
+
+.help-content {
+  .help-list {
+    margin: 0;
+    dt {
+      font-weight: 600; font-size: 0.8125rem; color: @text-primary;
+      margin: @spacing-md 0 2px 0;
+      &:first-child { margin-top: 0; }
+    }
+    dd {
+      margin: 0 0 0 @spacing-sm;
+      font-size: 0.75rem; line-height: 1.65; color: @text-muted;
+    }
+  }
+  .help-formula {
+    margin: @spacing-lg 0 0 0;
+    padding-top: @spacing-md;
+    border-top: 1px solid @color-border;
+    font-size: 0.75rem; color: @text-muted;
+  }
 }
 
 .page-subtitle {
