@@ -1,91 +1,79 @@
 <template>
   <div class="setting-popover">
     <div class="setting-header">
-      <el-icon class="setting-header-icon">
-        <component :is="icon" />
-      </el-icon>
-      <div class="setting-header-text">
-        <div class="setting-title">{{ title }}</div>
-      </div>
+      <AppIcon :name="icon" :size="18" class="setting-header-icon" />
+      <span class="setting-title">{{ title }}</span>
     </div>
     <div class="setting-body">
-      <el-input-number 
-        :model-value="modelValue"
-        v-bind="inputProps"
-        size="large"
-        class="setting-input"
-        @update:model-value="handleUpdate" />
+      <div class="stepper">
+        <button class="stepper-btn" @click="stepDown" :disabled="disabledDown">−</button>
+        <input
+          v-model.number="localValue"
+          type="number"
+          class="stepper-input"
+          @change="emitValue"
+        />
+        <button class="stepper-btn" @click="stepUp" :disabled="disabledUp">+</button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-/**
- * 设置项弹窗组件
- * 用于显示和编辑设置项的数值（如在线账号数、点卡价格等）
- */
+import { ref, computed, watch } from 'vue'
+import AppIcon from './AppIcon.vue'
+
 const props = defineProps({
-  title: {
-    type: String,
-    required: true
-  },
-  icon: {
-    type: [String, Object],
-    required: true
-  },
-  modelValue: {
-    type: Number,
-    required: true
-  },
-  inputProps: {
-    type: Object,
-    default: () => ({})
-  }
+  title: { type: String, required: true },
+  icon: { type: String, required: true },
+  modelValue: { type: Number, required: true },
+  inputProps: { type: Object, default: () => ({}) },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
-const handleUpdate = (value) => {
-  emit('update:modelValue', value)
+const localValue = ref(props.modelValue)
+const { min = 1, max = Infinity, step = 1 } = props.inputProps
+
+watch(() => props.modelValue, (v) => { localValue.value = v })
+
+const disabledDown = computed(() => localValue.value <= min)
+const disabledUp = computed(() => localValue.value >= max)
+
+const emitValue = () => {
+  let v = localValue.value
+  if (v < min) v = min
+  if (v > max) v = max
+  localValue.value = v
+  emit('update:modelValue', v)
 }
+
+const stepDown = () => { localValue.value -= step; emitValue() }
+const stepUp = () => { localValue.value += step; emitValue() }
 </script>
 
 <style lang="less" scoped>
 @import '../styles/variables.less';
-@import '../styles/mixins.less';
 
 .setting-popover {
-  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 
 .setting-header {
   display: flex;
   align-items: center;
   gap: @spacing-md;
-  padding: @spacing-md @spacing-xl;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  padding: @spacing-md @spacing-lg;
+  border-bottom: 1px solid @color-border;
 }
 
-.setting-header-icon {
-  font-size: 20px;
-  color: @color-primary;
-  flex-shrink: 0;
-}
-
-.setting-header-text {
-  flex: 1;
-  min-width: 0;
-}
+.setting-header-icon { color: @color-primary; flex-shrink: 0; }
 
 .setting-title {
-  font-size: 15px;
+  font-size: 0.875rem;
+  font-weight: 400;
   color: @text-primary;
-  font-weight: 600;
-  letter-spacing: 0.2px;
 }
 
 .setting-body {
@@ -94,46 +82,45 @@ const handleUpdate = (value) => {
   justify-content: center;
 }
 
-.setting-input {
-  width: 180px;
+.stepper {
+  display: flex;
+  align-items: center;
+  border: 1px solid @color-input;
+  background: @bg-paper;
+}
 
-  :deep(.el-input__wrapper) {
-    background: rgba(255, 255, 255, 0.4) !important;
-    border: 1px solid rgba(255, 107, 107, 0.3) !important;
-    border-radius: 10px !important;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
-  }
+.stepper-btn {
+  width: 32px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: @text-muted;
+  font-size: 1.125rem;
+  cursor: pointer;
+  transition: all @transition-fast ease;
 
-  :deep(.el-input__inner) {
-    font-weight: 600;
-    color: @text-primary;
-  }
+  &:hover:not(:disabled) { color: @color-primary; }
+  &:disabled { opacity: 0.3; cursor: not-allowed; }
+}
 
-  :deep(.el-input__wrapper:hover) {
-    background: rgba(255, 255, 255, 0.5) !important;
-    border-color: rgba(255, 107, 107, 0.5) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
-  }
+.stepper-input {
+  width: 80px;
+  height: 34px;
+  border: none;
+  border-left: 1px solid @color-input;
+  border-right: 1px solid @color-input;
+  background: @bg-paper;
+  text-align: center;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  color: @text-primary;
+  outline: none;
 
-  :deep(.el-input__wrapper.is-focus) {
-    background: rgba(255, 255, 255, 0.6) !important;
-    border-color: @color-primary !important;
-    box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1) !important;
-  }
-
-  :deep(.el-input-number__increase),
-  :deep(.el-input-number__decrease) {
-    background: rgba(255, 255, 255, 0.3);
-    border-color: rgba(255, 255, 255, 0.2);
-    color: @text-primary;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: rgba(255, 107, 107, 0.2);
-      color: @color-primary;
-    }
-  }
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  -moz-appearance: textfield;
 }
 </style>
-

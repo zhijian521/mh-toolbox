@@ -1,256 +1,221 @@
 <template>
   <div class="online-record">
-    <el-card class="record-card">
-      <template #header>
-        <div class="card-header">
-          <div class="header-left">
-            <el-popover placement="bottom-start" width="280" trigger="click" ref="accountPopover">
-              <template #reference>
-                <div class="setting-item">
-                  <el-icon class="setting-icon">
-                    <User />
-                  </el-icon>
-                  <span class="setting-label">在线角色</span>
-                  <span class="setting-value">{{ currentSetData.onlineAccounts }}</span>
-                  <el-icon class="setting-arrow">
-                    <ArrowDown />
-                  </el-icon>
-                </div>
-              </template>
-              <SettingPopover
-                title="设置在线账号数"
-                :icon="User"
-                v-model="currentSetData.onlineAccounts"
-                :input-props="{ min: 1, max: 20, controls: true }" />
-            </el-popover>
-            <el-popover placement="bottom-start" width="280" trigger="click" ref="cardPricePopover">
-              <template #reference>
-                <div class="setting-item">
-                  <el-icon class="setting-icon">
-                    <Money />
-                  </el-icon>
-                  <span class="setting-label">点卡价格</span>
-                  <span class="setting-value">{{ currentSetData.cardPrice.toLocaleString() }}</span>
-                  <el-icon class="setting-arrow">
-                    <ArrowDown />
-                  </el-icon>
-                </div>
-              </template>
-              <SettingPopover
-                title="设置点卡价格"
-                :icon="Money"
-                v-model="currentSetData.cardPrice"
-                :input-props="{ min: 1000, step: 1000, controls: true }" />
-            </el-popover>
+    <!-- 页头：状态 + 控制 -->
+    <header class="page-header">
+      <div class="header-info">
+        <h1 class="page-title">在线记录</h1>
+        <p class="page-subtitle">记录游戏时光，追踪点卡消耗与物品收益</p>
+      </div>
+      <div class="header-controls">
+        <!-- 在线计时 -->
+        <div v-if="isOnline" class="online-indicator">
+          <span class="indicator-dot"></span>
+          <span class="indicator-text">{{ currentDuration }}</span>
+        </div>
+
+        <!-- 设置 -->
+        <AppPopover placement="bottom" :width="220">
+          <template #reference>
+            <span class="setting-chip">
+              <AppIcon name="user" :size="14" />
+              {{ currentSetData.onlineAccounts }} 角色
+            </span>
+          </template>
+          <SettingPopover
+            title="在线角色数"
+            icon="user"
+            v-model="currentSetData.onlineAccounts"
+            :input-props="{ min: 1, max: 20, controls: true }" />
+        </AppPopover>
+        <AppPopover placement="bottom" :width="220">
+          <template #reference>
+            <span class="setting-chip">
+              <AppIcon name="money" :size="14" />
+              点卡 {{ cardPriceText }}
+            </span>
+          </template>
+          <SettingPopover
+            title="点卡价格"
+            icon="money"
+            v-model="currentSetData.cardPrice"
+            :input-props="{ min: 1000, step: 1000, controls: true }" />
+        </AppPopover>
+
+        <!-- 按钮 -->
+        <button
+          v-if="!isOnline"
+          class="start-btn"
+          :disabled="isStarting"
+          @click="startOnline">
+          <AppIcon name="video-play" :size="16" />
+          开始游戏
+        </button>
+        <button
+          v-if="isOnline"
+          class="stop-btn"
+          :disabled="isEnding"
+          @click="endOnline">
+          <AppIcon name="video-pause" :size="16" />
+          结束游戏
+        </button>
+      </div>
+    </header>
+
+    <!-- 统计卡片行 -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-icon-box">
+          <AppIcon name="clock" :size="20" />
+        </div>
+        <div class="stat-body">
+          <div class="stat-value">{{ todaysData.onlineTime.toFixed(2) }}h</div>
+          <div class="stat-label">今日在线</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon-box">
+          <AppIcon name="money" :size="20" />
+        </div>
+        <div class="stat-body">
+          <div class="stat-value">{{ todaysData.cardCost.toFixed(0) }}</div>
+          <div class="stat-label">点卡消耗</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon-box">
+          <AppIcon name="trend-charts" :size="20" />
+        </div>
+        <div class="stat-body">
+          <div class="stat-value">{{ todaysData.todaysIncome.toLocaleString() }}</div>
+          <div class="stat-label">今日收益</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon-box">
+          <AppIcon name="wallet" :size="20" />
+        </div>
+        <div class="stat-body">
+          <div class="stat-value" :class="{ negative: todaysData.todaysBalance < 0 }">
+            {{ todaysData.todaysBalance.toLocaleString() }}
           </div>
-          <div class="header-right">
-            <div v-if="isOnline" class="online-status">
-              <el-icon class="status-icon">
-                <Clock />
-              </el-icon>
-              <span class="status-text">当前在线：{{ currentDuration }}</span>
-            </div>
-            <el-button v-if="!isOnline" type="primary" @click="startOnline" class="control-button start-button"
-              :loading="isStarting" size="large">
-              <el-icon>
-                <VideoPlay />
-              </el-icon>
-              <span>开始游戏</span>
-            </el-button>
-            <el-button v-if="isOnline" type="danger" @click="endOnline" class="control-button end-button"
-              :loading="isEnding" size="large">
-              <el-icon>
-                <VideoPause />
-              </el-icon>
-              <span>结束游戏</span>
-            </el-button>
+          <div class="stat-label">今日结余</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主操作区：物品选择 + 今日战绩 -->
+    <div class="main-area">
+      <!-- 左侧：物品选择 -->
+      <section class="item-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">物品选择</h2>
+        </div>
+        <div class="item-panel-body">
+          <!-- 固定价格区 -->
+          <p class="section-label">固定价格</p>
+          <div class="item-grid">
+            <button
+              v-for="item in itemsData"
+              :key="item.id"
+              class="item-card"
+              @click="handleItemClick(item)"
+              @contextmenu.prevent="handleItemRightClick(item)">
+              <div class="item-img">
+                <img :src="item.image" :alt="item.name" />
+              </div>
+              <span v-if="item.price > 0" class="item-price">{{ fmtPrice(item.price) }}</span>
+            </button>
+          </div>
+
+          <!-- 非固定价格区 -->
+          <p class="section-label">非固定价格</p>
+          <div class="item-grid">
+            <button
+              v-for="item in unsetItemsData"
+              :key="item.id"
+              class="item-card"
+              @click="handleItemClick(item)"
+              @contextmenu.prevent="handleItemRightClick(item)">
+              <div class="item-img">
+                <img :src="item.image" :alt="item.name" />
+              </div>
+            </button>
           </div>
         </div>
-      </template>
-      <!-- 统计卡片 -->
-      <div class="stats-container">
-        <el-row :gutter="24">
-          <el-col :span="6">
-            <div class="stat-card total">
-              <div class="stat-icon">
-                <el-icon size="24">
-                  <Clock />
-                </el-icon>
-              </div>
-              <div class="stat-content">
-                <div class="stat-number">{{ todaysData.onlineTime.toFixed(2) }}h</div>
-                <div class="stat-label">今日在线</div>
-              </div>
-            </div>
-          </el-col>
-          <el-col :span="6">
-            <div class="stat-card today">
-              <div class="stat-icon">
-                <el-icon size="24">
-                  <Sunrise />
-                </el-icon>
-              </div>
-              <div class="stat-content">
-                <div class="stat-number">{{ todaysData.cardCost.toFixed(2) }}</div>
-                <div class="stat-label">点卡消耗</div>
-              </div>
-            </div>
-          </el-col>
-          <el-col :span="6">
-            <div class="stat-card weekly">
-              <div class="stat-icon">
-                <el-icon size="24">
-                  <Calendar />
-                </el-icon>
-              </div>
-              <div class="stat-content">
-                <div class="stat-number">{{ todaysData.todaysIncome.toFixed(2) }}</div>
-                <div class="stat-label">今日收益</div>
-              </div>
-            </div>
-          </el-col>
-          <el-col :span="6">
-            <div class="stat-card count">
-              <div class="stat-icon">
-                <el-icon size="24">
-                  <Document />
-                </el-icon>
-              </div>
-              <div class="stat-content">
-                <div class="stat-number">{{ todaysData.todaysBalance.toFixed(2) }}</div>
-                <div class="stat-label">今日结余</div>
-              </div>
-            </div>
-          </el-col>
-        </el-row>
-      </div>
-      <!-- 快速记录  -->
-      <div class="quick-record">
-        <el-row :gutter="24">
-          <!-- 左侧：物品选择区 -->
-          <el-col :span="16">
-            <el-card class="item-selection-card">
-              <template #header>
-                <div class="section-header">
-                  <div class="section-icon">
-                    <el-icon size="14">
-                      <Box />
-                    </el-icon>
-                  </div>
-                  <div class="section-info">
-                    <h3 class="section-title">物品选择</h3>
-                  </div>
-                </div>
-              </template>
-              <p class="card-text-tip">固定价格区</p>
-              <div class="item-grid">
-                <div v-for="item in itemsData" :key="item.id" class="item-card" @click="handleItemClick(item)"
-                  @contextmenu.prevent="handleItemRightClick(item)">
-                  <div class="item-icon">
-                    <img :src="item.image" :alt="item.name">
-                  </div>
-                  <div class="item-name">{{ item.name }}</div>
-                </div>
-              </div>
-              <p class="card-text-tip">非固定价格区</p>
-              <div class="item-grid">
-                <div v-for="item in unsetItemsData" :key="item.id" class="item-card" @click="handleItemClick(item)"
-                  @contextmenu.prevent="handleItemRightClick(item)">
-                  <div class="item-icon">
-                    <img :src="item.image" :alt="item.name">
-                  </div>
-                  <div class="item-name">{{ item.name }}</div>
-                </div>
-              </div>
-            </el-card>
-          </el-col>
-          <!-- 右侧：已添加物品区 -->
-          <el-col :span="8">
-            <el-card class="selected-items-card">
-              <template #header>
-                <div class="section-header">
-                  <div class="section-icon">
-                    <el-icon size="16">
-                      <ShoppingBag />
-                    </el-icon>
-                  </div>
-                  <div class="section-info">
-                    <h3 class="section-title">今日战绩</h3>
-                  </div>
-                  <div class="header-actions-right">
-                    <div class="header-total" v-if="selectedItems.length > 0">
-                      <span class="header-total-label">总价值：</span>
-                      <span class="header-total-value">¥{{ totalValue.toLocaleString() }}</span>
-                    </div>
-                  </div>
-                </div>
-              </template>
-              <div class="items-list">
-                <div v-if="selectedItems.length === 0" class="empty-state">
-                  <el-icon size="48" class="empty-icon">
-                    <Box />
-                  </el-icon>
-                  <p class="empty-text">暂无添加的物品</p>
-                  <p class="empty-hint">从左侧选择物品开始记录</p>
-                </div>
-                <div v-for="(selectedItem, index) in selectedItems" :key="index" class="selected-item">
-                  <div class="selected-item-info">
-                    <div class="selected-item-icon">
-                      <img :src="getItemById(selectedItem.itemId)?.image" :alt="getItemById(selectedItem.itemId)?.name">
-                    </div>
-                    <div class="selected-item-details">
-                      <div class="selected-item-name">
-                        {{ getItemById(selectedItem.itemId)?.name || '未知物品' }}
-                      </div>
-                      <div class="selected-item-price">¥{{ selectedItem.price }}</div>
-                    </div>
-                  </div>
-                  <div class="selected-item-actions">
-                    <el-button size="small" type="danger" plain @click="removeSelectedItem(index)">
-                      <el-icon>
-                        <Delete />
-                      </el-icon>
-                    </el-button>
-                  </div>
-                </div>
-              </div>
+      </section>
 
-            </el-card>
-          </el-col>
-        </el-row>
-      </div>
+      <!-- 右侧：今日战绩 -->
+      <section class="result-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">今日战绩</h2>
+          <span v-if="selectedItems.length > 0" class="panel-total">
+            合计 ¥{{ totalValue.toLocaleString() }}
+          </span>
+        </div>
 
-      <PriceDialog
-        v-model="showPriceDialog"
-        :item="currentItem"
-        @confirm="handlePriceConfirm" />
-    </el-card>
+        <div class="result-list">
+          <div v-if="selectedItems.length === 0" class="empty-state">
+            <AppIcon name="box" :size="40" />
+            <p>点击或右键物品开始记录</p>
+          </div>
+          <div
+            v-for="(item, idx) in selectedItems"
+            :key="idx"
+            class="result-item">
+            <div class="result-item-img">
+              <img :src="getItemById(item.itemId)?.image" :alt="getItemById(item.itemId)?.name" />
+            </div>
+            <span class="result-item-name">{{ item.customName || getItemById(item.itemId)?.name || '未知' }}</span>
+            <span class="result-item-price">¥{{ item.price.toLocaleString() }}</span>
+            <button class="result-item-remove" @click="removeSelectedItem(idx)">
+              <AppIcon name="close" :size="14" />
+            </button>
+          </div>
+        </div>
+
+        <!-- 查看历史 -->
+        <div class="result-footer">
+          <router-link to="/record-list" class="history-link">
+            查看历史记录
+            <AppIcon name="arrow-right" :size="14" />
+          </router-link>
+        </div>
+      </section>
+    </div>
+
+    <!-- 价格对话框 -->
+    <PriceDialog
+      v-model="showPriceDialog"
+      :item="currentItem"
+      @confirm="handlePriceConfirm" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Box, ShoppingBag, Delete, VideoPlay, VideoPause, Clock, Sunrise, Calendar, Document, User, ArrowDown, Money } from '@element-plus/icons-vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useSettings } from '../composables/useSettings'
 import { useOnlineTimer } from '../composables/useOnlineTimer'
 import { useTodayData } from '../composables/useTodayData'
 import { useItems } from '../composables/useItems'
 import { CARD_COST_MULTIPLIER, UNSET_ITEMS_START_ID } from '../constants'
-import SettingPopover from '../components/SettingPopover.vue'
 import PriceDialog from '../components/PriceDialog.vue'
+import SettingPopover from '../components/SettingPopover.vue'
+import AppIcon from '../components/AppIcon.vue'
+import AppPopover from '../components/AppPopover.vue'
+import { toast } from '../utils/toast.js'
 
 const { currentSetData } = useSettings()
-const { 
-  isOnline, 
-  startTime,
-  currentDuration, 
-  isStarting, 
-  isEnding, 
-  start, 
-  stop, 
-  getOnlineTime 
-} = useOnlineTimer()
+const { isOnline, startTime, currentDuration, isStarting, isEnding, start, stop, getOnlineTime, setAutoSave } = useOnlineTimer()
+
+const cardPriceText = computed(() => {
+  const v = currentSetData.value.cardPrice
+  return v >= 10000 ? `${(v / 10000).toFixed(1)}万` : v.toLocaleString()
+})
+
+const fmtPrice = (v) => {
+  if (v >= 1000000) return `${(v / 10000).toFixed(0)}W`
+  return v.toLocaleString()
+}
 const { todaysData, addOnlineRecord, updateIncome } = useTodayData()
 const { itemsData, unsetItemsData, getItemById } = useItems()
 
@@ -258,21 +223,42 @@ const selectedItems = ref([])
 const showPriceDialog = ref(false)
 const currentItem = ref(null)
 
+// 记录已保存的最后时间点，避免重复 save
+let lastSavedHours = 0
+
+const saveRecord = (onlineTime) => {
+  if (onlineTime <= 0 || onlineTime <= lastSavedHours) return
+  lastSavedHours = onlineTime
+  const { onlineAccounts, cardPrice } = currentSetData.value
+  addOnlineRecord({
+    time: onlineTime,
+    start: startTime.value,
+    end: new Date(),
+    onlineAccounts,
+    cardPrice,
+    cardCost: onlineTime * cardPrice * CARD_COST_MULTIPLIER * onlineAccounts,
+  })
+}
+
+const startOnline = () => {
+  lastSavedHours = 0
+  setAutoSave(saveRecord)
+  start()
+}
+
 const endOnline = () => {
   const onlineTime = getOnlineTime()
-  if (onlineTime > 0) {
-    const { onlineAccounts, cardPrice } = currentSetData.value
-    const record = {
-      time: onlineTime,
-      start: startTime.value,
-      end: new Date(),
-      onlineAccounts,
-      cardPrice,
-      cardCost: onlineTime * cardPrice * CARD_COST_MULTIPLIER * onlineAccounts,
-    }
-    addOnlineRecord(record)
-  }
+  if (onlineTime > 0) saveRecord(onlineTime)
+  setAutoSave(null)
   stop()
+}
+
+// 窗口关闭时自动保存
+const onBeforeUnload = () => {
+  if (isOnline.value) {
+    const onlineTime = getOnlineTime()
+    if (onlineTime > 0) saveRecord(onlineTime)
+  }
 }
 
 const handleItemClick = (item) => {
@@ -292,752 +278,463 @@ const handleItemRightClick = (item) => {
 const addItemToSelected = (item) => {
   selectedItems.value.unshift({
     itemId: item.id,
-    price: item.price
+    price: item.price,
+    customName: item.customName || null,
   })
-  ElMessage.success(`${item.name} 已添加`)
+  toast.success(`${item.customName || item.name} 已添加`)
 }
 
-const handlePriceConfirm = (price) => {
+const handlePriceConfirm = ({ price, name }) => {
   if (!currentItem.value || price <= 0) {
-    ElMessage.warning('请输入有效的价格')
+    toast.warning('请输入有效的价格')
     return
   }
-
   const item = currentItem.value
-  
+  const itemName = name || item.name
   if (item.id >= UNSET_ITEMS_START_ID) {
-    addItemToSelected({ id: item.id, name: item.name, price })
+    addItemToSelected({ id: item.id, name: itemName, price, customName: name || null })
   } else {
-    const itemIndex = itemsData.value.findIndex(i => i.id === item.id)
-    if (itemIndex !== -1) {
-      itemsData.value[itemIndex].price = price
-      addItemToSelected(itemsData.value[itemIndex])
-      ElMessage.success(`${itemsData.value[itemIndex].name} 价格已设置为 ¥${price}`)
+    const idx = itemsData.value.findIndex(i => i.id === item.id)
+    if (idx !== -1) {
+      itemsData.value[idx].price = price
+      addItemToSelected(itemsData.value[idx])
+      toast.success(`${itemsData.value[idx].name} 价格已设置为 ¥${price}`)
     }
   }
 }
 
 const removeSelectedItem = (index) => {
   selectedItems.value.splice(index, 1)
-  ElMessage.success('已移除物品')
 }
 
 const totalValue = computed(() => {
   return selectedItems.value.reduce((sum, item) => sum + item.price, 0)
 })
 
-watch(totalValue, (val) => {
-  updateIncome(val || 0)
-})
-
 watch(selectedItems, () => {
-  todaysData.value.loadList = selectedItems.value
-  todaysData.value.todaysBalance = todaysData.value.todaysIncome - todaysData.value.cardCost
+  todaysData.value.loadList = [...selectedItems.value]
+  updateIncome(totalValue.value)
 }, { deep: true })
 
 onMounted(() => {
   if (todaysData.value.loadList.length) {
     selectedItems.value = todaysData.value.loadList
   }
+  lastSavedHours = isOnline.value ? getOnlineTime() : 0
+  setAutoSave(saveRecord)
+  window.addEventListener('beforeunload', onBeforeUnload)
 })
 
-
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', onBeforeUnload)
+})
 </script>
-<style scoped lang="less">
+
+<style lang="less" scoped>
 @import '../styles/variables.less';
 @import '../styles/mixins.less';
 
 .online-record {
-  width: 100%;
-  min-height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0;
-  margin: 0;
+  gap: @spacing-2xl;
+  min-height: calc(100vh - 48px);
 }
 
-.record-card {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: @glass-bg-light;
-  border: 1px solid @glass-border;
-  .card-shadow(0.06);
-  position: relative;
-  border-radius: 24px;
-  overflow: hidden;
-  
-  // 覆盖全局的 ::before 伪元素
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, 
-      transparent 0%, 
-      rgba(255, 255, 255, 0.3) 20%, 
-      rgba(255, 255, 255, 0.4) 50%, 
-      rgba(255, 255, 255, 0.3) 80%, 
-      transparent 100%);
-    border-radius: 24px 24px 0 0;
-    pointer-events: none;
-    z-index: 1;
-  }
-  
-  // 确保内部元素也遵循圆角
-  :deep(.el-card__header),
-  :deep(.el-card__body) {
-    border-radius: inherit;
-  }
-}
-
-.card-header {
+/* ========== 页头 ========== */
+.page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: @spacing-lg;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.header-info {
   flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: @spacing-md;
+  min-width: 0;
 }
 
-.header-right {
+.page-title {
+  .serif-title();
+  font-size: 2rem;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.page-subtitle {
+  .copy-text();
+  margin: 0;
+  white-space: nowrap;
+}
+
+.header-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: @spacing-md;
+  flex-shrink: 0;
 }
 
-.setting-item {
-  display: flex;
-  align-items: center;
-  gap: @spacing-sm;
-  padding: 10px @spacing-lg;
-  .glass-effect(@blur-light, @glass-bg, @glass-border-hover);
-  border-radius: @radius-normal;
-  cursor: pointer;
-  .transition();
-  min-width: 140px;
-  
-  &:hover {
-    background: @glass-bg-hover;
-    border-color: @glass-border-hover;
-    .card-shadow-hover(0.1);
-  }
-}
-
-.setting-icon {
-  font-size: 18px;
-  color: @color-primary;
-}
-
-.setting-label {
-  font-size: 14px;
-  color: @text-primary;
-  font-weight: 500;
-}
-
-.setting-value {
-  font-size: 14px;
-  color: @text-primary;
-  font-weight: 600;
-  margin-left: auto;
-}
-
-.setting-arrow {
-  font-size: 12px;
-  color: @text-secondary;
-  .transition(transform);
-}
-
-.setting-item:hover .setting-arrow {
-  transform: translateY(2px);
-}
-
-
-.online-status {
+.online-indicator {
   display: flex;
   align-items: center;
   gap: @spacing-sm;
-  padding: 10px @spacing-lg;
-  background: rgba(82, 196, 26, 0.1);
-  border: 1px solid rgba(82, 196, 26, 0.2);
-  border-radius: @radius-normal;
-}
-
-.status-icon {
-  font-size: 18px;
+  padding: @spacing-sm @spacing-lg;
+  border: 1px solid @color-success;
+  background: @color-success-bg;
   color: @color-success;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: @color-success;
   animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
-.status-text {
-  font-size: 14px;
-  color: @color-success;
-  font-weight: 600;
-}
-
-.control-button {
-  padding: @spacing-md @spacing-xxl;
-  font-weight: 600;
-  border-radius: @radius-normal;
-  display: flex;
+.setting-chip {
+  display: inline-flex;
   align-items: center;
-  gap: @spacing-sm;
-  .transition();
-
-  .el-icon {
-    font-size: 18px;
-  }
-}
-
-.start-button {
-  background: linear-gradient(135deg, @color-primary 0%, #ee5a24 100%);
-  border: none;
-
-  &:hover {
-    background: linear-gradient(135deg, #ff7b7b 0%, #ff6a3a 100%);
-    .card-shadow-hover(0.4);
-  }
-}
-
-.end-button {
-  background: linear-gradient(135deg, @color-danger 0%, #cf1322 100%);
-  border: none;
-
-  &:hover {
-    background: linear-gradient(135deg, #ff6b6d 0%, #ff2d2f 100%);
-    .card-shadow-hover(0.4);
-  }
-}
-
-/* 快速记录样式 */
-.quick-record {
-  margin-top: 12px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.quick-record .el-row {
-  height: 100%;
-}
-
-.quick-record .el-col {
-  height: 100%;
-}
-
-.quick-record .item-selection-card,
-.quick-record .selected-items-card {
-  height: calc(100vh - 300px);
-  border-radius: @radius-normal;
-  overflow: hidden;
-  .transition();
-  background: transparent;
-  border: 1px solid @glass-border;
-  .card-shadow(0.1);
-  display: flex;
-  flex-direction: column;
-  
-  :deep(.el-card__header) {
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    padding: @spacing-md @spacing-lg;
-    border-radius: @radius-normal @radius-normal 0 0;
-    border: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    position: relative;
-    overflow: hidden;
-    margin: 0;
-    box-shadow: none;
-    
-    &::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, 
-        transparent 0%, 
-        rgba(255, 255, 255, 0.3) 50%, 
-        transparent 100%);
-      pointer-events: none;
-    }
-  }
-  
-  :deep(.el-card__body) {
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border-radius: 0 0 @radius-normal @radius-normal;
-  }
-}
-
-.record-card :deep(.el-card__header) {
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 24px 24px 0 0;
-  box-shadow: none;
-  overflow: hidden;
-  position: relative;
-  z-index: 2;
-}
-
-.record-card :deep(.el-card__body) {
-  background: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border-radius: 0 0 24px 24px;
-  box-shadow: 
-    0 12px 40px rgba(0, 0, 0, 0.05),
-    inset 0 2px 6px rgba(255, 255, 255, 0.15),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.05);
-  position: relative;
-  z-index: 1;
-  margin: 0 4px 4px 4px;
-}
-
-.quick-record .item-selection-card :deep(.el-card__body),
-.quick-record .selected-items-card :deep(.el-card__body) {
-  flex: 1;
-  overflow: hidden;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  height: calc(100% - 48px);
-  overflow: auto;
-}
-
-.quick-record .item-selection-card:hover,
-.quick-record .selected-items-card:hover {
-  .card-shadow-hover(0.12);
-  border-color: @glass-border-hover;
-}
-
-/* 卡片头部样式 */
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-
-
-.section-icon {
-  width: 28px;
-  height: 28px;
-  background: linear-gradient(135deg, @color-primary 0%, #ee5a24 100%);
-  border-radius: @radius-small;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  .card-shadow-hover(0.3);
-}
-
-.section-info {
-  flex: 1;
-}
-
-.section-title {
-  font-size: 16px;
+  gap: @spacing-xs;
+  padding: @spacing-xs @spacing-md;
+  border: 1px solid @color-border;
+  background: @bg-paper;
+  font-size: 0.8125rem;
   font-weight: 500;
-  color: @text-primary;
-  margin: 0 0 2px 0;
-  line-height: 1.2;
-}
-
-.section-subtitle {
-  font-size: 12px;
-  color: @text-secondary;
-  margin: 0;
-  font-weight: 400;
-}
-
-/* 头部总价值和操作按钮样式 */
-.header-actions-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.header-total {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-}
-
-.clear-button {
-  padding: @spacing-xs;
-  height: 28px;
-  width: 28px;
-}
-
-.header-total-label {
-  font-size: 14px;
-  color: @text-secondary;
-  font-weight: 400;
-}
-
-.header-total-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: @color-success;
-  background: rgba(82, 196, 26, 0.1);
-  padding: @spacing-xs @spacing-sm;
-  border-radius: 6px;
-  line-height: 1;
-}
-
-/* 物品网格样式 */
-.item-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.item-grid::-webkit-scrollbar {
-  width: 6px;
-}
-
-.item-grid::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
-
-.item-grid::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-.item-grid::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-
-.card-text-tip {
-  padding: 0;
-  margin: @spacing-sm 0;
-  font-size: 13px;
-  color: #6b46c1;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-}
-
-.item-card {
-  width: 72px;
-  height: 80px;
-  padding: 6px @spacing-xs;
-  text-align: center;
+  color: @text-muted;
   cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  .glass-effect(@blur-light, @glass-bg-light, rgba(255, 255, 255, 0.3));
-  border-radius: @radius-small;
-  .transition();
-  
+  transition: all @transition-fast ease;
+  flex-shrink: 0;
+
   &:hover {
-    border-color: rgba(255, 107, 107, 0.6);
-    background: @glass-bg-hover;
-    .card-shadow-hover(0.2);
+    border-color: @color-primary;
+    color: @color-primary;
   }
 }
 
-.item-card:hover::before {
-  opacity: 1;
-}
-
-.item-icon {
-  position: relative;
-  z-index: 1;
-  margin-bottom: 4px;
-  height: 42px;
-  display: flex;
+/* 紧凑按钮 — zhijian 风格 */
+.start-btn,
+.stop-btn {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.item-icon img {
-  max-width: 40px;
-  max-height: 40px;
-  object-fit: contain;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.1));
-}
-
-.item-name {
-  position: relative;
-  z-index: 1;
-  font-size: 14px;
-  color: @text-primary;
-  margin-bottom: @spacing-xs;
+  gap: @spacing-xs;
+  padding: @spacing-xs @spacing-lg;
+  border: 1px solid @color-primary;
+  background: @bg-paper;
+  color: @color-primary;
+  font-size: 0.8125rem;
   font-weight: 500;
-  line-height: 1.1;
-  text-align: center;
+  cursor: pointer;
+  transition: all @transition-fast ease;
   flex-shrink: 0;
-}
+  font-family: inherit;
 
-.item-price {
-  position: relative;
-  z-index: 1;
-  font-size: 10px;
-  color: @color-success;
-  font-weight: 600;
-  background: rgba(82, 196, 26, 0.1);
-  padding: 1px @spacing-xs;
-  border-radius: 3px;
-  display: inline-block;
-  flex-shrink: 0;
-}
+  &:hover:not(:disabled) {
+    background: @color-primary;
+    color: @color-primary-foreground;
+  }
 
-.item-status {
-  position: relative;
-  z-index: 1;
-  font-size: 10px;
-  color: @color-warning;
-  font-weight: 500;
-  background: rgba(250, 173, 20, 0.1);
-  padding: 1px @spacing-xs;
-  border-radius: 3px;
-  display: inline-block;
-  flex-shrink: 0;
-}
-
-/* 已添加物品列表样式 */
-.items-list {
-  flex: 1;
-  overflow-y: auto;
-  padding-right: 8px;
-}
-
-.items-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.items-list::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
-
-.items-list::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-.items-list::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-.empty-state {
-  text-align: center;
-  padding: @spacing-xxl @spacing-lg;
-  color: @text-secondary;
-}
-
-.empty-icon {
-  color: @text-tertiary;
-  margin-bottom: @spacing-lg;
-  opacity: 0.6;
-}
-
-.empty-text {
-  font-size: 16px;
-  font-weight: 500;
-  color: @text-secondary;
-  margin: 0 0 @spacing-sm 0;
-  letter-spacing: 0.2px;
-}
-
-.empty-hint {
-  font-size: 14px;
-  color: @text-tertiary;
-  margin: 0;
-  opacity: 0.8;
-}
-
-.selected-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px;
-  .glass-effect(@blur-light, @glass-bg, @glass-border);
-  border-radius: @radius-small;
-  margin-bottom: @spacing-sm;
-  .transition();
-  
-  &:hover {
-    .card-shadow-hover(0.18);
-    border-color: rgba(255, 107, 107, 0.5);
-    background: rgba(255, 255, 255, 0.4);
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }
 
-.selected-item-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
+.stop-btn {
+  border-color: @color-danger;
+  color: @color-danger;
+
+  &:hover:not(:disabled) {
+    background: @color-danger;
+    color: @color-primary-foreground;
+  }
 }
 
-.selected-item-icon {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-  border-radius: 8px;
-  flex-shrink: 0;
-}
-
-.selected-item-icon img {
-  max-width: 24px;
-  max-height: 24px;
-  object-fit: contain;
-}
-
-.selected-item-details {
-  flex: 1;
-  min-width: 0;
-}
-
-.selected-item-name {
-  font-size: 14px;
-  color: @text-primary;
-  font-weight: 500;
-  margin-bottom: @spacing-xs;
-  line-height: 1.2;
-}
-
-.selected-item-price {
-  font-size: 13px;
-  color: @color-success;
-  font-weight: 600;
-}
-
-.selected-item-actions {
-  flex-shrink: 0;
-}
-
-
-
-
-
-
-
-/* 统计卡片 */
-.stats-container {
-  margin-bottom: 24px;
+/* ========== 统计卡片行 ========== */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: @spacing-md;
 }
 
 .stat-card {
   display: flex;
   align-items: center;
+  gap: @spacing-lg;
   padding: @spacing-xl;
-  border-radius: @radius-large;
-  .glass-effect(@blur-light, @glass-bg, @glass-border);
-  .card-shadow(0.08);
-  .transition();
-  position: relative;
-  overflow: hidden;
-  
-  &:hover {
-    background: @glass-bg-hover;
-    border-color: @glass-border-hover;
-    .card-shadow-hover(0.12);
-  }
+  .paper-card-primary();
 }
 
-.stat-card.total {
-  .stat-icon {
-    background: linear-gradient(135deg, rgba(82, 196, 26, 0.15) 0%, rgba(56, 158, 13, 0.15) 100%);
-    color: #52c41a;
-  }
-}
-
-.stat-card.today {
-  .stat-icon {
-    background: linear-gradient(135deg, rgba(24, 144, 255, 0.15) 0%, rgba(9, 109, 217, 0.15) 100%);
-    color: #1890ff;
-  }
-}
-
-.stat-card.weekly {
-  .stat-icon {
-    background: linear-gradient(135deg, rgba(255, 193, 7, 0.15) 0%, rgba(255, 152, 0, 0.15) 100%);
-    color: #ffc107;
-  }
-}
-
-.stat-card.count {
-  .stat-icon {
-    background: linear-gradient(135deg, rgba(255, 107, 107, 0.15) 0%, rgba(238, 90, 36, 0.15) 100%);
-    color: #ff6b6b;
-  }
-}
-
-.stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: @radius-normal;
+.stat-icon-box {
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: @spacing-lg;
-  .glass-effect(@blur-light, transparent, transparent);
-  .card-shadow(0.06);
+  background: @color-primary-light;
+  color: @color-primary;
   flex-shrink: 0;
-  .transition();
-  position: relative;
-  z-index: 2;
-  
-  .stat-card:hover & {
-    transform: scale(1.05);
-    .card-shadow-hover(0.1);
+}
+
+.stat-body {
+  min-width: 0;
+}
+
+.stat-value {
+  .serif-title();
+  font-size: 1.75rem;
+  line-height: 1.2;
+  margin-bottom: 2px;
+
+  &.negative {
+    color: @color-danger;
   }
 }
 
-.stat-content {
+.stat-label {
+  font-size: 0.75rem;
+  color: @text-muted;
+  font-weight: 500;
+}
+
+/* ========== 主操作区 ========== */
+.main-area {
   flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: @spacing-2xl;
+  align-items: stretch;
+}
+
+/* 物品面板 */
+.item-panel {
+  .paper-card();
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  overflow: hidden;
+  min-height: 0;
+  padding: @spacing-2xl;
 }
 
-.stat-number {
-  font-size: 28px;
-  font-weight: 700;
-  color: @text-primary;
-  line-height: 1.2;
-  letter-spacing: -0.5px;
+.item-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: @spacing-xs;
 }
 
-.stat-label {
-  font-size: 14px;
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: @spacing-lg;
+}
+
+.panel-title {
+  .serif-title();
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.panel-total {
+  .serif-title();
+  font-size: 1.25rem;
+  color: @color-primary;
+}
+
+.section-label {
+  .label-text();
+  margin: @spacing-lg 0 @spacing-sm;
+  font-size: 0.6875rem;
+  letter-spacing: 0.15em;
+  opacity: 0.6;
+
+  &:first-of-type {
+    margin-top: 0;
+  }
+}
+
+/* 物品网格 */
+.item-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: @spacing-sm;
+}
+
+.item-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 64px;
+  padding: @spacing-xs;
+  border: 1px solid @color-border;
+  background: #fff;
+  cursor: pointer;
+
+  &:hover {
+    border-color: @color-primary;
+    background: @color-primary-light;
+  }
+}
+
+.item-img {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+
+  img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+}
+
+.item-price {
+  font-size: 0.625rem;
+  color: @color-primary;
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* 战绩面板 */
+.result-panel {
+  .paper-card-primary();
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.result-panel .panel-header {
+  padding: @spacing-lg @spacing-xl;
+  margin: 0;
+  border-bottom: 1px solid @color-border;
+}
+
+.result-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: @spacing-sm;
+  min-height: 120px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: @spacing-2xl;
+  color: @text-muted;
+  gap: @spacing-md;
+  font-size: 0.8125rem;
+}
+
+.result-item {
+  display: flex;
+  align-items: center;
+  gap: @spacing-sm;
+  padding: @spacing-sm @spacing-md;
+  border-bottom: 1px solid @color-border;
+  transition: background @transition-fast ease;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: @color-muted;
+  }
+}
+
+.result-item-img {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.result-item-name {
+  flex: 1;
+  font-size: 0.8125rem;
+  font-weight: 500;
   color: @text-primary;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-item-price {
   font-weight: 600;
-  opacity: 0.85;
+  font-size: 0.8125rem;
+  color: @color-primary;
+  flex-shrink: 0;
+}
+
+.result-item-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: @text-muted;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color @transition-fast ease;
+
+  &:hover {
+    color: @color-danger;
+  }
+}
+
+.result-footer {
+  padding: @spacing-md @spacing-xl;
+  border-top: 1px solid @color-border;
+}
+
+.history-link {
+  display: inline-flex;
+  align-items: center;
+  gap: @spacing-xs;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: @text-muted;
+  transition: color @transition-fast ease;
+
+  &:hover {
+    color: @color-primary;
+  }
+}
+
+/* ========== 响应式 ========== */
+@media (max-width: 900px) {
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .main-area {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

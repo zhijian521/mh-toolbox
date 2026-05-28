@@ -1,84 +1,77 @@
 <template>
-  <el-dialog 
-    v-model="visible" 
-    title="设置物品价格" 
-    width="30%" 
-    center 
-    class="custom-dialog" 
-    :modal="false"
-    @close="handleClose">
-    <div class="price-dialog-content">
-      <div class="dialog-item-card">
-        <div class="dialog-item-image">
-          <img v-if="item?.image" :src="item.image" :alt="item.name">
-          <el-icon v-else :size="32" class="dialog-icon">
-            <Box />
-          </el-icon>
-        </div>
-        <div class="dialog-item-info">
-          <div class="price-input-wrapper">
-            <el-input-number 
-              v-model="price" 
-              :min="0" 
-              :step="1000" 
-              size="default" 
-              class="custom-input-number"
-              :controls="false"
-              :precision="0" 
-              placeholder="请输入价格">
-              <template #prefix>
-                <span class="price-prefix">¥</span>
-              </template>
-            </el-input-number>
-          </div>
+  <AppDialog v-model="visible" title="设置物品价格" width="360px" @close="handleClose">
+    <div class="price-content" v-if="item">
+      <div class="item-preview-img">
+        <img v-if="item.image" :src="item.image" :alt="item.name" />
+        <AppIcon v-else name="box" :size="28" />
+      </div>
+      <div class="price-inputs">
+        <input
+          v-if="isCustom"
+          v-model="customName"
+          type="text"
+          class="name-input"
+          placeholder="物品名称"
+          maxlength="10"
+        />
+        <div class="price-row">
+          <span class="price-prefix">¥</span>
+          <input
+            ref="inputEl"
+            v-model.number="price"
+            type="number"
+            min="0"
+            step="1000"
+            class="price-input"
+            placeholder="输入价格"
+            @keyup.enter="handleConfirm"
+          />
         </div>
       </div>
     </div>
     <template #footer>
-      <div class="dialog-actions">
-        <el-button @click="handleClose" class="dialog-btn cancel-btn">取消</el-button>
-        <el-button type="primary" @click="handleConfirm" class="dialog-btn confirm-btn">确定</el-button>
-      </div>
+      <button class="btn-cancel" @click="handleClose">取消</button>
+      <button class="btn-confirm" @click="handleConfirm">确定</button>
     </template>
-  </el-dialog>
+  </AppDialog>
 </template>
 
 <script setup>
-/**
- * 物品价格设置对话框
- * 用于设置或修改物品的价格
- */
-import { ref, computed, watch } from 'vue'
-import { Box } from '@element-plus/icons-vue'
+import { ref, computed, watch, nextTick } from 'vue'
+import AppDialog from './AppDialog.vue'
+import AppIcon from './AppIcon.vue'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false
-  },
-  item: {
-    type: Object,
-    default: null
-  }
+  modelValue: { type: Boolean, default: false },
+  item: { type: Object, default: null },
 })
 
 const emit = defineEmits(['update:modelValue', 'confirm', 'cancel'])
 
 const visible = computed({
   get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val)
+  set: (v) => emit('update:modelValue', v),
 })
 
+const isCustom = computed(() => props.item?.id === 200)
+
 const price = ref(0)
+const customName = ref('其他')
+const inputEl = ref(null)
 
 watch(() => props.item, (item) => {
   if (item) {
     price.value = item.price || 0
+    customName.value = item.name || '其他'
   }
 }, { immediate: true })
 
+watch(visible, async (v) => {
+  if (v) await nextTick(); inputEl.value?.focus()
+})
+
 const handleConfirm = () => {
-  emit('confirm', price.value)
+  emit('confirm', { price: price.value, name: isCustom.value ? customName.value : props.item?.name })
   visible.value = false
 }
 
@@ -90,163 +83,103 @@ const handleClose = () => {
 
 <style lang="less" scoped>
 @import '../styles/variables.less';
-@import '../styles/mixins.less';
 
-.price-dialog-content {
-  padding: 0;
-}
-
-.dialog-item-card {
-  width: 100%;
+.price-content {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: @spacing-md;
-  padding: @spacing-sm 0;
 }
 
-.dialog-item-image {
+.item-preview-img {
+  width: 52px;
+  height: 52px;
   display: flex;
-  justify-content: center;
   align-items: center;
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-radius: @radius-normal;
-  border: 1px solid rgba(255, 107, 107, 0.2);
-  box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  justify-content: center;
+  border: 1px solid @color-border;
+  background: @bg-paper;
   padding: @spacing-xs;
-  overflow: hidden;
-  position: relative;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: @text-muted;
+  flex-shrink: 0;
+
+  img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
 }
 
-.dialog-item-image img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  position: relative;
-  z-index: 1;
+.price-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: @spacing-sm;
 }
 
-.dialog-icon {
-  color: @color-primary;
-  opacity: 0.8;
-  position: relative;
-  z-index: 1;
+.name-input {
+  width: 160px;
+  padding: 4px 10px;
+  border: 1px solid @color-input;
+  background: @bg-paper;
+  font-size: 0.8125rem;
+  color: @text-primary;
+  outline: none;
+  transition: border-color @transition-fast ease;
+
+  &:focus { border-color: @color-primary; }
 }
 
-.dialog-item-info {
-  flex: 1;
+.price-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  min-width: 0;
-}
-
-.price-input-wrapper {
-  flex: 1;
-  min-width: 0;
-  max-width: 250px;
-}
-
-.custom-input-number {
-  width: 100%;
-
-  :deep(.el-input__wrapper) {
-    background: rgba(255, 255, 255, 0.4) !important;
-    border: 1px solid rgba(255, 107, 107, 0.3) !important;
-    border-radius: 8px !important;
-    box-shadow: 
-      0 2px 8px rgba(0, 0, 0, 0.06),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    padding: 8px 12px !important;
-  }
-  
-  :deep(.el-input__inner) {
-    font-size: 15px;
-    font-weight: 600;
-    color: @text-primary;
-    text-align: left;
-  }
-  
-  :deep(.el-input__wrapper:hover) {
-    background: rgba(255, 255, 255, 0.5) !important;
-    border-color: rgba(255, 107, 107, 0.5) !important;
-    box-shadow: 
-      0 4px 12px rgba(0, 0, 0, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
-  }
-  
-  :deep(.el-input__wrapper.is-focus) {
-    background: rgba(255, 255, 255, 0.6) !important;
-    border-color: @color-primary !important;
-    box-shadow: 
-      0 0 0 2px rgba(255, 107, 107, 0.15),
-      0 4px 12px rgba(0, 0, 0, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
-  }
+  gap: @spacing-sm;
 }
 
 .price-prefix {
+  font-family: @font-serif;
+  font-size: 1.125rem;
   color: @color-primary;
-  font-weight: 700;
-  font-size: 15px;
-  margin-right: @spacing-xs;
-  opacity: 0.9;
+  flex-shrink: 0;
 }
 
-.dialog-actions {
-  display: flex;
-  justify-content: center;
-  gap: @spacing-md;
-  margin-top: @spacing-sm;
+.price-input {
+  width: 140px;
+  padding: 6px 10px;
+  border: 1px solid @color-input;
+  background: @bg-paper;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  color: @text-primary;
+  outline: none;
+  transition: border-color @transition-fast ease;
+
+  &:focus { border-color: @color-primary; }
+
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  -moz-appearance: textfield;
 }
 
-.dialog-btn {
-  min-width: 100px;
-  padding: 12px 24px;
-  font-weight: 600;
-  font-size: 14px;
-  border-radius: 10px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  letter-spacing: 0.3px;
+.btn-cancel, .btn-confirm {
+  padding: 6px 20px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all @transition-fast ease;
+  font-family: inherit;
 }
 
-.cancel-btn {
-  background: rgba(255, 255, 255, 0.3) !important;
-  border-color: rgba(255, 255, 255, 0.3) !important;
-  color: @text-primary !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.4) !important;
-    border-color: rgba(255, 255, 255, 0.4) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    transform: translateY(-1px);
-  }
+.btn-cancel {
+  border: 1px solid @color-border;
+  background: @bg-paper;
+  color: @text-primary;
+  &:hover { border-color: @color-primary; color: @color-primary; }
 }
 
-.confirm-btn {
-  background: linear-gradient(135deg, @color-primary 0%, #ee5a24 100%) !important;
-  border-color: transparent !important;
-  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
-
-  &:hover {
-    background: linear-gradient(135deg, #ff7b7b 0%, #ff6a3a 100%) !important;
-    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
-    transform: translateY(-2px);
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
+.btn-confirm {
+  border: 1px solid @color-primary;
+  background: @color-primary;
+  color: @color-primary-foreground;
+  &:hover { background: @color-primary-hover; }
 }
 </style>
-

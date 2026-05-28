@@ -1,63 +1,48 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { ROUTES } from '../constants'
 import Layout from '../components/Layout.vue'
 
 const OnlineRecord = () => import('../views/OnlineRecord.vue')
 const RecordList = () => import('../views/RecordList.vue')
-const CharacterInfo = () => import('../views/CharacterInfo.vue')
-const TradeRecord = () => import('../views/TradeRecord.vue')
-const PWASettings = () => import('../components/PWASettings.vue')
+const PlaceholderPage = () => import('../components/PlaceholderPage.vue')
 
 const routes = [
   {
-    path: ROUTES.HOME,
+    path: '/',
     component: Layout,
-    redirect: ROUTES.ONLINE_RECORD,
+    redirect: '/online-record',
     children: [
       {
-        path: ROUTES.ONLINE_RECORD,
+        path: 'online-record',
         name: 'OnlineRecord',
         component: OnlineRecord,
-        meta: {
-          title: '在线记录',
-          subtitle: '记录游戏时光，统计在线数据'
-        }
+        meta: { title: '在线记录' }
       },
       {
-        path: ROUTES.RECORD_LIST,
+        path: 'record-list',
         name: 'RecordList',
         component: RecordList,
-        meta: {
-          title: '记录列表',
-          subtitle: '查看历史记录，分析游戏数据'
-        }
+        meta: { title: '历史记录' }
       },
       {
-        path: ROUTES.CHARACTER_INFO,
-        name: 'CharacterInfo',
-        component: CharacterInfo,
-        meta: {
-          title: '角色信息',
-          subtitle: '管理角色属性，查看装备技能'
-        }
-      },
-      {
-        path: ROUTES.TRADE_RECORD,
+        path: 'trade-record',
         name: 'TradeRecord',
-        component: TradeRecord,
-        meta: {
-          title: '交易记录',
-          subtitle: '追踪交易历史，分析收益数据'
-        }
+        component: PlaceholderPage,
+        props: { title: '交易记录' },
+        meta: { title: '交易记录' }
       },
       {
-        path: ROUTES.PWA_SETTINGS,
-        name: 'PWASettings',
-        component: PWASettings,
-        meta: {
-          title: '应用设置',
-          subtitle: '管理PWA功能，手动安装选项'
-        }
+        path: 'character-record',
+        name: 'CharacterRecord',
+        component: PlaceholderPage,
+        props: { title: '角色记录' },
+        meta: { title: '角色记录' }
+      },
+      {
+        path: 'growth-record',
+        name: 'GrowthRecord',
+        component: PlaceholderPage,
+        props: { title: '养成记录' },
+        meta: { title: '养成记录' }
       }
     ]
   }

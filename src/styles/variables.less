@@ -1,37 +1,52 @@
 /**
- * 样式变量定义
+ * 样式变量定义 — 中国风纸墨美学
  */
 
-// 颜色
-@color-primary: #ff6b6b;
-@color-success: #52c41a;
-@color-warning: #faad14;
-@color-danger: #ff4d4f;
-@color-info: #1890ff;
+// 背景 & 面板
+@bg-paper: #fbf9f9;
+@bg-warm: #f9f5f0;
+@bg-panel: rgba(255, 251, 247, 0.84);
+@bg-panel-strong: rgba(255, 255, 255, 0.92);
 
-// 文字颜色
-@text-primary: #1a1f2e;
-@text-secondary: #5a6c7d;
-@text-tertiary: #8a9ba8;
-@text-light: rgba(255, 255, 255, 0.95);
-@text-disabled: #b8c5d1;
+// 前景 / 文字
+@text-primary: #1d1b20;
+@text-ink: #281715;
+@text-ink-soft: #5c403c;
+@text-muted: #6f655c;
 
-// 毛玻璃
-@glass-bg: rgba(255, 255, 255, 0.25);
-@glass-bg-hover: rgba(255, 255, 255, 0.35);
-@glass-bg-light: rgba(255, 255, 255, 0.2);
-@glass-border: rgba(255, 255, 255, 0.2);
-@glass-border-hover: rgba(255, 255, 255, 0.3);
+// 主色 — 暗朱砂红
+@color-primary: #9f000f;
+@color-primary-hover: rgba(159, 0, 15, 0.85);
+@color-primary-light: rgba(159, 0, 15, 0.08);
+@color-primary-foreground: #ffffff;
 
-// 模糊度
-@blur-light: 5px;
-@blur-normal: 10px;
-@blur-strong: 20px;
+// 辅色
+@color-secondary: #f3ece4;
+@color-secondary-foreground: #494551;
+@color-muted: #f6efe7;
+@color-accent: #e6efe5;
+@color-accent-foreground: #31483f;
+
+// 边框 & 输入
+@color-border: #e7ddd1;
+@color-border-hover: rgba(159, 0, 15, 0.4);
+@color-input: #d9cbbc;
+@color-ring: #c8161d;
+
+// 功能色
+@color-success: #2d6a4f;
+@color-success-bg: #e6efe5;
+@color-warning: #b45309;
+@color-warning-bg: #fef3c7;
+@color-danger: #9f000f;
+@color-danger-bg: #fce7f3;
+@color-info: #1e40af;
+@color-info-bg: #dbeafe;
 
 // 圆角
-@radius-small: 8px;
-@radius-normal: 12px;
-@radius-large: 16px;
+@radius-sm: 2px;
+@radius-md: 4px;
+@radius-lg: 8px;
 
 // 间距
 @spacing-xs: 4px;
@@ -39,16 +54,19 @@
 @spacing-md: 12px;
 @spacing-lg: 16px;
 @spacing-xl: 20px;
-@spacing-xxl: 24px;
+@spacing-2xl: 24px;
 
 // 阴影
-@shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
-@shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
-@shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
-@shadow-xl: 0 12px 32px rgba(0, 0, 0, 0.15);
+@shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+@shadow-md: 0 2px 4px rgba(0, 0, 0, 0.06);
 
-// 过渡时间
-@transition-fast: 0.2s;
-@transition-normal: 0.3s;
-@transition-slow: 0.6s;
+// 字体
+@font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+@font-serif: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', '宋体', Georgia, serif;
 
+// 过渡
+@transition-fast: 0.15s;
+@transition-normal: 0.25s;
+
+// 侧边栏（竖排窄栏）
+@sidebar-width: 52px;

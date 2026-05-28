@@ -1,47 +1,63 @@
 /**
- * 样式混入
+ * 样式混入 — 中国风纸墨美学
  */
 
 @import './variables.less';
 
-// 毛玻璃效果
-.glass-effect(@blur: 5px, @bg: rgba(255, 255, 255, 0.25), @border: rgba(255, 255, 255, 0.2)) {
-  background: @bg;
-  backdrop-filter: blur(@blur);
-  -webkit-backdrop-filter: blur(@blur);
-  border: 1px solid @border;
+// 细线卡片
+.paper-card() {
+  border: 1px solid @color-border;
+  background: @bg-paper;
+  transition: border-color @transition-fast ease, transform @transition-fast ease;
 }
 
-// 卡片阴影混入
-.card-shadow(@intensity: 0.08) {
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, @intensity),
-    0 2px 8px rgba(0, 0, 0, @intensity * 0.5);
+// 主色边框卡片
+.paper-card-primary() {
+  border: 1px solid @color-primary;
+  background: @bg-paper;
+  transition: border-color @transition-fast ease, transform @transition-fast ease;
 }
 
-// 卡片 hover 阴影混入
-.card-shadow-hover(@intensity: 0.12) {
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, @intensity),
-    0 4px 12px rgba(0, 0, 0, @intensity * 0.67);
+// hover 微动效
+.paper-hover() {
+  &:hover {
+    border-color: @color-primary;
+    transform: translateY(-1px);
+  }
 }
 
-// 过渡动画混入
-.transition(@property: all, @duration: 0.3s) {
-  transition: @property @duration cubic-bezier(0.4, 0, 0.2, 1);
+// 过渡动画
+.transition(@property: all, @duration: @transition-normal) {
+  transition: @property @duration ease;
 }
 
-// 白色光晕混入
-.white-glow(@intensity: 0.2) {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, @intensity * 1.5),
-    0 0 20px rgba(255, 255, 255, @intensity);
+// 衬线标题
+.serif-title() {
+  font-family: @font-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: @text-primary;
 }
 
-// 白色光晕 hover 混入
-.white-glow-hover(@intensity: 0.3) {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, @intensity * 1.33),
-    0 0 30px rgba(255, 255, 255, @intensity);
+// 无衬线正文
+.sans-body() {
+  font-family: @font-sans;
+  color: @text-primary;
 }
 
+// 小标签文字
+.label-text() {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: @color-primary;
+  opacity: 0.7;
+}
+
+// 正文描述
+.copy-text() {
+  font-size: 0.875rem;
+  line-height: 1.85;
+  color: @text-muted;
+}

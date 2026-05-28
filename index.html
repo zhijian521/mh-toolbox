@@ -2,54 +2,28 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>梦幻西游工具箱</title>
-    
-    <!-- PWA Meta Tags -->
-    <meta name="description" content="梦幻西游游戏辅助工具，包含在线记录、角色信息、交易记录等功能" />
-    <meta name="keywords" content="梦幻西游,工具箱,游戏辅助,在线记录,角色信息,交易记录" />
-    <meta name="author" content="梦幻西游工具箱" />
-    
-    <!-- PWA Manifest -->
+
+    <meta name="description" content="梦幻西游游戏辅助工具，记录在线时长、点卡消耗、物品收益" />
+    <meta name="theme-color" content="#9f000f" />
+
+    <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
-    
-    <!-- PWA Theme Colors -->
-    <meta name="theme-color" content="#667eea" />
-    <meta name="msapplication-TileColor" content="#667eea" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="梦幻工具箱" />
-    
-    <!-- PWA Icons -->
-    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <link rel="apple-touch-icon" href="/icons/icon.svg" />
-    <link rel="mask-icon" href="/icons/icon.svg" color="#667eea" />
-    
-    <!-- PWA Splash Screen -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    
-    <!-- Open Graph Meta Tags -->
-    <meta property="og:title" content="梦幻西游工具箱" />
-    <meta property="og:description" content="梦幻西游游戏辅助工具，包含在线记录、角色信息、交易记录等功能" />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://your-domain.com" />
-    <meta property="og:image" content="/icons/icon.svg" />
-    
-    <!-- Twitter Meta Tags -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="梦幻西游工具箱" />
-    <meta name="twitter:description" content="梦幻西游游戏辅助工具，包含在线记录、角色信息、交易记录等功能" />
-    <meta name="twitter:image" content="/icons/icon.svg" />
-    
-    <!-- Preload Critical Resources -->
-    <link rel="preload" href="/src/main.js" as="script" />
-    <link rel="preload" href="/src/App.vue" as="script" />
-    
-    <!-- DNS Prefetch -->
-    <link rel="dns-prefetch" href="//unpkg.com" />
-    <link rel="dns-prefetch" href="//cdn.jsdelivr.net" />
+
+    <!-- 字体预加载 — Noto Serif SC（衬线标题） -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+
     <script>
       var _hmt = _hmt || [];
       (function () {
