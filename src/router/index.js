@@ -1,9 +1,11 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import Layout from '../components/Layout.vue'
 
 const OnlineRecord = () => import('../views/OnlineRecord.vue')
 const RecordList = () => import('../views/RecordList.vue')
 const PlaceholderPage = () => import('../components/PlaceholderPage.vue')
+
+const DEFAULT_TITLE = '梦幻西游工具箱'
 
 const routes = [
   {
@@ -15,7 +17,7 @@ const routes = [
         path: 'online-record',
         name: 'OnlineRecord',
         component: OnlineRecord,
-        meta: { title: '在线记录' }
+        meta: { title: '收益记录' }
       },
       {
         path: 'record-list',
@@ -49,8 +51,13 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHashHistory(),
-  routes
+  history: createWebHistory('/xyq/'),
+  routes,
+})
+
+router.afterEach((to) => {
+  const title = to.meta?.title
+  document.title = title ? `${title} - ${DEFAULT_TITLE}` : DEFAULT_TITLE
 })
 
 export default router

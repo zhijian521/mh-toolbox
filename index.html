@@ -2,29 +2,60 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>梦幻西游工具箱</title>
+    <title>梦幻西游工具箱 — 收益记录、点卡统计</title>
+    <meta name="description" content="梦幻西游游戏辅助工具，记录收益、点卡消耗、物品获取。统计每日在线时长与梦幻币收入，支持历史数据查看与导出。" />
+    <meta name="keywords" content="梦幻西游,工具箱,收益记录,点卡计算,梦幻币,在线时长,物品统计" />
 
-    <meta name="description" content="梦幻西游游戏辅助工具，记录在线时长、点卡消耗、物品收益" />
-    <meta name="theme-color" content="#9f000f" />
+    <!-- Canonical -->
+    <link rel="canonical" href="https://yuwb.cn/xyq/" />
+    <meta name="robots" content="index, follow" />
 
     <!-- PWA -->
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#9f000f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="梦幻工具箱" />
     <link rel="apple-touch-icon" href="/icons/icon.svg" />
 
-    <!-- 字体预加载 — Noto Serif SC（衬线标题） -->
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="梦幻西游工具箱 — 收益记录、点卡统计" />
+    <meta property="og:description" content="梦幻西游游戏辅助工具，记录收益、点卡消耗、物品获取。" />
+    <meta property="og:url" content="https://yuwb.cn/xyq/" />
+    <meta property="og:image" content="https://yuwb.cn/xyq/icons/icon.svg" />
+    <meta property="og:site_name" content="梦幻西游工具箱" />
+    <meta property="og:locale" content="zh_CN" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="梦幻西游工具箱 — 收益记录、点卡统计" />
+    <meta name="twitter:description" content="梦幻西游游戏辅助工具，记录收益、点卡消耗、物品获取。" />
+    <meta name="twitter:image" content="https://yuwb.cn/xyq/icons/icon.svg" />
+
+    <!-- 字体 -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet" />
 
-    <script>
+    <!-- JSON-LD 结构化数据 -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "梦幻西游工具箱",
+      "description": "梦幻西游游戏辅助工具，记录收益、点卡消耗、物品获取",
+      "url": "https://yuwb.cn/xyq/",
+      "applicationCategory": "GameApplication",
+      "operatingSystem": "Web",
+      "inLanguage": "zh-CN"
+    }
+    </script>
+
+    <!-- 百度统计 -->
+    <script async>
       var _hmt = _hmt || [];
       (function () {
         var hm = document.createElement("script");

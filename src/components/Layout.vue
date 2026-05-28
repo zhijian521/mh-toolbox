@@ -61,7 +61,7 @@ import AppIcon from './AppIcon.vue'
 const route = useRoute()
 
 const tabs = [
-  { path: '/online-record', label: '在线记录', icon: 'clock' },
+  { path: '/online-record', label: '收益记录', icon: 'clock' },
   { path: '/trade-record', label: '交易记录', icon: 'coin' },
   { path: '/character-record', label: '角色记录', icon: 'user-filled' },
   { path: '/growth-record', label: '养成记录', icon: 'trend-charts' },

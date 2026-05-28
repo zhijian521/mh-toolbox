@@ -3,7 +3,7 @@
     <!-- 页头：状态 + 控制 -->
     <header class="page-header">
       <div class="header-info">
-        <h1 class="page-title">在线记录</h1>
+        <h1 class="page-title">收益记录</h1>
         <p class="page-subtitle">记录游戏时光，追踪点卡消耗与物品收益</p>
       </div>
       <div class="header-controls">
