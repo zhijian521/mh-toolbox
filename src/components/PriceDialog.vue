@@ -15,17 +15,17 @@
           maxlength="10"
         />
         <div class="price-row">
-          <span class="price-prefix">¥</span>
           <input
             ref="inputEl"
             v-model.number="price"
             type="number"
             min="0"
-            step="1000"
+            step="0.1"
             class="price-input"
             placeholder="输入价格"
             @keyup.enter="handleConfirm"
           />
+          <span class="price-suffix">W</span>
         </div>
       </div>
     </div>
@@ -61,7 +61,8 @@ const inputEl = ref(null)
 
 watch(() => props.item, (item) => {
   if (item) {
-    price.value = item.price || 0
+    // 存储值 → 万（显示用）
+    price.value = item.price ? item.price / 10000 : 0
     customName.value = item.name || '其他'
   }
 }, { immediate: true })
@@ -71,7 +72,8 @@ watch(visible, async (v) => {
 })
 
 const handleConfirm = () => {
-  emit('confirm', { price: price.value, name: isCustom.value ? customName.value : props.item?.name })
+  // 万 → 存储值
+  emit('confirm', { price: Math.round(price.value * 10000), name: isCustom.value ? customName.value : props.item?.name })
   visible.value = false
 }
 
@@ -135,10 +137,10 @@ const handleClose = () => {
   gap: @spacing-sm;
 }
 
-.price-prefix {
-  font-family: @font-serif;
-  font-size: 1.125rem;
-  color: @color-primary;
+.price-suffix {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: @text-muted;
   flex-shrink: 0;
 }
 

@@ -110,6 +110,17 @@
       <section class="item-panel">
         <div class="panel-header">
           <h2 class="panel-title">物品选择</h2>
+          <div class="panel-actions">
+            <button class="btn-mini" @click="exportPrices" title="导出单价">导出</button>
+            <button class="btn-mini" @click="triggerImport" title="导入单价">导入</button>
+            <input
+              ref="importInput"
+              type="file"
+              accept=".json"
+              class="import-input"
+              @change="importPrices"
+            />
+          </div>
         </div>
         <div class="item-panel-body">
           <!-- 固定价格区 -->
@@ -245,13 +256,118 @@ const selectedItems = ref([])
 const showPriceDialog = ref(false)
 const showHelp = ref(false)
 const currentItem = ref(null)
+const importInput = ref(null)
 
-// 记录已保存的最后时间点，避免重复 save
+// 导入导出
+const triggerImport = () => importInput.value?.click()
+
+const exportPrices = () => {
+  const data = {
+    fixed: itemsData.value.map(({ id, name, price }) => ({ id, name, price })),
+    unset: unsetItemsData.value.map(({ id, name, price }) => ({ id, name, price })),
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `梦幻西游物品单价_${new Date().toLocaleDateString()}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+  toast.success('单价已导出')
+}
+
+const importPrices = (e) => {
+  const file = e.target.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result)
+      if (!data.fixed || !data.unset) {
+        return toast.warning('文件格式不正确')
+      }
+      let count = 0
+      data.fixed.forEach((item) => {
+        const idx = itemsData.value.findIndex(i => i.id === item.id)
+        if (idx !== -1 && item.price > 0) {
+          itemsData.value[idx].price = item.price
+          count++
+        }
+      })
+      data.unset.forEach((item) => {
+        const idx = unsetItemsData.value.findIndex(i => i.id === item.id)
+        if (idx !== -1 && item.price > 0) {
+          unsetItemsData.value[idx].price = item.price
+          count++
+        }
+      })
+      toast.success(`已导入 ${count} 个物品单价`)
+    } catch {
+      toast.error('文件解析失败')
+    }
+  }
+  reader.readAsText(file)
+  importInput.value.value = ''
+}
+
+// 记录已保存的最后时间点，避免重复累加
 let lastSavedHours = 0
 
-const saveRecord = (onlineTime) => {
+// 自动保存：只增量更新累积值，不重复建 onlineList 记录
+const autoSave = (onlineTime) => {
   if (onlineTime <= 0 || onlineTime <= lastSavedHours) return
+  const delta = onlineTime - lastSavedHours
   lastSavedHours = onlineTime
+  const { onlineAccounts, cardPrice } = currentSetData.value
+  const cost = delta * cardPrice * CARD_COST_MULTIPLIER * onlineAccounts
+  todaysData.value.onlineTime += delta
+  todaysData.value.cardCost += cost
+  todaysData.value.todaysBalance = todaysData.value.todaysIncome - todaysData.value.cardCost
+}
+
+const startOnline = () => {
+  lastSavedHours = 0
+  setAutoSave(autoSave)
+  start()
+}
+
+const endOnline = () => {
+  const onlineTime = getOnlineTime()
+  if (onlineTime > 0) {
+    // 补上最后一段未自动保存的增量
+    const delta = onlineTime - lastSavedHours
+    if (delta > 0) {
+      const { onlineAccounts, cardPrice } = currentSetData.value
+      todaysData.value.onlineTime += delta
+      todaysData.value.cardCost += delta * cardPrice * CARD_COST_MULTIPLIER * onlineAccounts
+      todaysData.value.todaysBalance = todaysData.value.todaysIncome - todaysData.value.cardCost
+    }
+    const { onlineAccounts, cardPrice } = currentSetData.value
+    addOnlineRecord({
+      time: onlineTime,
+      start: startTime.value,
+      end: new Date(),
+      onlineAccounts,
+      cardPrice,
+      cardCost: onlineTime * cardPrice * CARD_COST_MULTIPLIER * onlineAccounts,
+    })
+  }
+  setAutoSave(null)
+  stop()
+}
+
+// 窗口关闭时保存最终记录
+const onBeforeUnload = () => {
+  if (!isOnline.value) return
+  const onlineTime = getOnlineTime()
+  if (onlineTime <= 0) return
+  const delta = onlineTime - lastSavedHours
+  if (delta > 0) {
+    const { onlineAccounts, cardPrice } = currentSetData.value
+    todaysData.value.onlineTime += delta
+    todaysData.value.cardCost += delta * cardPrice * CARD_COST_MULTIPLIER * onlineAccounts
+    todaysData.value.todaysBalance = todaysData.value.todaysIncome - todaysData.value.cardCost
+  }
   const { onlineAccounts, cardPrice } = currentSetData.value
   addOnlineRecord({
     time: onlineTime,
@@ -261,27 +377,6 @@ const saveRecord = (onlineTime) => {
     cardPrice,
     cardCost: onlineTime * cardPrice * CARD_COST_MULTIPLIER * onlineAccounts,
   })
-}
-
-const startOnline = () => {
-  lastSavedHours = 0
-  setAutoSave(saveRecord)
-  start()
-}
-
-const endOnline = () => {
-  const onlineTime = getOnlineTime()
-  if (onlineTime > 0) saveRecord(onlineTime)
-  setAutoSave(null)
-  stop()
-}
-
-// 窗口关闭时自动保存
-const onBeforeUnload = () => {
-  if (isOnline.value) {
-    const onlineTime = getOnlineTime()
-    if (onlineTime > 0) saveRecord(onlineTime)
-  }
 }
 
 const handleItemClick = (item) => {
@@ -344,7 +439,7 @@ onMounted(() => {
     selectedItems.value = todaysData.value.loadList
   }
   lastSavedHours = isOnline.value ? getOnlineTime() : 0
-  setAutoSave(saveRecord)
+  if (isOnline.value) setAutoSave(autoSave)
   window.addEventListener('beforeunload', onBeforeUnload)
 })
 
@@ -361,7 +456,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: @spacing-2xl;
-  min-height: calc(100vh - 48px);
+  height: calc(100vh - 48px);
+  overflow: hidden;
 }
 
 /* ========== 页头 ========== */
@@ -570,6 +666,7 @@ onUnmounted(() => {
 .main-area {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 1fr 320px;
   gap: @spacing-2xl;
@@ -599,6 +696,23 @@ onUnmounted(() => {
   align-items: center;
   margin-bottom: @spacing-lg;
 }
+
+.panel-actions {
+  display: flex; gap: @spacing-xs; flex-shrink: 0;
+}
+
+.btn-mini {
+  padding: 2px 10px;
+  border: 1px solid @color-border;
+  background: @bg-paper;
+  font-size: 0.6875rem; color: @text-muted;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all @transition-fast ease;
+  &:hover { border-color: @color-primary; color: @color-primary; }
+}
+
+.import-input { display: none; }
 
 .panel-title {
   .serif-title();

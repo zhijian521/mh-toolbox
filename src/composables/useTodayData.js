@@ -66,9 +66,7 @@ export function useTodayData() {
   const addOnlineRecord = (record) => {
     ensureDate()
     todaysData.value.onlineList.unshift(record)
-    todaysData.value.onlineTime += record.time
-    todaysData.value.cardCost += record.cardCost
-    todaysData.value.todaysBalance = todaysData.value.todaysIncome - todaysData.value.cardCost
+    // 累积值由调用方（autoSave / endOnline）管理，此处仅追加记录
   }
 
   const updateIncome = (income) => {
