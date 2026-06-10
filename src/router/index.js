@@ -12,12 +12,12 @@ const routes = [
   {
     path: '/',
     component: Layout,
-    redirect: '/online-record',
     children: [
       {
-        path: 'online-record',
+        path: '',
         name: 'OnlineRecord',
         component: OnlineRecord,
+        alias: 'online-record',
         meta: { title: '收益记录' }
       },
       {
