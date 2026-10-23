@@ -10,6 +10,7 @@
 
 ### 新增
 - `docs/ARCHITECTURE.md` 架构与扩展指南、本更新日志。
+- 提交信息规范（Conventional Commits 风格：`type: 简短描述`）。
 - 字体随包附带 OFL 1.1 许可文本。
 
 ## [0.1.0] - 2026-10-23

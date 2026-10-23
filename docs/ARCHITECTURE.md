@@ -98,6 +98,27 @@ npm run dist       # 打包安装版 + 便携版到 dist/
 - 网络不佳时设置镜像：`ELECTRON_MIRROR` / `ELECTRON_BUILDER_BINARIES_MIRROR`（npmmirror）。
 - 便携版偶发被杀毒软件锁文件：删旧文件重跑 `npx electron-builder --win portable`。
 
+## 提交信息规范
+
+格式：`<type>: <简短描述>` —— type 用英文小写，冒号后跟一个空格，描述简明扼要（建议不超过 50 字），可用中文。
+
+| type | 用途 |
+|---|---|
+| `feat` | 新功能 |
+| `fix` | 缺陷修复 |
+| `docs` | 文档变更 |
+| `style` | 界面 / 样式调整（不影响逻辑） |
+| `refactor` | 重构（既非新功能也非修复） |
+| `perf` | 性能优化 |
+| `test` | 测试相关 |
+| `chore` | 构建、依赖、工具链等杂项 |
+
+补充规则：
+
+- 可选 scope 限定影响范围：`feat(quick): 支持数量累计`、`fix(titlebar): 双击还原失效`
+- 详细说明写在正文（标题空一行之后），一个提交只做一件事
+- 示例：`feat: 新增装备更换记录`、`fix: 修复目标进度重复注入`、`docs: 补充提交信息规范`
+
 ## 已知约定
 
 - 金额显示统一走 `U.fmtMoney`（万/亿自动换算）。
