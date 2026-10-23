@@ -67,14 +67,16 @@ mh-tool/
 | 集合 | 字段要点 |
 |---|---|
 | `characters` | id, name, level, school, server |
-| `transactions` | id, characterId, date, kind(income/expense), currency(cash/reserve), amount(**单位: 万**), category, minutes, note, source?/itemId?（source='quick' 为快速记录生成） |
+| `transactions` | id, ledger(earnings/account), recordType(money/item), characterId, date, kind, currency(cash/reserve/rmb), amount, category, minutes, note, fee, channel；物品包含 itemName/quantity/unitPrice/status/saleId；结算包含 itemRecordId；装备关联包含 equipmentId/gearAction |
 | `goals` | id, characterId, type(money/gear/progress), title, target, current, unit, status, deadline, logs[] |
 | `equipment` | id, characterId, slot, name, level, attributes, special, gems, status |
 | `gearLogs` | id, equipmentId, characterId, date, action, amount, note |
 | `itemPrices` | 物品 id → 单价（**单位: 梦幻币**，与网页版单价文件互通） |
 | `quickSettings` | accounts(在线角色数), cardPrice(梦幻币/点) |
 
-> 金额双单位约定：transactions.amount 用「万」；itemPrices 用「梦幻币」（×10000 换算）。
+> 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 2。
+
+共享账本列表和筛选位于 `views/records.js`，收益表单位于 `transactions.js`，账号表单位于 `account.js`；金额、结算和装备关联逻辑集中在 `core/data.js`。
 
 ## 如何新增一个页面
 
@@ -97,6 +99,8 @@ npm start          # 普通运行（无热更新）
 npm run smoke      # 冒烟：启动 1.2s 自动关闭
 npm run shots      # 注入示例数据截图到 docs/screenshots（不落盘）
 npm run demo      # 写入完整示例数据到本地（覆盖当前数据）
+npm test           # 记账领域回归测试
+npm run test:electron # 隔离数据的真实 Electron 流程检查
 npm run dist       # 打包安装版 + 便携版到 dist/
 ```
 
@@ -132,7 +136,7 @@ npm run dist       # 打包安装版 + 便携版到 dist/
 
 ## 已知约定
 
-- 金额显示统一走 `U.fmtMoney`（万/亿自动换算）。
-- `source='quick'` 的交易由快速记录生成：物品点击 → 物品掉落收入；结束游戏 → 点卡支出（小时 × 点卡价 × 6 × 角色数）。
+- 游戏币显示走 `U.fmtMoney`（万/亿自动换算）；可能含人民币的金额走 `U.fmtAmount(value, currency)`。
+- `source='quick'` 的记录归收益账本：物品点击 → 物品估值（金币直接记实际收入）；结束游戏 → 点卡成本。
 - 界面禁止 emoji 图标；`✕`/`✓` 为约定排版符号。
 - 样式 Token 全部在 `styles.css :root`，改风格先改 `docs/STYLE_GUIDE.md`。

@@ -7,7 +7,8 @@ Views.characters = function () {
   el.innerHTML =
     '<div class="char-grid">' +
     chars.map(function (c) {
-      const txN = D.state.transactions.filter(function (t) { return t.characterId === c.id; }).length;
+      const txN = D.earnings().filter(function (t) { return t.characterId === c.id; }).length;
+      const accountN = D.accounts().filter(function (t) { return t.characterId === c.id; }).length;
       const goalN = D.state.goals.filter(function (g) { return g.characterId === c.id && g.status === 'active'; }).length;
       const eqN = D.state.equipment.filter(function (e) { return e.characterId === c.id && e.status === 'active'; }).length;
       return '<div class="char-card" data-id="' + c.id + '">' +
@@ -16,6 +17,7 @@ Views.characters = function () {
         '<div class="char-sub">' + (c.level ? c.level + ' 级 · ' : '') + U.esc(c.school || '') + (c.server ? ' · ' + U.esc(c.server) : '') + '</div></div></div>' +
         '<div class="char-stats">' +
           '<div class="char-stat"><div class="n">' + U.fmtInt(txN) + '</div><div class="t">收益记录</div></div>' +
+          '<div class="char-stat"><div class="n">' + U.fmtInt(accountN) + '</div><div class="t">账号记录</div></div>' +
           '<div class="char-stat"><div class="n">' + U.fmtInt(goalN) + '</div><div class="t">进行中目标</div></div>' +
           '<div class="char-stat"><div class="n">' + U.fmtInt(eqN) + '</div><div class="t">在用装备</div></div>' +
         '</div>' +
@@ -37,7 +39,7 @@ Views.characters = function () {
         D.state.equipment.filter(function (e) { return e.characterId === c.id; }).length;
       const ok = await UI.confirmModal({
         title: '删除角色',
-        message: '确定删除角色「' + c.name + '」吗？其名下 ' + n + ' 条相关记录（收益/目标/装备）会一并删除，且无法恢复。',
+        message: '确定删除角色「' + c.name + '」吗？其名下 ' + n + ' 条相关记录（收益/账号账本/目标/装备）会一并删除，且无法恢复。',
         danger: true, confirmText: '确认删除'
       });
       if (!ok) return;

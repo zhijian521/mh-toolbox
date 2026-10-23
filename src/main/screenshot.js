@@ -45,11 +45,11 @@ function attachDevFlows(win) {
         await wait(250);
         await capture(win, 'shot-02-transactions.png');
         const selCount = await win.webContents.executeJavaScript('document.querySelectorAll(".xsel").length', true);
-        console.log('[check] transactions .xsel =', selCount, '(expect 4)');
+        console.log('[check] transactions .xsel =', selCount, '(expect 6)');
         await win.webContents.executeJavaScript('Views.txModal()', true);
         await wait(150);
         const modalSel = await win.webContents.executeJavaScript('document.querySelectorAll(".modal .xsel").length', true);
-        console.log('[check] txModal .xsel =', modalSel, '(expect 3)');
+        console.log('[check] txModal .xsel =', modalSel, '(expect 4, including hidden item status)');
         await win.webContents.executeJavaScript('UI.closeModal()', true);
         await win.webContents.executeJavaScript("Views.go('goals')", true);
         await wait(250);
@@ -57,6 +57,9 @@ function attachDevFlows(win) {
         await win.webContents.executeJavaScript("Views.go('quick')", true);
         await wait(250);
         await capture(win, 'shot-04-quick.png');
+        await win.webContents.executeJavaScript("Views.go('account')", true);
+        await wait(250);
+        await capture(win, 'shot-05-account.png');
       } catch (e) {
         console.error('screenshot failed:', e);
       }

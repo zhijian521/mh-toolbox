@@ -58,20 +58,21 @@ Views.quick = function () {
   const today = U.today();
 
   const quickTxs = D.state.transactions.filter(function (t) {
-    return t.source === 'quick' && t.date === today && t.characterId === charId;
+    return t.ledger === 'earnings' && t.source === 'quick' && t.date === today && t.characterId === charId;
   });
   const cardTxs = quickTxs.filter(function (t) { return t.kind === 'expense'; });
   const lootTxs = quickTxs.filter(function (t) { return t.kind === 'income'; }).sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
   const saved = {
     hours: cardTxs.reduce(function (s, t) { return s + (t.minutes || 0); }, 0) / 60,
     card: cardTxs.reduce(function (s, t) { return s + t.amount; }, 0),
-    loot: lootTxs.reduce(function (s, t) { return s + t.amount; }, 0)
+    loot: lootTxs.reduce(function (s, t) { return s + (t.recordType === 'item' && t.status === 'held' ? D.itemValue(t) : 0); }, 0),
+    coins: D.txIn(charId, today, today).reduce(function (s, t) { return s + (t.recordType !== 'item' && t.kind === 'income' ? t.amount : 0); }, 0)
   };
   const liveHours = q.isOnline && q.startTime ? (Date.now() - q.startTime) / 3600000 : 0;
   const liveCost = liveHours * settings.cardPrice * 6 * settings.accounts / 10000;
   const totalHours = saved.hours + liveHours;
   const totalCard = saved.card + liveCost;
-  const balance = saved.loot - totalCard;
+  const balance = saved.coins - totalCard;
   const priceText = settings.cardPrice >= 10000 ? (settings.cardPrice / 10000).toFixed(1) + '万' : settings.cardPrice.toLocaleString('zh-CN');
 
   function itemCard(item) {
@@ -100,8 +101,8 @@ Views.quick = function () {
     '<div class="stat-grid">' +
       '<div class="stat"><div class="k">今日在线</div><div class="v" id="quick-h">' + totalHours.toFixed(2) + ' 小时</div><div class="d">按结束游戏的时间累计</div></div>' +
       '<div class="stat bad"><div class="k">点卡消耗</div><div class="v" id="quick-card">' + U.esc(U.fmtMoney(totalCard)) + '</div><div class="d">' + settings.accounts + ' 角色 · ' + priceText + '/点 · 6点/时</div></div>' +
-      '<div class="stat good"><div class="k">物品收益</div><div class="v" id="quick-loot">' + U.esc(U.fmtMoney(saved.loot)) + '</div><div class="d">今日快速记录共 ' + lootTxs.length + ' 件</div></div>' +
-      '<div class="stat ' + (balance >= 0 ? 'good' : 'bad') + '"><div class="k">今日结余</div><div class="v" id="quick-balance">' + U.esc(U.fmtMoney(balance)) + '</div><div class="d">物品收益 − 点卡消耗</div></div>' +
+      '<div class="stat hi"><div class="k">持有物品估值</div><div class="v" id="quick-loot">' + U.esc(U.fmtMoney(saved.loot)) + '</div><div class="d">今日速记物品 · 出售后结算收入</div></div>' +
+      '<div class="stat ' + (balance >= 0 ? 'good' : 'bad') + '"><div class="k">游戏币结余</div><div class="v" id="quick-balance">' + U.esc(U.fmtMoney(balance)) + '</div><div class="d">今日游戏币收入 − 速记点卡消耗</div></div>' +
     '</div>' +
 
     '<div class="quick-main">' +
@@ -119,14 +120,14 @@ Views.quick = function () {
             const item = Views.quickItemById(t.itemId);
             return '<div class="quick-row" data-tid="' + t.id + '">' +
               '<span class="quick-row-img">' + (item ? '<img src="assets/images/online-record/' + item.img + '" alt="">' : UI.icon('book', 16)) + '</span>' +
-              '<span class="quick-row-name" title="' + U.esc(t.note || '') + '">' + U.esc(t.note || '物品') + '</span>' +
-              '<span class="quick-row-price">+' + U.esc(U.fmtMoney(t.amount)) + '</span>' +
+              '<span class="quick-row-name" title="' + U.esc(t.note || '') + '">' + U.esc(t.itemName || t.note || '物品') + (t.recordType === 'item' ? '<small class="cell-sub">' + U.esc(D.itemStatuses[t.status]) + ' · 估值</small>' : '') + '</span>' +
+              '<span class="quick-row-price ' + (t.recordType === 'item' ? 'money-estimate' : '') + '">' + U.esc(U.fmtMoney(t.amount)) + '</span>' +
               '<button class="quick-row-x" title="移除">✕</button></div>';
           }).join('')
           : '<div class="quick-result-empty">点击左侧物品图标<br>快速记录今日掉落</div>') +
         '</div>' +
         '<div class="quick-result-footer">' +
-          '<span>共 <b>' + lootTxs.length + '</b> 件 · 合计 <b>' + U.esc(U.fmtMoney(saved.loot)) + '</b></span>' +
+          '<span>共 <b>' + lootTxs.length + '</b> 条 · 持有估值 <b>' + U.esc(U.fmtMoney(saved.loot)) + '</b></span>' +
           '<button class="btn btn-sm btn-ghost" data-act="tolist">收益记录</button>' +
         '</div>' +
       '</div>' +
@@ -147,7 +148,9 @@ Views.quick = function () {
 
   el.querySelectorAll('.quick-row').forEach(function (row) {
     row.querySelector('.quick-row-x').addEventListener('click', async function () {
-      D.state.transactions = D.state.transactions.filter(function (t) { return t.id !== row.dataset.tid; });
+      const tx = D.state.transactions.find(function (t) { return t.id === row.dataset.tid; });
+      if (tx && tx.saleId && !await UI.confirmModal({ title: '移除已出售物品', message: '关联的成交收入也会删除，确定继续吗？', danger: true })) return;
+      D.removeTransaction(row.dataset.tid);
       await D.persist();
       UI.toast('已移除该记录');
       Views.quick();
@@ -176,7 +179,7 @@ Views.quickTick = function () {
   const charId = Views.quickCharId();
   const today = U.today();
   const cardTxs = D.state.transactions.filter(function (t) {
-    return t.source === 'quick' && t.date === today && t.characterId === charId && t.kind === 'expense';
+    return t.ledger === 'earnings' && t.source === 'quick' && t.date === today && t.characterId === charId && t.kind === 'expense';
   });
   const savedHours = cardTxs.reduce(function (s, t) { return s + (t.minutes || 0); }, 0) / 60;
   const savedCard = cardTxs.reduce(function (s, t) { return s + t.amount; }, 0);
@@ -184,7 +187,7 @@ Views.quickTick = function () {
   const liveH = diff / 3600000;
   const liveC = liveH * settings.cardPrice * 6 * settings.accounts / 10000;
   const lootTx = D.state.transactions.filter(function (t) {
-    return t.source === 'quick' && t.date === today && t.characterId === charId && t.kind === 'income';
+    return t.ledger === 'earnings' && t.recordType !== 'item' && t.date === today && t.characterId === charId && t.kind === 'income';
   });
   const loot = lootTx.reduce(function (s, t) { return s + t.amount; }, 0);
 
@@ -220,7 +223,7 @@ Views.quickStop = async function () {
   if (h > 0) {
     const cost = h * settings.cardPrice * 6 * settings.accounts / 10000;
     D.state.transactions.push({
-      id: U.uid(), characterId: Views.quickCharId(), date: U.today(),
+      id: U.uid(), ledger: 'earnings', recordType: 'money', characterId: Views.quickCharId(), date: U.today(),
       kind: 'expense', currency: 'cash', amount: Math.round(cost * 100) / 100,
       category: '点卡', minutes: Math.round(h * 60),
       note: '在线 ' + h.toFixed(2) + ' 小时 × ' + settings.accounts + ' 角色',
@@ -238,13 +241,13 @@ Views.quickAddLoot = async function (item) {
   const price = D.itemPrice(item.id);
   if (!price) { Views.quickPriceDialog(item, true); return; }
   D.state.transactions.push({
-    id: U.uid(), characterId: Views.quickCharId(), date: U.today(),
+    id: U.uid(), ledger: 'earnings', recordType: item.id === 99 ? 'money' : 'item', characterId: Views.quickCharId(), date: U.today(),
     kind: 'income', currency: 'cash', amount: Math.round(price / 100) / 100,
     category: '物品掉落', minutes: 0, note: item.name,
-    source: 'quick', itemId: item.id, createdAt: Date.now()
+    source: 'quick', itemId: item.id, itemName: item.name, quantity: 1, unitPrice: Math.round(price / 100) / 100, status: 'held', createdAt: Date.now()
   });
   await D.persist();
-  UI.toast('已记录 ' + item.name + ' +' + U.fmtMoney(price / 10000));
+  UI.toast('已记录 ' + item.name + (item.id === 99 ? ' +' : ' · 参考估值 ') + U.fmtMoney(price / 10000));
   Views.quick();
 };
 

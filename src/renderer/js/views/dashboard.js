@@ -3,138 +3,88 @@
 const Views = window.Views = window.Views || {};
 Views._range = 'month';
 
+Views.statHtml = function (label, value, cls, sub) {
+  return '<div class="stat ' + (cls || '') + '"><div class="k">' + U.esc(label) + '</div><div class="v">' + U.esc(value) + '</div><div class="d">' + U.esc(sub || '') + '</div></div>';
+};
+Views.ledgerTrend = function (records, end, currency) {
+  const start = U.addDays(end, -13);
+  const days = [];
+  for (let n = 0; n < 14; n++) {
+    const date = U.addDays(start, n);
+    const value = records.filter(function (t) { return t.date === date && t.recordType !== 'item' && (t.currency === currency || currency === 'cash' && t.currency === 'reserve'); })
+      .reduce(function (sum, t) { return sum + (t.kind === 'income' ? t.amount - (t.fee || 0) : -t.amount - (t.fee || 0)); }, 0);
+    days.push({ date: date, value: value });
+  }
+  const max = Math.max(1, ...days.map(function (d) { return Math.abs(d.value); }));
+  return '<div class="chart">' + days.map(function (d) {
+    return '<div class="bar-col" title="' + U.esc(d.date + ' 收支差额 ' + U.fmtAmount(d.value, currency)) + '"><div class="bar-track"><i class="bar' + (d.value < 0 ? ' neg' : '') + '" style="height:' + Math.max(2, Math.round(Math.abs(d.value) / max * 78)) + 'px"></i></div><span class="bar-lab">' + d.date.slice(5) + '</span></div>';
+  }).join('') + '</div>';
+};
+Views.recentRecords = function (records, account) {
+  const list = records.slice().sort(function (a, b) { return b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0); }).slice(0, 6);
+  if (!list.length) return '<div class="empty"><p>该时间范围内暂无记录</p></div>';
+  return '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>日期</th><th>角色</th><th>内容</th><th class="num">金额 / 估值</th></tr></thead><tbody>' + list.map(function (t) {
+    const item = t.recordType === 'item';
+    const value = item ? D.itemValue(t) : t.amount + (account ? (t.kind === 'income' ? -1 : 1) * (t.fee || 0) : 0);
+    return '<tr><td>' + U.esc(t.date.slice(5)) + '</td><td>' + U.esc(D.charName(t.characterId)) + '</td><td class="ellipsis" title="' + U.esc(t.note || t.category) + '">' + U.esc(item ? t.itemName + ' ×' + t.quantity : t.note || t.category) + '</td><td class="num"><span class="' + (item ? 'money-estimate' : t.kind === 'income' ? 'money-in' : 'money-out') + '">' + (item ? '估值 ' : t.kind === 'income' ? '+' : '−') + U.fmtAmount(value, t.currency) + '</span></td></tr>';
+  }).join('') + '</tbody></table></div>';
+};
+Views.incomeRanking = function (records) {
+  const totals = new Map();
+  records.filter(function (t) { return t.kind === 'income' && t.recordType !== 'item'; }).forEach(function (t) {
+    totals.set(t.category, (totals.get(t.category) || 0) + t.amount);
+  });
+  const list = Array.from(totals).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 8);
+  return '<details class="ledger-ranking"><summary>游戏币收入分类排行</summary>' +
+    (list.length ? list.map(function (r, i) {
+      return '<div class="rank-row"><span class="rank-name">' + (i + 1) + '. ' + U.esc(r[0]) + '</span><div class="rank-track"><i class="rank-fill" style="width:' + (list[0][1] ? Math.round(r[1] / list[0][1] * 100) : 0) + '%"></i></div><span class="rank-val">' + U.fmtMoney(r[1]) + '</span></div>';
+    }).join('') : '<p class="ledger-hint">暂无游戏币收入</p>') + '</details>';
+};
 Views.dashboard = function () {
   const el = document.getElementById('view');
-  const rangeDefs = [
-    { v: 'today', t: '今日' }, { v: 'week', t: '本周' },
-    { v: 'month', t: '本月' }, { v: 'year', t: '今年' }, { v: 'all', t: '全部' }
-  ];
-  const rangeKey = Views._range;
-  const range = U.rangeFor(rangeKey);
-  const txs = D.txIn(D.charFilter, range.from, range.to);
-  const st = D.stats(txs);
-  const hasAny = D.state.transactions.length || D.state.characters.length;
-  const rangeLabel = rangeDefs.find(function (r) { return r.v === rangeKey; }).t;
-
-  if (!hasAny) {
-    el.innerHTML =
-      '<div class="empty"><div class="ic">' + UI.icon('book', 32) + '</div>' +
-      '<p>欢迎使用梦幻养老助手～<br>先创建一个角色，或者直接记第一笔收益</p>' +
-      '<div class="btns"><button class="btn btn-gold" data-act="new-char">创建角色</button>' +
-      '<button class="btn" data-act="demo">加载示例数据</button></div></div>';
-    el.querySelector('[data-act="new-char"]').addEventListener('click', function () { Views.go('characters'); });
-    el.querySelector('[data-act="demo"]').addEventListener('click', Views.loadDemoData);
+  const ranges = [{ v: 'today', t: '今日' }, { v: 'week', t: '本周' }, { v: 'month', t: '本月' }, { v: 'year', t: '今年' }, { v: 'all', t: '全部' }];
+  const range = U.rangeFor(Views._range);
+  const earnings = D.txIn(D.charFilter, range.from, range.to);
+  const accounts = D.txIn(D.charFilter, range.from, range.to, 'account');
+  const st = D.stats(earnings);
+  const held = D.stats(D.scope(D.earnings()));
+  const end = range.to && range.to < U.today() ? range.to : U.today();
+  const goals = D.scope(D.state.goals).filter(function (g) { return g.status === 'active'; }).slice(0, 4);
+  if (!D.state.characters.length && !D.state.transactions.length) {
+    el.innerHTML = '<div class="empty"><p>先创建一个角色，开始记录你的养老生活。</p><div class="btns"><button class="btn btn-gold" data-page="characters">创建角色</button><button class="btn" data-act="demo">加载示例数据</button></div></div>';
+    el.querySelector('[data-page]').onclick = function () { Views.go('characters'); };
+    el.querySelector('[data-act="demo"]').onclick = function () { Views.loadDemoData(); };
     return;
   }
-
-  /* 分类排行（收入） */
-  const catMap = {};
-  txs.forEach(function (t) {
-    if (t.kind !== 'income') return;
-    catMap[t.category] = (catMap[t.category] || 0) + (Number(t.amount) || 0);
-  });
-  const cats = Object.keys(catMap).map(function (k) { return { k: k, v: catMap[k] }; })
-    .sort(function (a, b) { return b.v - a.v; }).slice(0, 8);
-  const catMax = cats.length ? cats[0].v : 0;
-
-  /* 最近 14 天每日净收益 */
-  const end = range.to && range.to < U.today() ? range.to : U.today();
-  const start = U.addDays(end, -13);
-  const dayMap = {};
-  txs.forEach(function (t) {
-    if (t.date >= start && t.date <= end) {
-      dayMap[t.date] = (dayMap[t.date] || 0) + (t.kind === 'income' ? 1 : -1) * (Number(t.amount) || 0);
-    }
-  });
-  const days = [];
-  for (let i = 0; i < 14; i++) {
-    const d = U.addDays(start, i);
-    days.push({ d: d, v: dayMap[d] || 0 });
-  }
-  const dayMax = Math.max.apply(null, days.map(function (x) { return Math.abs(x.v); }).concat([1]));
-
-  /* 进行中目标 */
-  const goals = D.scope(D.state.goals).filter(function (g) { return g.status === 'active'; })
-    .sort(function (a, b) { return b.createdAt - a.createdAt; }).slice(0, 5);
-
-  /* 最近记录 */
-  const recent = D.scope(D.state.transactions).slice().sort(function (a, b) {
-    return b.date === a.date ? (b.createdAt || 0) - (a.createdAt || 0) : (b.date > a.date ? 1 : -1);
-  }).slice(0, 8);
-
-  el.innerHTML =
-    '<div class="filter-bar">' +
-      '<div class="seg" style="background:var(--panel2)">' +
-        rangeDefs.map(function (r) {
-          return '<button type="button" class="seg-btn' + (r.v === rangeKey ? ' on' : '') + '" data-range="' + r.v + '">' + r.t + '</button>';
-        }).join('') + '</div>' +
-      '<span class="badge">' + (range.from ? range.from + ' ~ ' + range.to : '全部时间') + '</span>' +
-    '</div>' +
-
-    '<div class="stat-grid">' +
-      statCard('总收入', U.fmtMoney(st.income), 'good', '现金+储备') +
-      statCard('总支出', U.fmtMoney(st.expense), 'bad', '含点卡等成本') +
-      statCard('净收益', U.fmtMoney(st.net), st.net >= 0 ? 'good' : 'bad', '现金 ' + U.fmtMoney(st.cashNet) + ' · 储备 ' + U.fmtMoney(st.reserveNet)) +
-      statCard('时薪', st.hourly != null ? U.fmtMoney(st.hourly) + '/时' : '—', 'hi', '按已填用时的记录计算') +
-      statCard('记录笔数', U.fmtInt(st.count), '', '累计用时 ' + U.fmtMinutes(st.minutes)) +
-    '</div>' +
-
-    '<div class="dash-grid" style="margin-top:16px">' +
-      '<div class="dash-col">' +
-        '<div class="card"><div class="card-title">每日净收益<span class="sub">近 14 天（' + rangeLabel + '范围内）</span></div>' +
-          '<div class="chart">' + days.map(function (x) {
-            const h = Math.max(3, Math.round((Math.abs(x.v) / dayMax) * 92));
-            const tip = x.d.slice(5) + (x.v >= 0 ? ' 净收 ' : ' 净支 ') + U.fmtMoney(Math.abs(x.v));
-            return '<div class="bar-col" title="' + U.esc(tip) + '">' +
-              '<div class="bar-track"><i class="bar' + (x.v < 0 ? ' neg' : '') + '" style="height:' + h + 'px"></i></div>' +
-              '<span class="bar-lab">' + x.d.slice(5) + '</span></div>';
-          }).join('') + '</div></div>' +
-
-        '<div class="card"><div class="card-title">最近记录</div>' +
-          (recent.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>日期</th><th>角色</th><th>分类</th><th class="num">金额</th><th>备注</th></tr></thead><tbody>' +
-            recent.map(function (t) {
-              return '<tr><td>' + U.esc(t.date.slice(5)) + '</td><td>' + U.esc(D.charName(t.characterId)) + '</td>' +
-                '<td><span class="badge ' + (t.kind === 'income' ? 'in' : 'out') + '">' + U.esc(t.category) + '</span></td>' +
-                '<td class="num"><span class="' + (t.kind === 'income' ? 'money-in' : 'money-out') + '">' + (t.kind === 'income' ? '+' : '-') + U.fmtMoney(t.amount) + '</span>' +
-                (t.currency === 'reserve' ? '<div class="cell-sub">储备金</div>' : '') + '</td>' +
-                '<td class="ellipsis">' + U.esc(t.note || '') + '</td></tr>';
-            }).join('') + '</tbody></table></div>'
-          : '<div class="empty" style="padding:24px"><p>该范围内还没有记录</p></div>') +
-        '</div>' +
-      '</div>' +
-
-      '<div class="dash-col">' +
-        '<div class="card"><div class="card-title">分类收益排行<span class="sub">' + rangeLabel + '</span></div>' +
-          (cats.length ? cats.map(function (c, i) {
-            return '<div class="rank-row"><span class="rank-name">' + (i + 1) + '. ' + U.esc(c.k) + '</span>' +
-              '<div class="rank-track"><i class="rank-fill" style="width:' + (catMax ? Math.round(c.v / catMax * 100) : 0) + '%"></i></div>' +
-              '<span class="rank-val">' + U.fmtMoney(c.v) + '</span></div>';
-          }).join('') : '<div class="empty" style="padding:24px"><p>暂无收入记录</p></div>') +
-        '</div>' +
-        '<div class="card"><div class="card-title">进行中的目标</div>' +
-          (goals.length ? goals.map(function (g) {
-            const pct = g.target ? Math.min(100, Math.round(g.current / g.target * 100)) : 0;
-            return '<div style="margin-bottom:14px">' +
-              '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">' +
-              '<span>' + U.esc(g.title) + '</span><span style="color:var(--gold2)">' + U.fmtMoney(g.current) + ' / ' + U.fmtMoney(g.target) + '</span></div>' +
-              '<div class="progress"><i style="width:' + pct + '%"></i></div></div>';
-          }).join('') : '<div class="empty" style="padding:24px"><p>还没有进行中的目标<br><button class="btn btn-sm" style="margin-top:10px" data-act="new-goal">去创建目标</button></p></div>') +
-        '</div>' +
-      '</div>' +
-    '</div>';
-
-  function statCard(k, v, cls, d) {
-    return '<div class="stat ' + (cls || '') + '"><div class="k">' + U.esc(k) + '</div><div class="v">' + U.esc(v) + '</div>' + (d ? '<div class="d">' + U.esc(d) + '</div>' : '') + '</div>';
-  }
-
-  el.querySelectorAll('[data-range]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      Views._range = b.dataset.range;
-      Views.dashboard();
-    });
-  });
-  const newGoal = el.querySelector('[data-act="new-goal"]');
-  if (newGoal) newGoal.addEventListener('click', function () { Views.go('goals'); });
+  el.innerHTML = '<div class="filter-bar"><div class="seg">' + ranges.map(function (r) {
+    return '<button class="seg-btn' + (r.v === Views._range ? ' on' : '') + '" data-range="' + r.v + '">' + r.t + '</button>';
+  }).join('') + '</div><span class="badge">' + (range.from ? range.from + ' 至 ' + range.to : '全部时间') + '</span><span class="ledger-hint">下方两类账本共用角色与时间筛选</span></div>' +
+    '<section class="ledger-section" data-ledger="earnings"><div class="ledger-section-head"><div><h2>日常收益</h2><p>游戏币与物品分开记，看看日常赚了多少</p></div><button class="btn btn-sm" data-page="transactions">查看收益记录</button></div>' +
+    '<div class="stat-grid earnings-stats">' +
+      Views.statHtml('游戏币收入', U.fmtMoney(st.income), 'good', '现金 ' + U.fmtMoney(st.income - st.reserveIncome) + ' · 储备 ' + U.fmtMoney(st.reserveIncome)) +
+      Views.statHtml('日常成本', U.fmtMoney(st.expense), 'bad', '点卡消耗、药品、修理等') +
+      Views.statHtml('净收益', U.fmtMoney(st.net), st.net >= 0 ? 'good' : 'bad', '游戏币收入 − 日常成本') +
+      Views.statHtml('持有物品估值', U.fmtMoney(held.itemEstimate), 'hi', '当前持有 · 不受时间筛选影响') +
+      Views.statHtml('游戏币时薪', st.hourly == null ? '—' : U.fmtMoney(st.hourly) + '/时', '', '仅按填有用时的游戏币记录计算') + '</div>' +
+    '<div class="ledger-overview-grid"><div class="card"><div class="card-title">每日游戏币净收益<span class="sub">所选范围内 · 近 14 天</span></div>' + Views.ledgerTrend(earnings, end, 'cash') + Views.incomeRanking(earnings) + '</div>' +
+      '<div class="card"><div class="card-title">最近收益记录</div>' + Views.recentRecords(earnings, false) + '</div></div></section>' +
+    '<section class="ledger-section" data-ledger="account"><div class="ledger-section-head"><div><h2>账号账本</h2><p>装备买卖、藏宝阁交易与充值，按币种单独统计</p></div><button class="btn btn-sm" data-page="account">查看账号账本</button></div>' +
+    '<div class="ledger-overview-grid">' + ['rmb', 'cash'].map(function (currency) {
+      const sum = D.accountStats(accounts, currency);
+      const rmb = currency === 'rmb';
+      return '<div class="card account-overview"><div class="card-title">' + (rmb ? '人民币收支' : '梦幻币收支') + '<span class="sub">含手续费 · ' + sum.count + ' 笔</span></div><div class="account-metrics">' +
+        Views.statHtml(rmb ? '总投入' : '交易支出', U.fmtAmount(sum.expense, currency), 'bad') +
+        Views.statHtml(rmb ? '总回款' : '交易收入', U.fmtAmount(sum.income, currency), 'good') +
+        Views.statHtml(rmb ? '净支出' : '收支差额', U.fmtAmount(rmb ? -sum.net : sum.net, currency), '') +
+        '</div><p class="ledger-hint">每日收支差额 · 所选范围内近 14 天</p>' + Views.ledgerTrend(accounts, end, currency) + '</div>';
+    }).join('') + '</div><div class="card"><div class="card-title">最近账号记录<span class="sub">人民币、梦幻币分别记账，不折算合计</span></div>' + Views.recentRecords(accounts, true) + '</div></section>' +
+    '<section class="ledger-section"><div class="ledger-section-head"><div><h2>进行中的目标</h2><p>当前角色的养老计划</p></div><button class="btn btn-sm" data-page="goals">查看目标</button></div>' +
+      (goals.length ? '<div class="goal-overview-grid">' + goals.map(function (g) {
+        const pct = g.target ? Math.min(100, Math.round(g.current / g.target * 100)) : 0;
+        return '<div class="card"><div class="card-title">' + U.esc(g.title) + '</div><div class="ledger-summary compact"><span>' + U.esc(g.current + ' / ' + g.target + ' ' + (g.unit || '万')) + '</span><b>' + pct + '%</b></div><div class="progress"><i style="width:' + pct + '%"></i></div></div>';
+      }).join('') + '</div>' : '<div class="empty"><p>还没有进行中的目标</p></div>') + '</section>';
+  el.querySelectorAll('[data-range]').forEach(function (b) { b.onclick = function () { Views._range = b.dataset.range; Views.dashboard(); }; });
+  el.querySelectorAll('[data-page]').forEach(function (b) { b.onclick = function () { Views.go(b.dataset.page); }; });
 };
 
 Views.loadDemoData = async function (autoConfirm, persist) {
@@ -201,7 +151,7 @@ Views.loadDemoData = async function (autoConfirm, persist) {
     const item = Views.quickItemById(l[1]);
     tx(l[0], c1, 'income', '物品掉落', l[2], 0, item ? item.name : '物品', { source: 'quick', itemId: l[1] });
   });
-  tx(0, c1, 'expense', '点卡', 22.5, 150, '在线 2.50 小时 × 5 角色', { source: 'quick' });
+  tx(0, c1, 'expense', '点卡', 112.5, 150, '在线 2.50 小时 × 5 角色', { source: 'quick' });
 
   const goals = [
     {
@@ -244,14 +194,28 @@ Views.loadDemoData = async function (autoConfirm, persist) {
     21: 80000, 99: 100000, 100: 150000, 101: 600000, 102: 80000, 103: 300000
   };
 
-  D.state = {
+  D.state = D.normalize({
     characters: characters, transactions: transactions, goals: goals,
     equipment: equipment, gearLogs: gearLogs,
     itemPrices: itemPrices,
     quickSettings: { accounts: 5, cardPrice: 15000 }
+  });
+
+  const account = function (n, characterId, kind, currency, category, amount, fee, channel, note, equipmentId) {
+    const record = { id: U.uid(), ledger: 'account', recordType: 'money', characterId, date: day(n), kind, currency, category, amount, fee, channel, note, equipmentId: equipmentId || '', minutes: 0, createdAt: now - n * DAY };
+    D.state.transactions.push(record);
+    if (record.equipmentId) D.syncAccountEquipment(record);
   };
+  account(8, c1, 'expense', 'rmb', '装备交易', 680, 0, '藏宝阁', '购入备用青玉戒指', 'demo-e4');
+  account(5, c1, 'expense', 'rmb', '点卡充值', 100, 0, '官方充值', '充值点卡 100 元');
+  account(1, c1, 'income', 'rmb', '装备交易', 260, 13, '藏宝阁', '旧装备出售到账');
+  account(0, c1, 'expense', 'cash', '养成投入', 80, 0, '游戏内', '给主号补修炼');
+  account(3, c3, 'expense', 'rmb', '召唤兽交易', 350, 0, '藏宝阁', '购入任务须弥');
+  account(0, c3, 'income', 'cash', '装备交易', 90, 0, '游戏内', '出售换下的旧鞋');
+  const soldItem = D.state.transactions.find(function (t) { return t.recordType === 'item' && t.date === day(1); });
+  if (soldItem) D.settleItem(soldItem, { date: day(0), amount: 8.5, note: '摆摊成交示例' });
   D.setCharFilter('all');
   if (persist) await D.persist();
   Views.refreshHeader();
-  Views.dashboard();
+  Views.go('dashboard');
 };

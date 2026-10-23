@@ -47,7 +47,11 @@ function registerIpc(opts) {
 
   ipcMain.handle('mh:saveData', (_e, data) => {
     try {
-      atomicWriteJson(dataFilePath(), data);
+      const file = dataFilePath();
+      if (fs.existsSync(file) && readJson(file).schemaVersion !== 2 && data.schemaVersion === 2) {
+        fs.copyFileSync(file, file + '.before-ledgers-' + Date.now() + '.bak');
+      }
+      atomicWriteJson(file, data);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: String(e.message || e) };

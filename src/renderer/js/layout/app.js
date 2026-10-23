@@ -1,9 +1,10 @@
 'use strict';
 /* 应用入口：路由与全局 UI */
 Views._pages = [
-  { id: 'dashboard', t: '总览', icon: 'chart', sub: '收益统计与目标进度' },
+  { id: 'dashboard', t: '总览', icon: 'chart', sub: '日常收益 · 账号收支 · 目标进度' },
   { id: 'quick', t: '快速记录', icon: 'bolt', sub: '在线计时 · 点卡消耗 · 物品掉落速记' },
-  { id: 'transactions', t: '收益记录', icon: 'ledger', sub: '记录每一笔收入与支出' },
+  { id: 'transactions', t: '收益记录', icon: 'ledger', sub: '游戏币、物品获得与日常成本' },
+  { id: 'account', t: '账号账本', icon: 'archive', sub: '装备交易、藏宝阁收支与点卡充值' },
   { id: 'goals', t: '目标', icon: 'target', sub: '存钱、装备与养成目标' },
   { id: 'equipment', t: '装备', icon: 'sword', sub: '装备档案与更新时间线' },
   { id: 'characters', t: '角色', icon: 'user', sub: '管理你的养老角色' },
@@ -26,6 +27,7 @@ Views.renderHeader = function () {
   const page = Views._pages.find(function (p) { return p.id === Views._current; });
   document.getElementById('page-title').textContent = page.t;
   document.getElementById('page-sub').textContent = page.sub;
+  document.getElementById('quick-add').textContent = page.id === 'account' ? '＋ 记账号收支' : '＋ 记收益 / 物品';
 };
 
 Views.charOptions = function () {
@@ -41,6 +43,7 @@ Views.refreshHeader = function () {
 };
 
 Views.go = function (page) {
+  UI.closePop();
   Views._current = page;
   Views.renderNav();
   Views.renderHeader();
@@ -69,7 +72,7 @@ Views.rerender = function () {
       Views.rerender();
     }
   });
-  document.getElementById('quick-add').addEventListener('click', function () { Views.txModal(); });
+  document.getElementById('quick-add').addEventListener('click', function () { Views._current === 'account' ? Views.accountModal() : Views.txModal(); });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') UI.closeModal();
   });

@@ -498,3 +498,46 @@ body { display: flex; flex-direction: column; }
 .xday.on { background: var(--red); color: #f7f2e7; font-weight: 700; }
 .xday.on:hover { background: #9c3131; }
 .xday.on.today::after { background: #f7f2e7; }
+
+/* ---------- 双账本：收益、账号收支与总览 ---------- */
+[hidden] { display: none !important; }
+.btn:disabled { opacity: .45; cursor: default; }
+.ledger-section { margin-top: 22px; }
+.ledger-section:first-of-type { margin-top: 12px; }
+.ledger-section-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 10px; margin-bottom: 12px; border-bottom: 3px double var(--line-2); }
+.ledger-section-head h2 { font-size: 16px; font-family: var(--font-serif); font-weight: 700; letter-spacing: 1px; }
+.ledger-section-head p, .ledger-hint { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.ledger-section-head p { margin-top: 3px; }
+.ledger-overview-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin: 12px 0; }
+.ledger-overview-grid > * { min-width: 0; }
+.ledger-overview-grid > .card + .card, .goal-overview-grid > .card + .card { margin-top: 0; }
+.char-stats { flex-wrap: wrap; }
+.earnings-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.earnings-stats .v { font-size: 21px; }
+.account-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding-bottom: 10px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+.account-metrics .stat { background: transparent; border: 0; border-radius: 0; padding: 0; }
+.account-metrics .stat .v { font-size: 20px; }
+.account-metrics .stat .d:empty { display: none; }
+.account-overview .chart { margin-top: 6px; }
+.account-overview .bar-lab { font-size: 9px; }
+.goal-overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.ledger-filters { gap: 7px; }
+.ledger-search { width: 150px; }
+.ledger-actions { white-space: nowrap; width: 190px; }
+.ledger-actions .btn { padding: 3px 5px; }
+.ledger-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 22px; padding: 12px 14px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); font-size: 12px; }
+.ledger-summary b { font-weight: 700; }
+.ledger-summary.compact { padding: 0; border: 0; justify-content: space-between; }
+.account-totals .ledger-summary { margin-bottom: 8px; }
+.account-totals { margin-bottom: 12px; }
+.money-estimate, .quick-row-price.money-estimate { color: var(--gold2); }
+.ledger-pagination { display: flex; justify-content: flex-end; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; margin-top: 12px; }
+.ledger-pagination span { margin-right: auto; }
+.ledger-ranking { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.ledger-ranking summary { color: var(--ink-2); font-size: 12px; cursor: pointer; }
+.ledger-ranking[open] summary { margin-bottom: 10px; }
+.quick-row-name .cell-sub { display: block; }
+@media (max-width: 1120px) {
+  .earnings-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ledger-overview-grid { grid-template-columns: minmax(0, 1fr); }
+}

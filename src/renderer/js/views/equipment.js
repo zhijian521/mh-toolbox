@@ -69,10 +69,11 @@ Views.equipment = function () {
     tr.querySelector('[data-act="detail"]').addEventListener('click', function () { Views.eqDetailModal(eq); });
     tr.querySelector('[data-act="del"]').addEventListener('click', async function () {
       const n = D.gearLogsOf(eq.id).length;
-      const ok = await UI.confirmModal({ title: '删除装备', message: '确定删除「' + eq.name + '」吗？' + (n ? '其 ' + n + ' 条变动记录会一并删除。' : ''), danger: true, confirmText: '删除' });
+      const ok = await UI.confirmModal({ title: '删除装备', message: '确定删除「' + eq.name + '」吗？' + (n ? '其 ' + n + ' 条变动记录会一并删除，账号账本中的收支保留。' : ''), danger: true, confirmText: '删除' });
       if (!ok) return;
       D.state.equipment = D.state.equipment.filter(function (x) { return x.id !== eq.id; });
       D.state.gearLogs = D.state.gearLogs.filter(function (l) { return l.equipmentId !== eq.id; });
+      D.accounts().forEach(function (t) { if (t.equipmentId === eq.id) { delete t.equipmentId; delete t.gearAction; } });
       await D.persist(); UI.toast('已删除'); Views.equipment();
     });
   });
@@ -112,40 +113,47 @@ Views.eqModal = function (eq) {
 Views.gearLogModal = function (eq) {
   UI.formModal({
     title: '装备变动 · ' + eq.name,
-    submitText: '记入',
+    values: { date: U.today(), action: 'buy', currency: 'cash', channel: '游戏内', amount: '', sync: true },
     fields: [
-      { key: 'date', label: '日期', type: 'date', required: true, default: U.today() },
+      { key: 'date', label: '日期', type: 'date', required: true },
       { key: 'action', label: '动作', type: 'select', required: true, options: D.gearActions.map(function (a) { return { v: a.v, t: a.t }; }) },
-      { key: 'amount', label: '金额（万）', type: 'number', step: '0.1', min: 0, hint: '购入/打造/宝石为支出，售出为收入' },
-      { key: 'sync', label: '', type: 'check', default: true, hint: '购入/打造/售出时自动生成一笔收益记录' },
-      { key: 'note', label: '备注', type: 'text', full: true, placeholder: '如：换下 100 级刀，卖了 120 万' }
+      { key: 'currency', label: '币种', type: 'segment', options: [{ v: 'cash', t: '梦幻币 · 万' }, { v: 'rmb', t: '人民币 · 元' }] },
+      { key: 'channel', label: '渠道', type: 'select', options: D.channels },
+      { key: 'amount', label: '成交金额', type: 'number', step: '0.01', min: 0 },
+      { key: 'sync', label: '同时记入账号账本', type: 'check', default: true, hint: '购入、售出、打造、宝石支出均可同步' },
+      { key: 'note', label: '备注', type: 'text', full: true }
     ],
     onRender: function (form, api) {
-      const toggle = function () {
-        const row = form.querySelector('[name="sync"]').closest('.frow');
-        row.style.display = ['buy', 'sell', 'craft'].includes(api.getVal('action')) ? '' : 'none';
+      const update = function () {
+        api.show('sync', D.gearAction(api.getVal('action')).dir !== 0);
+        form.querySelector('[data-field="amount"] label').textContent = '成交金额（' + (api.getVal('currency') === 'rmb' ? '元' : '万梦幻币') + '）';
       };
-      form.querySelector('[name="action"]').addEventListener('change', toggle);
-      toggle();
+      form.addEventListener('change', update);
+      form.addEventListener('segchange', update);
+      update();
     },
     onSubmit: async function (data) {
       const act = D.gearAction(data.action);
-      D.state.gearLogs.push({
-        id: U.uid(), equipmentId: eq.id, characterId: eq.characterId,
-        date: data.date, action: data.action, amount: data.amount || 0,
-        note: data.note || '', synced: false, createdAt: Date.now()
-      });
-      if (data.action === 'sell') eq.status = 'sold';
-      if (data.sync && act.dir !== 0 && data.amount) {
-        D.state.transactions.push({
-          id: U.uid(), characterId: eq.characterId, date: data.date,
-          kind: act.dir > 0 ? 'income' : 'expense', currency: 'cash',
-          category: act.dir > 0 ? '摆摊卖货' : (data.action === 'buy' ? '装备购入' : (data.action === 'gem' ? '其他支出' : '打造费用')),
-          amount: data.amount, minutes: 0,
-          note: '装备「' + eq.name + '」' + act.t, createdAt: Date.now()
+      if (data.sync && act.dir !== 0) {
+        const tx = {
+          id: U.uid(), ledger: 'account', recordType: 'money', characterId: eq.characterId,
+          date: data.date, kind: act.dir > 0 ? 'income' : 'expense', currency: data.currency,
+          category: ['craft', 'gem'].includes(data.action) ? '养成投入' : '装备交易',
+          amount: data.amount || 0, fee: 0, minutes: 0, channel: data.channel,
+          equipmentId: eq.id, gearAction: data.action,
+          note: data.note || '装备「' + eq.name + '」' + act.t, createdAt: Date.now()
+        };
+        D.state.transactions.push(tx);
+        D.syncAccountEquipment(tx);
+      } else {
+        D.state.gearLogs.push({
+          id: U.uid(), equipmentId: eq.id, characterId: eq.characterId,
+          date: data.date, action: data.action, amount: data.amount || 0, currency: data.currency,
+          note: data.note || '', synced: false, createdAt: Date.now()
         });
+        D.syncEquipmentStatus(eq.id);
       }
-      await D.persist(); UI.toast('变动已记录 ✓'); Views.equipment();
+      await D.persist(); UI.toast('变动已记录'); Views.equipment();
     }
   });
 };
@@ -172,7 +180,7 @@ Views.eqDetailModal = function (eq) {
             const act = D.gearAction(l.action);
             return '<div class="tl-item">' +
               '<div class="tl-head"><span class="badge ' + (act.dir > 0 ? 'in' : act.dir < 0 ? 'out' : '') + '">' + act.t + '</span>' +
-              '<span class="' + (l.amount ? (act.dir > 0 ? 'money-in' : act.dir < 0 ? 'money-out' : '') : 'money-zero') + '">' + (l.amount ? U.fmtMoney(l.amount) : '') + '</span></div>' +
+              '<span class="' + (l.amount ? (act.dir > 0 ? 'money-in' : act.dir < 0 ? 'money-out' : '') : 'money-zero') + '">' + (l.amount ? U.fmtAmount(l.amount, l.currency) : '') + '</span></div>' +
               '<div class="tl-date">' + U.esc(l.date) + '</div>' +
               (l.note ? '<div class="tl-note">' + U.esc(l.note) + '</div>' : '') +
             '</div>';

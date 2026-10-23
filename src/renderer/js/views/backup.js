@@ -9,7 +9,8 @@ Views.backup = async function () {
       '<div>' +
         '<div class="card"><div class="card-title">数据概览</div>' +
           '<div class="kv"><span class="k">角色</span><span class="v">' + U.fmtInt(s.characters.length) + ' 个</span></div>' +
-          '<div class="kv"><span class="k">收益记录</span><span class="v">' + U.fmtInt(s.transactions.length) + ' 笔</span></div>' +
+          '<div class="kv"><span class="k">收益记录</span><span class="v">' + U.fmtInt(D.earnings().length) + ' 笔（含物品）</span></div>' +
+          '<div class="kv"><span class="k">账号账本</span><span class="v">' + U.fmtInt(D.accounts().length) + ' 笔</span></div>' +
           '<div class="kv"><span class="k">目标</span><span class="v">' + U.fmtInt(s.goals.length) + ' 个</span></div>' +
           '<div class="kv"><span class="k">装备档案</span><span class="v">' + U.fmtInt(s.equipment.length) + ' 件（变动 ' + U.fmtInt(s.gearLogs.length) + ' 次）</span></div>' +
           '<div class="kv"><span class="k">数据文件</span><span class="v">' + U.esc(info.dataFile) + '</span></div>' +
@@ -19,6 +20,7 @@ Views.backup = async function () {
           '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
             '<button class="btn btn-gold" data-act="export">导出备份</button>' +
             '<button class="btn" data-act="import">导入备份</button>' +
+            '<button class="btn" data-act="demo">加载示例数据</button>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -26,7 +28,7 @@ Views.backup = async function () {
         '<div class="card"><div class="card-title">关于</div>' +
           '<div class="kv"><span class="k">应用</span><span class="v">梦幻养老助手 v' + U.esc(info.version) + '</span></div>' +
           '<div class="kv"><span class="k">技术</span><span class="v">Electron 桌面应用 · 本地 JSON 存储</span></div>' +
-          '<div class="kv"><span class="k">提示</span><span class="v">金额统一按「万」记录，显示时自动换算亿。</span></div>' +
+          '<div class="kv"><span class="k">记账单位</span><span class="v">梦幻币按「万」、人民币按「元」记录；物品估值独立统计。</span></div>' +
         '</div>' +
         '<div class="card"><div class="card-title" style="color:var(--red)">危险区</div>' +
           '<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">清空将删除本机全部记录，请务必先导出备份。</p>' +
@@ -35,6 +37,7 @@ Views.backup = async function () {
       '</div>' +
     '</div>';
 
+  el.querySelector('[data-act="demo"]').addEventListener('click', function () { Views.loadDemoData(); });
   el.querySelector('[data-act="export"]').addEventListener('click', async function () {
     const r = await window.mh.exportData(D.state);
     if (r.ok) UI.toast('已导出到：' + r.path);

@@ -43,6 +43,10 @@ U.fmtInt = function (v) {
   return Math.round(v).toLocaleString('zh-CN');
 };
 
+U.fmtAmount = function (v, currency) {
+  return currency === 'rmb' ? '¥ ' + Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : U.fmtMoney(v);
+};
+
 U.fmtMinutes = function (m) {
   if (!m) return '—';
   if (m < 60) return m + ' 分钟';

@@ -12,6 +12,8 @@
     "smoke": "electron . --smoke",
     "shots": "electron . --screenshot",
     "demo": "electron . --demo",
+    "test": "node --test tests/ledgers.test.cjs",
+    "test:electron": "electron tests/ledgers.electron.cjs",
     "dist": "electron-builder --win"
   },
   "devDependencies": {

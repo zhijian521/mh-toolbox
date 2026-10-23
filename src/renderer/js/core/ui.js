@@ -16,6 +16,7 @@ UI.toast = function (msg, type) {
 };
 
 UI.closeModal = function () {
+  if (UI.closePop) UI.closePop();
   const root = document.getElementById('modal-root');
   root.innerHTML = '';
 };
@@ -78,14 +79,14 @@ UI.fieldHtml = function (f, val) {
       break;
     }
     case 'check':
-      return '<div class="frow full"><div class="check-line"><input type="checkbox" name="' + f.key + '"' + (v ? ' checked' : '') + '> <span>' + U.esc(f.label) + (f.hint ? ' <span class="hint">' + U.esc(f.hint) + '</span>' : '') + '</span></div></div>';
+      return '<div class="frow full" data-field="' + f.key + '"><div class="check-line"><input type="checkbox" name="' + f.key + '"' + (v ? ' checked' : '') + '> <span>' + U.esc(f.label) + (f.hint ? ' <span class="hint">' + U.esc(f.hint) + '</span>' : '') + '</span></div></div>';
     default: {
       const step = f.step ? ' step="' + f.step + '"' : '';
       const min = f.min != null ? ' min="' + f.min + '"' : '';
       inner = '<input type="' + (f.type || 'text') + '" name="' + f.key + '" value="' + U.esc(v) + '" placeholder="' + U.esc(f.placeholder || '') + '"' + step + min + '>';
     }
   }
-  return '<div class="frow' + (f.full ? ' full' : '') + '">' +
+  return '<div class="frow' + (f.full ? ' full' : '') + '" data-field="' + f.key + '">' +
     '<label class="' + req.trim() + '">' + U.esc(f.label) + '</label>' + inner +
     (f.hint ? '<span class="hint">' + U.esc(f.hint) + '</span>' : '') + '</div>';
 };
@@ -129,7 +130,13 @@ UI.formModal = function (opts) {
       : UI.date(m, { name: f.key, value: initVal, placeholder: f.placeholder || '选择日期' });
   });
 
+  const hiddenFields = new Set();
   const api = {
+    show(key, visible) {
+      const row = form.querySelector('[data-field="' + key + '"]');
+      if (row) row.hidden = !visible;
+      if (visible) hiddenFields.delete(key); else hiddenFields.add(key);
+    },
     getVal(key) {
       const f = fields.find(function (x) { return x.key === key; });
       if (!f) return '';
@@ -179,19 +186,33 @@ UI.formModal = function (opts) {
     }
   };
 
-  function submit() {
+  async function submit() {
     const data = {};
     for (const f of fields) data[f.key] = api.getVal(f.key);
     for (const f of fields) {
+      if (hiddenFields.has(f.key)) continue;
       if (f.required && (data[f.key] === '' || data[f.key] == null)) {
         UI.toast('请填写「' + f.label + '」', 'err');
         const el = form.querySelector('[name="' + f.key + '"]');
         if (el) el.focus();
         return;
       }
+      if (f.type === 'number' && data[f.key] !== '' && (!Number.isFinite(data[f.key]) || (f.min != null && data[f.key] < f.min))) {
+        UI.toast('「' + f.label + '」需填写' + (f.min != null ? '不小于 ' + f.min + ' 的' : '有效') + '数字', 'err');
+        return;
+      }
     }
-    UI.closeModal();
-    opts.onSubmit(data);
+    const error = opts.validate && opts.validate(data);
+    if (error) { UI.toast(error, 'err'); return; }
+    const button = ov.querySelector('[data-act="ok"]');
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+      await opts.onSubmit(data);
+      if (ov.isConnected) UI.closeModal();
+    } catch (err) {
+      UI.toast(err.message || '保存失败，请重试', 'err');
+    } finally { button.disabled = false; }
   }
 
   ov.querySelector('[data-act="ok"]').addEventListener('click', submit);
@@ -323,6 +344,7 @@ UI.select = function (mount, opts) {
         renderTrigger();
         syncHidden(value);
         UI.closePop();
+        mount.dispatchEvent(new Event('change', { bubbles: true }));
         if (opts.onChange) opts.onChange(value);
       });
     });
@@ -364,6 +386,7 @@ UI.date = function (mount, opts) {
     trigger = mount.querySelector('button');
     trigger.addEventListener('click', function (e) {
       e.stopPropagation();
+      if (value) { const d = U.parseDate(value); vy = d.getFullYear(); vm = d.getMonth(); }
       openCal();
     });
   }
@@ -383,7 +406,6 @@ UI.date = function (mount, opts) {
     return html;
   }
   function openCal() {
-    if (value) { const d = U.parseDate(value); vy = d.getFullYear(); vm = d.getMonth(); }
     const title = vy + ' 年 ' + (vm + 1) + ' 月';
     const pop = UI.openPop(trigger,
       '<div class="xcal">' +
