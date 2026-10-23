@@ -12,6 +12,7 @@
 - `docs/ARCHITECTURE.md` 架构与扩展指南、本更新日志。
 - 开发模式热更新 `npm run dev`：CSS 免刷新替换、页面自动刷新并恢复状态、main/preload 变更提示重启。
 - 自定义下拉选择与日历日期组件，替换全部原生 select/date 控件，风格与宣纸账本规范一致。
+- 丰富示例数据生成器（3 角色 / 45 天流水 / 目标 / 装备 / 单价），新增 `npm run demo` 一键写入。
 - 提交信息规范（Conventional Commits 风格：`type: 简短描述`）。
 - 字体随包附带 OFL 1.1 许可文本。
 

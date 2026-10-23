@@ -137,33 +137,121 @@ Views.dashboard = function () {
   if (newGoal) newGoal.addEventListener('click', function () { Views.go('goals'); });
 };
 
-Views.loadDemoData = async function () {
-  const ok = await UI.confirmModal({ title: '加载示例数据', message: '将写入一套演示用的角色、收益、目标与装备数据，方便你快速了解界面。确定加载吗？', confirmText: '加载' });
-  if (!ok) return;
-  const cid = U.uid();
+Views.loadDemoData = async function (autoConfirm, persist) {
+  if (persist === undefined) persist = true;
+  if (!autoConfirm) {
+    const ok = await UI.confirmModal({
+      title: '加载示例数据',
+      message: '将写入一套演示用的角色、45 天收益流水、目标、装备与物品单价，覆盖当前全部数据。确定加载吗？',
+      confirmText: '加载'
+    });
+    if (!ok) return;
+  }
+
+  /* 固定种子伪随机，保证每次生成的示例数据一致 */
+  let seed = 20261023;
+  const rnd = function () { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  const rr = function (min, max) { return Math.round((min + rnd() * (max - min)) * 10) / 10; };
   const now = Date.now();
-  const t = function (dayAgo, kind, cat, amt, minutes, note) {
-    const d = new Date(); d.setDate(d.getDate() - dayAgo);
-    return { id: U.uid(), characterId: cid, date: U.fmtDate(d), kind: kind, currency: 'cash', amount: amt, category: cat, minutes: minutes || 0, note: note || '', createdAt: now - dayAgo };
+  const DAY = 86400000;
+  const day = function (n) { const d = new Date(); d.setDate(d.getDate() - n); return U.fmtDate(d); };
+
+  const c1 = 'demo-c1', c2 = 'demo-c2', c3 = 'demo-c3';
+  const characters = [
+    { id: c1, name: '养老一号', level: 69, school: '大唐官府', server: '紫禁城', createdAt: now - 45 * DAY },
+    { id: c2, name: '方寸小号', level: 69, school: '方寸山', server: '紫禁城', createdAt: now - 40 * DAY },
+    { id: c3, name: '龙宫三号', level: 109, school: '龙宫', server: '2008', createdAt: now - 30 * DAY }
+  ];
+
+  const transactions = [];
+  const tx = function (n, charId, kind, cat, amt, minutes, note, extra) {
+    transactions.push(Object.assign({
+      id: U.uid(), characterId: charId, date: day(n),
+      kind: kind, currency: 'cash', amount: amt, category: cat,
+      minutes: minutes || 0, note: note || '', createdAt: now - n * 3600000 + transactions.length * 1000
+    }, extra || {}));
   };
+
+  /* 近 45 天流水：主线日常 + 周末活动 + 周期性支出 + 小号车队 */
+  for (let n = 44; n >= 0; n--) {
+    const d = new Date(); d.setDate(d.getDate() - n);
+    const wd = d.getDay();
+    if (n % 2 === 0) tx(n, c1, 'income', '捉鬼', rr(78, 92), rr(85, 100), '双份鬼');
+    if (n % 3 === 0) tx(n, c1, 'income', '押镖', 30, 40, '');
+    if (n % 4 === 1) tx(n, c1, 'income', '师门', rr(18, 24), 30, '', { currency: 'reserve' });
+    if (n % 5 === 2) tx(n, c1, 'income', '封妖', rr(42, 52), 60, '');
+    if (n % 7 === 3) tx(n, c1, 'income', '副本', rr(55, 72), 120, '乌鸡 + 车迟');
+    if (wd === 6 || wd === 0) tx(n, c1, 'income', '周末活动', rr(100, 150), 150, '');
+    if (n % 6 === 5) tx(n, c1, 'expense', '点卡', rr(28, 45), 0, '挂机点卡');
+    if (n % 10 === 4) tx(n, c1, 'expense', '修理装备', rr(8, 15), 0, '');
+    if (n % 8 === 6) tx(n, c1, 'expense', '药品补给', rr(10, 16), 0, '血蓝');
+    if (n % 9 === 2) tx(n, c1, 'income', '摆摊卖货', rr(120, 260), 0, '环装 + 杂货');
+    if (n % 2 === 1) tx(n, c2, 'income', '捉鬼', rr(70, 85), 90, '');
+    if (n % 3 === 1) tx(n, c2, 'income', '押镖', 30, 40, '');
+    if (n % 2 === 0) tx(n, c3, 'income', '副本', rr(60, 80), 130, '五开车队');
+    if (n % 5 === 0) tx(n, c3, 'expense', '点卡', rr(30, 50), 0, '三号点卡');
+  }
+  tx(12, c1, 'expense', '装备购入', 620, 0, '装备「偃月青龙刀」购入');
+
+  /* 近两天：快速记录产生的物品掉落与点卡（source=quick，快速页可见） */
+  [
+    [1, 7, 9], [1, 8, 6], [0, 7, 9], [0, 20, 30],
+    [0, 13, 8], [0, 99, 10], [1, 100, 15]
+  ].forEach(function (l) {
+    const item = Views.quickItemById(l[1]);
+    tx(l[0], c1, 'income', '物品掉落', l[2], 0, item ? item.name : '物品', { source: 'quick', itemId: l[1] });
+  });
+  tx(0, c1, 'expense', '点卡', 22.5, 150, '在线 2.50 小时 × 5 角色', { source: 'quick' });
+
+  const goals = [
+    {
+      id: 'demo-g1', characterId: c1, type: 'gear', title: '攒钱买 120 简易武器',
+      target: 3000, current: 1856, unit: '万', status: 'active',
+      deadline: U.addDays(U.today(), 38), note: '拍卖行蹲了三周，就差最后一段', createdAt: now - 20 * DAY,
+      logs: [
+        { id: U.uid(), date: day(14), delta: 620, note: '卖旧装备回血' },
+        { id: U.uid(), date: day(7), delta: 680, note: '本周捉鬼净收益' },
+        { id: U.uid(), date: day(1), delta: 556, note: '周末活动 + 摆摊' }
+      ]
+    },
+    { id: 'demo-g2', characterId: c1, type: 'money', title: '现金攒到 5000 万', target: 5000, current: 3210, unit: '万', status: 'active', deadline: '', note: '', createdAt: now - 30 * DAY, logs: [{ id: U.uid(), date: day(3), delta: 900, note: '本月结余转入' }] },
+    { id: 'demo-g3', characterId: c3, type: 'progress', title: '攻修点到 20', target: 20, current: 14, unit: '级', status: 'active', deadline: '', note: '每周两次跑商', createdAt: now - 15 * DAY, logs: [] },
+    { id: 'demo-g4', characterId: c1, type: 'progress', title: '养老一号升 69', target: 69, current: 69, unit: '级', status: 'done', deadline: day(18), note: '', createdAt: now - 45 * DAY, doneAt: day(18), logs: [] }
+  ];
+
+  const equipment = [
+    { id: 'demo-e1', characterId: c1, slot: '武器', name: '偃月青龙刀', level: 110, attributes: '伤害 +620\n命中 +380', special: '无级别限制', gems: '太阳石 x4', status: 'active', note: '主号毕业武器', createdAt: now - 12 * DAY },
+    { id: 'demo-e2', characterId: c1, slot: '项链', name: '碧水青龙项链', level: 100, attributes: '灵力 +168', special: '简易', gems: '舍利子 x3', status: 'active', note: '', createdAt: now - 25 * DAY },
+    { id: 'demo-e3', characterId: c1, slot: '衣服', name: '逆鳞龙鳞甲', level: 100, attributes: '防御 +280\n体质 +18', special: '', gems: '月亮石 x2', status: 'active', note: '自己打的', createdAt: now - 33 * DAY },
+    { id: 'demo-e4', characterId: c1, slot: '戒指', name: '青玉戒指', level: 80, attributes: '伤害 +32', special: '', gems: '', status: 'stored', note: '备用', createdAt: now - 28 * DAY },
+    { id: 'demo-e5', characterId: c1, slot: '武器', name: '80 级旧刀', level: 80, attributes: '伤害 +420', special: '', gems: '太阳石 x2', status: 'sold', note: '换新后出掉', createdAt: now - 40 * DAY },
+    { id: 'demo-e6', characterId: c3, slot: '鞋子', name: '七星履', level: 100, attributes: '速度 +56\n敏捷 +12', special: '简易', gems: '黑宝石 x3', status: 'active', note: '', createdAt: now - 9 * DAY }
+  ];
+
+  const gearLogs = [
+    { id: U.uid(), equipmentId: 'demo-e1', characterId: c1, date: day(12), action: 'buy', amount: 620, note: '拍卖行拿下', createdAt: now - 12 * DAY },
+    { id: U.uid(), equipmentId: 'demo-e1', characterId: c1, date: day(10), action: 'gem', amount: 60, note: '上满 4 级太阳石', createdAt: now - 10 * DAY },
+    { id: U.uid(), equipmentId: 'demo-e2', characterId: c1, date: day(25), action: 'buy', amount: 380, note: '', createdAt: now - 25 * DAY },
+    { id: U.uid(), equipmentId: 'demo-e3', characterId: c1, date: day(33), action: 'craft', amount: 150, note: '自己打造一次过', createdAt: now - 33 * DAY },
+    { id: U.uid(), equipmentId: 'demo-e5', characterId: c1, date: day(40), action: 'buy', amount: 200, note: '当年 200 万收的', createdAt: now - 40 * DAY },
+    { id: U.uid(), equipmentId: 'demo-e5', characterId: c1, date: day(12), action: 'sell', amount: 120, note: '换新武器后出售', createdAt: now - 12 * DAY },
+    { id: U.uid(), equipmentId: 'demo-e6', characterId: c3, date: day(9), action: 'buy', amount: 260, note: '', createdAt: now - 9 * DAY }
+  ];
+
+  const itemPrices = {
+    7: 90000, 8: 60000, 9: 55000, 10: 45000, 11: 50000, 12: 30000,
+    13: 80000, 14: 150000, 15: 40000, 16: 90000, 20: 300000, 17: 12000,
+    21: 80000, 99: 100000, 100: 150000, 101: 600000, 102: 80000, 103: 300000
+  };
+
   D.state = {
-    characters: [{ id: cid, name: '养老一号', level: 69, school: '大唐官府', server: '紫禁城', createdAt: now }],
-    transactions: [
-      t(6, 'income', '捉鬼', 86, 95, '20个鬼'), t(6, 'income', '押镖', 30, 40, ''),
-      t(5, 'income', '师门', 22, 30, ''), t(5, 'expense', '点卡', 16, 0, '5小时点卡'),
-      t(4, 'income', '副本', 65, 120, '乌鸡+车迟'), t(3, 'income', '摆摊卖货', 140, 0, '卖了两件环装'),
-      t(2, 'income', '捉鬼', 82, 90, ''), t(1, 'income', '封妖', 48, 60, ''),
-      t(1, 'expense', '药品补给', 12, 0, '买血蓝'), t(0, 'income', '押镖', 30, 40, '今天的镖')
-    ],
-    goals: [{ id: U.uid(), characterId: cid, type: 'gear', title: '攒钱买 120 简易武器', target: 3000, current: 513, unit: '万', status: 'active', deadline: '', note: '目标三个月内拿下', createdAt: now, logs: [{ id: U.uid(), date: U.today(), delta: 513, note: '当前存款' }] }],
-    equipment: [
-      { id: U.uid(), characterId: cid, slot: '武器', name: '偃月青龙刀', level: 110, attributes: '伤害 +620\n命中 +380', special: '无级别限制', gems: '太阳石 x4', status: 'active', note: '上周换的', createdAt: now },
-      { id: U.uid(), characterId: cid, slot: '项链', name: '碧水青龙项链', level: 100, attributes: '灵力 +168', special: '简易', gems: '舍利子 x3', status: 'active', note: '', createdAt: now }
-    ],
-    gearLogs: []
+    characters: characters, transactions: transactions, goals: goals,
+    equipment: equipment, gearLogs: gearLogs,
+    itemPrices: itemPrices,
+    quickSettings: { accounts: 5, cardPrice: 15000 }
   };
-  await D.persist();
+  D.setCharFilter('all');
+  if (persist) await D.persist();
   Views.refreshHeader();
   Views.dashboard();
-  UI.toast('示例数据已加载');
 };

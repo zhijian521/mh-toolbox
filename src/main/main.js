@@ -33,6 +33,18 @@ function createWindow() {
   if (process.argv.includes('--dev')) {
     require('./dev').setupDevWatch(mainWindow);
   }
+  if (process.argv.includes('--demo')) {
+    mainWindow.webContents.on('did-finish-load', async () => {
+      try {
+        await new Promise((r) => setTimeout(r, 600));
+        await mainWindow.webContents.executeJavaScript('Views.loadDemoData(true)', true);
+        console.log('[demo] 示例数据已写入本地数据文件');
+      } catch (e) {
+        console.error('[demo] 写入失败:', e);
+      }
+      mainWindow.close();
+    });
+  }
 }
 
 app.whenReady().then(() => {

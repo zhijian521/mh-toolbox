@@ -20,6 +20,7 @@ npm run dev      # 开发模式（热更新：CSS 免刷新 / 页面自动刷新
 npm start        # 普通运行
 npm run smoke    # 冒烟自检（启动 1.2s 自动退出）
 npm run shots    # 注入示例数据并截图到 docs/screenshots
+npm run demo      # 写入一套完整示例数据到本地（覆盖当前数据）
 npm run dist     # 打包安装版 + 便携版（输出 dist/）
 ```
 

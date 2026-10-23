@@ -95,7 +95,8 @@ npm install
 npm run dev        # 开发模式（推荐）：热更新
 npm start          # 普通运行（无热更新）
 npm run smoke      # 冒烟：启动 1.2s 自动关闭
-npm run shots      # 注入示例数据截图到 docs/screenshots
+npm run shots      # 注入示例数据截图到 docs/screenshots（不落盘）
+npm run demo      # 写入完整示例数据到本地（覆盖当前数据）
 npm run dist       # 打包安装版 + 便携版到 dist/
 ```
 
