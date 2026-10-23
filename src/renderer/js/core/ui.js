@@ -57,12 +57,14 @@ UI.fieldHtml = function (f, val) {
   const req = f.required ? ' req' : '';
   let inner = '';
   switch (f.type) {
-    case 'select':
-      inner = '<select name="' + f.key + '">' +
-        f.options.map(function (o) {
-          const ov = typeof o === 'string' ? { v: o, t: o } : o;
-          return '<option value="' + U.esc(ov.v) + '"' + (String(ov.v) === String(v) ? ' selected' : '') + '>' + U.esc(ov.t) + '</option>';
-        }).join('') + '</select>';
+    case 'select': {
+      const opts = f.options.map(function (o) { return typeof o === 'string' ? { v: o, t: o } : o; });
+      const cur = opts.some(function (o) { return String(o.v) === String(v); }) ? v : (opts[0] ? opts[0].v : '');
+      inner = '<div class="xmount" data-xmount="' + f.key + '"><input type="hidden" name="' + f.key + '" value="' + U.esc(cur) + '"></div>';
+      break;
+    }
+    case 'date':
+      inner = '<div class="xmount" data-xmount="' + f.key + '"><input type="hidden" name="' + f.key + '" value="' + U.esc(v) + '"></div>';
       break;
     case 'textarea':
       inner = '<textarea name="' + f.key + '" placeholder="' + U.esc(f.placeholder || '') + '">' + U.esc(v) + '</textarea>';
@@ -114,6 +116,19 @@ UI.formModal = function (opts) {
     });
   });
 
+  /* 自定义下拉 / 日期组件挂载（写入 form._xcomps 供 api 使用） */
+  form._xcomps = {};
+  fields.forEach(function (f) {
+    if (f.type !== 'select' && f.type !== 'date') return;
+    const m = form.querySelector('[data-xmount="' + f.key + '"]');
+    if (!m) return;
+    const h = m.querySelector('input[type="hidden"]');
+    const initVal = h ? h.value : '';
+    form._xcomps[f.key] = f.type === 'select'
+      ? UI.select(m, { name: f.key, options: f.options, value: initVal, placeholder: f.placeholder })
+      : UI.date(m, { name: f.key, value: initVal, placeholder: f.placeholder || '选择日期' });
+  });
+
   const api = {
     getVal(key) {
       const f = fields.find(function (x) { return x.key === key; });
@@ -135,6 +150,7 @@ UI.formModal = function (opts) {
       return el.value.trim();
     },
     setVal(key, v) {
+      if (form._xcomps && form._xcomps[key]) { form._xcomps[key].set(v); return; }
       const f = fields.find(function (x) { return x.key === key; });
       if (!f) return;
       if (f.type === 'segment') {
@@ -149,6 +165,10 @@ UI.formModal = function (opts) {
       if (el) el.value = v;
     },
     setOptions(key, options) {
+      if (form._xcomps && form._xcomps[key] && form._xcomps[key].setOptions) {
+        form._xcomps[key].setOptions(options);
+        return;
+      }
       const sel = form.querySelector('select[name="' + key + '"]');
       if (!sel) return;
       const cur = api.getVal(key) || (typeof options[0] === 'string' ? options[0] : options[0].v);
@@ -207,3 +227,212 @@ Object.assign(UI.icons, {
   'bolt': '<path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/>',
   'coin': '<circle cx="12" cy="12" r="9"/><rect x="9.5" y="9.5" width="5" height="5"/>'
 });
+
+
+/* 下拉 / 日历图标 */
+Object.assign(UI.icons, {
+  'chev-down': '<path d="M6 9l6 6 6-6"/>',
+  'chev-left': '<path d="M15 6l-6 6 6 6"/>',
+  'chev-right': '<path d="M9 6l6 6-6 6"/>',
+  'calendar': '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/>'
+});
+
+
+/* ---------- 弹层基座（下拉菜单 / 日历共用） ---------- */
+UI.closePop = function () {
+  const old = document.querySelector('.xpop');
+  if (old) old.remove();
+  document.removeEventListener('mousedown', UI._popOut, true);
+};
+
+UI._popOut = function (e) {
+  const pop = document.querySelector('.xpop');
+  if (!pop) return;
+  if (pop._anchor && !pop._anchor.isConnected) { UI.closePop(); return; }
+  if (pop.contains(e.target)) return;
+  if (pop._anchor && pop._anchor.contains(e.target)) return;
+  UI.closePop();
+};
+
+UI.openPop = function (anchor, contentHtml, opts) {
+  UI.closePop();
+  opts = opts || {};
+  const pop = document.createElement('div');
+  pop.className = 'xpop';
+  pop._anchor = anchor;
+  pop.innerHTML = contentHtml;
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  pop.style.visibility = 'hidden';
+  requestAnimationFrame(function () {
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let left = opts.align === 'right' ? r.right - pw : r.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+    let top = r.bottom + 4;
+    if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 4);
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+    pop.style.visibility = '';
+  });
+  document.addEventListener('mousedown', UI._popOut, true);
+  return pop;
+};
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') UI.closePop();
+});
+
+/* ---------- 自定义下拉选择 ---------- */
+UI.select = function (mount, opts) {
+  opts = opts || {};
+  if (typeof mount === 'string') mount = document.querySelector(mount);
+  if (!mount) return null;
+  const norm = function (o) { return typeof o === 'string' ? { v: o, t: o } : o; };
+  let options = (opts.options || []).map(norm);
+  let value = (opts.value != null && opts.value !== '') ? String(opts.value) : (options.length ? String(options[0].v) : '');
+  let trigger = null;
+
+  function curLabel() {
+    const cur = options.find(function (o) { return String(o.v) === value; });
+    return cur ? cur.t : (opts.placeholder || '请选择');
+  }
+  function syncHidden(v) {
+    const h = mount.querySelector('input[type="hidden"]');
+    if (h) h.value = v;
+  }
+  function renderTrigger() {
+    mount.innerHTML = '<input type="hidden"' + (opts.name ? ' name="' + U.esc(opts.name) + '"' : '') + ' value="' + U.esc(value) + '">' +
+      '<button type="button" class="xsel"><span class="xsel-t">' + U.esc(curLabel()) + '</span>' + UI.icon('chev-down', 13) + '</button>';
+    trigger = mount.querySelector('button');
+    trigger.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openMenu();
+    });
+  }
+  function openMenu() {
+    const pop = UI.openPop(trigger,
+      '<div class="xmenu">' + options.map(function (o) {
+        const on = String(o.v) === value;
+        return '<div class="xitem' + (on ? ' on' : '') + '" data-v="' + U.esc(o.v) + '">' +
+          '<span class="xitem-t">' + U.esc(o.t) + '</span>' + (on ? UI.icon('check', 13) : '') + '</div>';
+      }).join('') + '</div>',
+      { align: opts.align });
+    pop.querySelectorAll('.xitem').forEach(function (item) {
+      item.addEventListener('click', function () {
+        value = item.dataset.v;
+        renderTrigger();
+        syncHidden(value);
+        UI.closePop();
+        if (opts.onChange) opts.onChange(value);
+      });
+    });
+    trigger.focus();
+  }
+  renderTrigger();
+  return {
+    get: function () { return value; },
+    set: function (v) { value = (v == null ? '' : String(v)); renderTrigger(); syncHidden(value); },
+    setOptions: function (newOptions) {
+      options = (newOptions || []).map(norm);
+      if (!options.some(function (o) { return String(o.v) === value; })) {
+        value = options.length ? String(options[0].v) : '';
+      }
+      renderTrigger();
+      syncHidden(value);
+    },
+    el: mount
+  };
+};
+
+/* ---------- 自定义日历日期选择 ---------- */
+UI.date = function (mount, opts) {
+  opts = opts || {};
+  if (typeof mount === 'string') mount = document.querySelector(mount);
+  if (!mount) return null;
+  let value = opts.value || '';
+  const initD = value ? U.parseDate(value) : new Date();
+  let vy = initD.getFullYear(), vm = initD.getMonth();
+  let trigger = null;
+
+  function syncHidden(v) {
+    const h = mount.querySelector('input[type="hidden"]');
+    if (h) h.value = v;
+  }
+  function renderTrigger() {
+    mount.innerHTML = '<input type="hidden"' + (opts.name ? ' name="' + U.esc(opts.name) + '"' : '') + ' value="' + U.esc(value) + '">' +
+      '<button type="button" class="xsel"><span class="xsel-t' + (value ? '' : ' ph') + '">' + U.esc(value || opts.placeholder || '选择日期') + '</span>' + UI.icon('calendar', 13) + '</button>';
+    trigger = mount.querySelector('button');
+    trigger.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openCal();
+    });
+  }
+  function dayHtml() {
+    const base = new Date(vy, vm, 1);
+    base.setDate(base.getDate() - (base.getDay() + 6) % 7); /* 周一对齐 */
+    let html = '';
+    const today = U.today();
+    for (let i = 0; i < 42; i++) {
+      const dt = new Date(base);
+      dt.setDate(base.getDate() + i);
+      const ds = U.fmtDate(dt);
+      const dim = dt.getMonth() !== vm;
+      const cls = 'xday' + (dim ? ' dim' : '') + (ds === today ? ' today' : '') + (ds === value ? ' on' : '');
+      html += '<button type="button" class="' + cls.trim() + '" data-d="' + ds + '">' + dt.getDate() + '</button>';
+    }
+    return html;
+  }
+  function openCal() {
+    if (value) { const d = U.parseDate(value); vy = d.getFullYear(); vm = d.getMonth(); }
+    const title = vy + ' 年 ' + (vm + 1) + ' 月';
+    const pop = UI.openPop(trigger,
+      '<div class="xcal">' +
+        '<div class="xcal-head">' +
+          '<button type="button" class="xcal-nav" data-nav="-1" title="上个月">' + UI.icon('chev-left', 14) + '</button>' +
+          '<div class="xcal-title">' + U.esc(title) + '</div>' +
+          '<button type="button" class="xcal-nav" data-nav="1" title="下个月">' + UI.icon('chev-right', 14) + '</button>' +
+        '</div>' +
+        '<div class="xcal-quick">' +
+          '<button type="button" class="btn btn-sm" data-q="today">今天</button>' +
+          (opts.allowClear === false ? '' : '<button type="button" class="btn btn-sm btn-ghost" data-q="clear">清除</button>') +
+        '</div>' +
+        '<div class="xcal-week"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>' +
+        '<div class="xcal-grid">' + dayHtml() + '</div>' +
+      '</div>',
+      { align: opts.align });
+    pop.querySelectorAll('[data-nav]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        vm += Number(b.dataset.nav);
+        if (vm < 0) { vm = 11; vy--; } else if (vm > 11) { vm = 0; vy++; }
+        UI.closePop();
+        openCal();
+      });
+    });
+    const todayBtn = pop.querySelector('[data-q="today"]');
+    if (todayBtn) todayBtn.addEventListener('click', function () { pick(U.today()); });
+    const clearBtn = pop.querySelector('[data-q="clear"]');
+    if (clearBtn) clearBtn.addEventListener('click', function () {
+      value = '';
+      renderTrigger();
+      syncHidden('');
+      UI.closePop();
+      if (opts.onChange) opts.onChange('');
+    });
+    pop.querySelectorAll('.xday').forEach(function (b) {
+      b.addEventListener('click', function () { pick(b.dataset.d); });
+    });
+    function pick(ds) {
+      value = ds;
+      renderTrigger();
+      syncHidden(ds);
+      UI.closePop();
+      if (opts.onChange) opts.onChange(ds);
+    }
+  }
+  renderTrigger();
+  return {
+    get: function () { return value; },
+    set: function (v) { value = v || ''; if (value) { const d = U.parseDate(value); vy = d.getFullYear(); vm = d.getMonth(); } renderTrigger(); syncHidden(value); },
+    el: mount
+  };
+};

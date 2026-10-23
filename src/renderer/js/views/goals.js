@@ -19,8 +19,7 @@ Views.goals = function () {
         [['active', '进行中'], ['done', '已完成'], ['all', '全部']].map(function (a) {
           return '<button type="button" class="seg-btn' + (f.status === a[0] ? ' on' : '') + '" data-s="' + a[0] + '">' + a[1] + '</button>';
         }).join('') + '</div>' +
-      '<select data-f="type"><option value="">全部类型</option>' +
-        D.goalTypes.map(function (t) { return '<option value="' + t.v + '"' + (f.type === t.v ? ' selected' : '') + '>' + t.t + '</option>'; }).join('') + '</select>' +
+      '<span class="xmount" data-mount="type"></span>' +
       '<span class="spacer"></span>' +
       '<button class="btn btn-gold" data-act="add">＋ 新目标</button>' +
     '</div>' +
@@ -50,7 +49,11 @@ Views.goals = function () {
   el.querySelectorAll('[data-s]').forEach(function (b) {
     b.addEventListener('click', function () { f.status = b.dataset.s; Views.goals(); });
   });
-  el.querySelector('select[data-f="type"]').addEventListener('change', function (e) { f.type = e.target.value; Views.goals(); });
+  UI.select(el.querySelector('[data-mount="type"]'), {
+    options: [{ v: '', t: '全部类型' }].concat(D.goalTypes),
+    value: f.type,
+    onChange: function (v) { Views._goalFilter.type = v; Views.goals(); }
+  });
   el.querySelector('[data-act="add"]').addEventListener('click', function () { Views.goalModal(); });
 
   el.querySelectorAll('.goal-card').forEach(function (card) {

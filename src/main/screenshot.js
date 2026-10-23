@@ -71,6 +71,13 @@ function attachDevFlows(win) {
         await win.webContents.executeJavaScript("Views.go('transactions')", true);
         await wait(250);
         await capture(win, 'shot-02-transactions.png');
+        const selCount = await win.webContents.executeJavaScript('document.querySelectorAll(".xsel").length', true);
+        console.log('[check] transactions .xsel =', selCount, '(expect 4)');
+        await win.webContents.executeJavaScript('Views.txModal()', true);
+        await wait(150);
+        const modalSel = await win.webContents.executeJavaScript('document.querySelectorAll(".modal .xsel").length', true);
+        console.log('[check] txModal .xsel =', modalSel, '(expect 3)');
+        await win.webContents.executeJavaScript('UI.closeModal()', true);
         await win.webContents.executeJavaScript("Views.go('goals')", true);
         await wait(250);
         await capture(win, 'shot-03-goals.png');

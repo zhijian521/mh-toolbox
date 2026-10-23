@@ -35,7 +35,7 @@ mh-tool/
 │        ├─ core/                # 无 UI 依赖的基础层
 │        │  ├─ util.js           # U：日期/金额/转义等纯函数
 │        │  ├─ data.js           # D：状态、常量、领域逻辑、持久化
-│        │  └─ ui.js             # UI：Toast/弹窗/表单生成器/SVG 图标库
+│        │  └─ ui.js             # UI：Toast/弹窗/表单生成器/SVG 图标库/下拉与日历组件
 │        ├─ layout/
 │        │  ├─ titlebar.js       # 自绘标题栏（拖拽/最大化/关闭）
 │        │  │  └─ dev.js            # 开发模式客户端（热替换/状态快照恢复）

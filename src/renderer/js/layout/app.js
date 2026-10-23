@@ -28,13 +28,16 @@ Views.renderHeader = function () {
   document.getElementById('page-sub').textContent = page.sub;
 };
 
+Views.charOptions = function () {
+  return [{ v: 'all', t: '全部角色' }].concat(
+    D.state.characters.map(function (c) { return { v: c.id, t: c.name }; })
+  );
+};
+
 Views.refreshHeader = function () {
-  const sel = document.getElementById('char-select');
-  sel.innerHTML = '<option value="all">全部角色</option>' +
-    D.state.characters.map(function (c) {
-      return '<option value="' + U.esc(c.id) + '"' + (D.charFilter === c.id ? ' selected' : '') + '>' + U.esc(c.name) + '</option>';
-    }).join('');
-  if (!D.charById(D.charFilter)) { D.setCharFilter('all'); sel.value = 'all'; }
+  if (D.charFilter !== 'all' && !D.charById(D.charFilter)) D.setCharFilter('all');
+  const sel = Views._charSel;
+  if (sel) { sel.setOptions(Views.charOptions()); sel.set(D.charFilter); }
 };
 
 Views.go = function (page) {
@@ -57,9 +60,14 @@ Views.rerender = function () {
     document.getElementById('ver').textContent = info.version || '-';
   } catch (e) { /* 版本号获取失败不影响使用 */ }
 
-  document.getElementById('char-select').addEventListener('change', function (e) {
-    D.setCharFilter(e.target.value);
-    Views.rerender();
+  Views._charSel = UI.select(document.getElementById('char-select-mount'), {
+    options: Views.charOptions(),
+    value: D.charFilter,
+    align: 'right',
+    onChange: function (v) {
+      D.setCharFilter(v);
+      Views.rerender();
+    }
   });
   document.getElementById('quick-add').addEventListener('click', function () { Views.txModal(); });
   document.addEventListener('keydown', function (e) {

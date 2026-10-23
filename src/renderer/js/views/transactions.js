@@ -32,12 +32,10 @@ Views.transactions = function () {
           const a = s.split(':');
           return '<button type="button" class="seg-btn' + (f.kind === a[0] ? ' on' : '') + '" data-k="' + a[0] + '">' + a[1] + '</button>';
         }).join('') + '</div>' +
-      '<select data-f="category">' + catOptions.map(function (c) {
-        return '<option value="' + U.esc(c) + '"' + (f.category === c ? ' selected' : '') + '>' + (c ? c : '全部分类') + '</option>';
-      }).join('') + '</select>' +
-      '<input type="date" data-f="from" value="' + U.esc(f.from) + '" title="开始日期">' +
+      '<span class="xmount" data-mount="category"></span>' +
+      '<span class="xmount" data-mount="from"></span>' +
       '<span style="color:var(--muted)">~</span>' +
-      '<input type="date" data-f="to" value="' + U.esc(f.to) + '" title="结束日期">' +
+      '<span class="xmount" data-mount="to"></span>' +
       '<input type="text" data-f="kw" value="' + U.esc(f.kw) + '" placeholder="搜索备注 / 分类" style="width:160px">' +
       '<button class="btn btn-sm btn-ghost" data-act="reset">重置</button>' +
       '<span class="spacer"></span>' +
@@ -75,11 +73,22 @@ Views.transactions = function () {
       Views.transactions();
     });
   });
-  el.querySelectorAll('[data-f]').forEach(function (inp) {
-    inp.addEventListener('change', function () { f[inp.dataset.f] = inp.value; Views.transactions(); });
-    if (inp.dataset.f === 'kw') inp.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { f.kw = inp.value; Views.transactions(); }
-    });
+  UI.select(el.querySelector('[data-mount="category"]'), {
+    options: catOptions.map(function (c) { return { v: c, t: c ? c : '全部分类' }; }),
+    value: f.category,
+    onChange: function (v) { Views._txFilter.category = v; Views.transactions(); }
+  });
+  UI.date(el.querySelector('[data-mount="from"]'), {
+    value: f.from, placeholder: '开始日期',
+    onChange: function (v) { Views._txFilter.from = v; Views.transactions(); }
+  });
+  UI.date(el.querySelector('[data-mount="to"]'), {
+    value: f.to, placeholder: '结束日期',
+    onChange: function (v) { Views._txFilter.to = v; Views.transactions(); }
+  });
+  const kw = el.querySelector('input[data-f="kw"]');
+  if (kw) kw.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { Views._txFilter.kw = kw.value; Views.transactions(); }
   });
   el.querySelector('[data-act="reset"]').addEventListener('click', function () {
     Views._txFilter = { kind: 'all', category: '', from: '', to: '', kw: '' };

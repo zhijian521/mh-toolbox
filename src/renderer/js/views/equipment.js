@@ -17,10 +17,8 @@ Views.equipment = function () {
   const statusText = { active: '在用', stored: '仓库', sold: '已出售' };
   el.innerHTML =
     '<div class="filter-bar">' +
-      '<select data-f="slot"><option value="">全部部位</option>' +
-        D.slots.map(function (s) { return '<option value="' + s + '"' + (f.slot === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>' +
-      '<select data-f="status"><option value="">全部状态</option>' +
-        Object.keys(statusText).map(function (s) { return '<option value="' + s + '"' + (f.status === s ? ' selected' : '') + '>' + statusText[s] + '</option>'; }).join('') + '</select>' +
+      '<span class="xmount" data-mount="slot"></span>' +
+      '<span class="xmount" data-mount="status"></span>' +
       '<input type="text" data-f="kw" value="' + U.esc(f.kw) + '" placeholder="搜索名称 / 特技 / 属性" style="width:180px">' +
       '<span class="spacer"></span>' +
       '<button class="btn btn-gold" data-act="add">＋ 新装备</button>' +
@@ -48,10 +46,19 @@ Views.equipment = function () {
       }).join('') + '</tbody></table></div>'
     : '<div class="empty"><div class="ic">' + UI.icon('sword', 30) + '</div><p>' + (D.state.equipment.length ? '没有符合筛选条件的装备' : '还没有装备档案，把你的养老装备记进来吧') + '</p></div>');
 
-  el.querySelectorAll('[data-f]').forEach(function (inp) {
-    const handler = function () { f[inp.dataset.f] = inp.value; Views.equipment(); };
-    inp.addEventListener('change', handler);
-    if (inp.dataset.f === 'kw') inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') handler(); });
+  UI.select(el.querySelector('[data-mount="slot"]'), {
+    options: [{ v: '', t: '全部部位' }].concat(D.slots.map(function (s) { return { v: s, t: s }; })),
+    value: f.slot,
+    onChange: function (v) { Views._eqFilter.slot = v; Views.equipment(); }
+  });
+  UI.select(el.querySelector('[data-mount="status"]'), {
+    options: [{ v: '', t: '全部状态' }].concat(Object.keys(statusText).map(function (s) { return { v: s, t: statusText[s] }; })),
+    value: f.status,
+    onChange: function (v) { Views._eqFilter.status = v; Views.equipment(); }
+  });
+  const kw = el.querySelector('input[data-f="kw"]');
+  if (kw) kw.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { Views._eqFilter.kw = kw.value; Views.equipment(); }
   });
   el.querySelector('[data-act="add"]').addEventListener('click', function () { Views.eqModal(); });
 
