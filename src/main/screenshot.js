@@ -22,7 +22,7 @@ function attachDevFlows(win) {
       setTimeout(async () => {
         try {
           const summary = await win.webContents.executeJavaScript(
-            'JSON.stringify({ file: (typeof mh !== "undefined") ? "" : "", chars: D.state.characters.length, tx: D.state.transactions.length, goals: D.state.goals.length, page: Views._current, viewLen: document.getElementById("view").innerHTML.length })', true);
+            '(async () => JSON.stringify({ file: (await mh.info()).dataFile, chars: D.state.characters.length, tx: D.state.transactions.length, goals: D.state.goals.length, equipment: D.state.equipment.length, page: Views._current, charFilter: D.charFilter, quickRows: document.querySelectorAll(".quick-row").length, viewLen: document.getElementById("view").innerHTML.length }))()', true);
           console.log('[smoke] state =', summary);
         } catch (e) {
           console.error('[smoke] state check failed:', e);
