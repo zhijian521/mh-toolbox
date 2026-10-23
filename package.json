@@ -1,20 +1,58 @@
 {
-  "name": "mh-tools",
-  "version": "1.0.0",
-  "description": "梦幻西游工具箱",
-  "type": "module",
+  "name": "mh-tool",
+  "productName": "梦幻养老助手",
+  "version": "0.1.0",
+  "description": "梦幻西游养老记录日志：收益记录、目标记录、装备更新管理",
+  "main": "src/main/main.js",
+  "author": "zhijian",
+  "license": "MIT",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "vue": "^3.3.4",
-    "vue-router": "^4.2.4"
+    "start": "electron .",
+    "smoke": "electron . --smoke",
+    "dist": "electron-builder --win",
+    "shots": "electron . --screenshot"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^4.2.3",
-    "less": "^4.5.1",
-    "vite": "^4.4.5"
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.zhijian.mhtool",
+    "productName": "梦幻养老助手",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.ico"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "梦幻养老助手",
+      "artifactName": "梦幻养老助手-安装版-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "梦幻养老助手-便携版-${version}.exe"
+    }
   }
 }

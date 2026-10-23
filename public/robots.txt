@@ -1,3 +1,0 @@
-User-agent: *
-Allow: /
-Sitemap: https://yuwb.dev/xyq/sitemap.xml

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="color-scheme" content="light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>梦幻养老助手</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header id="titlebar">
+  <div class="tb-title">梦幻养老助手</div>
+  <div class="tb-btns">
+    <button class="tbtn" id="tb-min" title="最小化"></button>
+    <button class="tbtn" id="tb-max" title="最大化"></button>
+    <button class="tbtn tbtn-close" id="tb-close" title="关闭"></button>
+  </div>
+</header>
+<div id="app">
+  <aside id="sidebar">
+    <div class="logo">
+      <span class="logo-badge">梦</span>
+      <div>
+        <div class="logo-name">梦幻养老助手</div>
+        <div class="logo-sub">养老手账</div>
+      </div>
+    </div>
+    <nav id="nav"></nav>
+    <div class="sidebar-foot">数据本地保存 · v<span id="ver">-</span></div>
+  </aside>
+  <div id="main">
+    <header id="topbar">
+      <div class="topbar-title">
+        <h1 id="page-title">总览</h1>
+        <p id="page-sub">收益统计与目标进度</p>
+      </div>
+      <div class="topbar-actions">
+        <label class="char-filter">角色
+          <select id="char-select" title="全局角色筛选"></select>
+        </label>
+        <button id="quick-add" class="btn btn-gold">＋ 记一笔</button>
+      </div>
+    </header>
+    <main id="view"></main>
+  </div>
+</div>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+<script src="js/core/util.js"></script>
+<script src="js/core/data.js"></script>
+<script src="js/core/ui.js"></script>
+<script src="js/views/dashboard.js"></script>
+<script src="js/views/quick.js"></script>
+<script src="js/views/transactions.js"></script>
+<script src="js/views/goals.js"></script>
+<script src="js/views/equipment.js"></script>
+<script src="js/views/characters.js"></script>
+<script src="js/views/backup.js"></script>
+<script src="js/layout/titlebar.js"></script>
+<script src="js/layout/app.js"></script>
+</body>
+</html>
