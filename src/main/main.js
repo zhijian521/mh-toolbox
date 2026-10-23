@@ -30,6 +30,9 @@ function createWindow() {
   mainWindow.on('unmaximize', () => mainWindow.webContents.send('mh:winState', false));
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   attachDevFlows(mainWindow);
+  if (process.argv.includes('--dev')) {
+    require('./dev').setupDevWatch(mainWindow);
+  }
 }
 
 app.whenReady().then(() => {

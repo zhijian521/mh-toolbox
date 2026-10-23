@@ -67,8 +67,12 @@ Views.rerender = function () {
   });
 
   Titlebar.init();
+  if (window.Dev) Dev.restore();
+  if (!localStorage.getItem('mh.dev')) {
+    Views._current = D.state.characters.length ? 'dashboard' : 'characters';
+  }
   Views.renderNav();
-  Views.go(D.state.transactions.length ? 'dashboard' : (D.state.characters.length ? 'dashboard' : 'characters'));
+  Views.go(Views._current);
 })().catch(function (err) {
   document.getElementById('view').innerHTML =
     '<div class="empty"><p>启动失败：' + U.esc(String(err && err.message || err)) + '</p></div>';

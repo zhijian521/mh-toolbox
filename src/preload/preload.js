@@ -12,5 +12,7 @@ contextBridge.exposeInMainWorld('mh', {
   winMax: () => ipcRenderer.invoke('mh:winMax'),
   winClose: () => ipcRenderer.invoke('mh:winClose'),
   isMaximized: () => ipcRenderer.invoke('mh:winIsMax'),
-  onWinState: (cb) => ipcRenderer.on('mh:winState', (_e, v) => cb(v))
+  onWinState: (cb) => ipcRenderer.on('mh:winState', (_e, v) => cb(v)),
+  onDevReload: (cb) => ipcRenderer.on('mh:dev-reload', () => cb()),
+  onDevCss: (cb) => ipcRenderer.on('mh:dev-css', () => cb())
 });

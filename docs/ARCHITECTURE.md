@@ -22,7 +22,8 @@ mh-tool/
 │  ├─ main/                      # 主进程
 │  │  ├─ main.js                 # 窗口生命周期与模块装配
 │  │  ├─ ipc.js                  # 全部 ipcMain 处理器（数据/备份/窗口）
-│  │  └─ screenshot.js           # --smoke / --screenshot 开发辅助
+│  │  ├─ screenshot.js           # --smoke / --screenshot 开发辅助
+│  └─ dev.js                  # --dev 开发模式热更新监听
 │  ├─ preload/preload.js         # contextBridge API 白名单
 │  └─ renderer/
 │     ├─ index.html              # 唯一页面（脚本顺序即依赖顺序）
@@ -37,6 +38,7 @@ mh-tool/
 │        │  └─ ui.js             # UI：Toast/弹窗/表单生成器/SVG 图标库
 │        ├─ layout/
 │        │  ├─ titlebar.js       # 自绘标题栏（拖拽/最大化/关闭）
+│        │  │  └─ dev.js            # 开发模式客户端（热替换/状态快照恢复）
 │        │  └─ app.js            # 路由、导航、顶栏、启动引导
 │        └─ views/               # 各页面（挂载到全局 Views 命名空间）
 ```
@@ -58,6 +60,7 @@ mh-tool/
 | `info()` | 版本、数据文件路径、平台 |
 | `winMin()` / `winMax()` / `winClose()` / `isMaximized()` | 自绘标题栏窗口控制 |
 | `onWinState(cb)` | 订阅最大化状态变化 |
+| `onDevReload(cb)` / `onDevCss(cb)` | 开发模式热更新通道（仅 `--dev` 时主进程会发送） |
 
 ## 数据模型（D.state）
 
@@ -89,11 +92,18 @@ mh-tool/
 
 ```bash
 npm install
-npm start          # 开发运行
+npm run dev        # 开发模式（推荐）：热更新
+npm start          # 普通运行（无热更新）
 npm run smoke      # 冒烟：启动 1.2s 自动关闭
 npm run shots      # 注入示例数据截图到 docs/screenshots
 npm run dist       # 打包安装版 + 便携版到 dist/
 ```
+
+### 热更新（`npm run dev`）
+
+- `src/renderer` 下 **CSS** 变更 → 免刷新直接替换样式，不丢任何状态；
+- `src/renderer` 下 **JS / HTML** 变更 → 页面自动刷新，并恢复所在页、角色筛选与计时中的快速记录（快照 10 分钟内有效）；
+- `src/main` / `src/preload` 变更 → 终端提示手动重启（`Ctrl+C` 后重新 `npm run dev`），避免自动重启产生游离进程。
 
 - 网络不佳时设置镜像：`ELECTRON_MIRROR` / `ELECTRON_BUILDER_BINARIES_MIRROR`（npmmirror）。
 - 便携版偶发被杀毒软件锁文件：删旧文件重跑 `npx electron-builder --win portable`。
