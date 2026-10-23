@@ -19,7 +19,16 @@ async function capture(win, name) {
 function attachDevFlows(win) {
   if (isSmoke) {
     win.webContents.on('did-finish-load', () => {
-      setTimeout(() => { if (win && !win.isDestroyed()) win.close(); }, 1200);
+      setTimeout(async () => {
+        try {
+          const summary = await win.webContents.executeJavaScript(
+            'JSON.stringify({ file: (typeof mh !== "undefined") ? "" : "", chars: D.state.characters.length, tx: D.state.transactions.length, goals: D.state.goals.length, page: Views._current, viewLen: document.getElementById("view").innerHTML.length })', true);
+          console.log('[smoke] state =', summary);
+        } catch (e) {
+          console.error('[smoke] state check failed:', e);
+        }
+        if (win && !win.isDestroyed()) win.close();
+      }, 900);
     });
   }
   if (isShot) {
