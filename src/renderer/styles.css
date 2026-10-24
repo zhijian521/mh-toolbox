@@ -187,6 +187,9 @@ body {
   border-radius: 3px; padding: 4px 8px; font-size: 12px; font-family: inherit; outline: none;
 }
 .filter-bar select:focus, .filter-bar input:focus { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(166, 124, 46, 0.25); }
+.date-range-filter { gap: 8px 14px; }
+.date-range-fields { display: inline-flex; align-items: center; gap: 8px; }
+.date-range-fields .xsel { min-width: 132px; }
 .spacer { flex: 1; }
 
 /* ---------- 表格（账本式） ---------- */
@@ -195,7 +198,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .tbl th {
   text-align: left; font-weight: 600; color: var(--ink-3); font-size: 11px; letter-spacing: .06em;
   padding: 7px 10px; background: var(--paper-2);
-  border-bottom: 3px double var(--line-2); white-space: nowrap;
+  white-space: nowrap;
 }
 .tbl td { padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .tbl tr:last-child td { border-bottom: none; }
@@ -504,7 +507,7 @@ body { display: flex; flex-direction: column; }
 .btn:disabled { opacity: .45; cursor: default; }
 .ledger-section { margin-top: 22px; }
 .ledger-section:first-of-type { margin-top: 12px; }
-.ledger-section-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 10px; margin-bottom: 12px; border-bottom: 3px double var(--line-2); }
+.ledger-section-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 10px; margin-bottom: 12px; }
 .ledger-section-head h2 { font-size: 16px; font-family: var(--font-serif); font-weight: 700; letter-spacing: 1px; }
 .ledger-section-head p, .ledger-hint { color: var(--muted); font-size: 11px; line-height: 1.6; }
 .ledger-section-head p { margin-top: 3px; }
@@ -541,3 +544,41 @@ body { display: flex; flex-direction: column; }
   .earnings-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .ledger-overview-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------- 账号快速记录（规范见 STYLE_GUIDE.md 第 12 节） ---------- */
+.account-quick-totals { margin-top: 0; margin-bottom: 14px; }
+.account-quick-totals .account-metrics { padding: 0; margin: 0; border: 0; }
+.stat-grid + .quick-main { margin-top: 14px; }
+.quick-main > .card + .card { margin-top: 0; }
+.account-shortcut-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.account-shortcut {
+  display: flex; flex-direction: column; gap: 9px; padding: 13px;
+  background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 3px;
+  font-family: inherit; text-align: left; cursor: pointer;
+}
+.account-shortcut:hover { background: var(--paper-2); border-color: var(--gold); }
+.account-shortcut:focus-visible, .account-recent-row:focus-visible { outline: 1px dashed var(--gold); outline-offset: 2px; }
+.account-shortcut-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--ink-2); }
+.account-shortcut b { font-size: 13px; }
+.account-shortcut-hint { font-size: 11px; color: var(--muted); }
+.account-recent-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 0;
+  border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.account-recent-row:last-child { border-bottom: 0; }
+.account-recent-content { flex: 1; min-width: 0; }
+.account-recent-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.account-recent-row:hover .account-recent-title { text-decoration: underline; }
+.account-recent-meta { display: block; margin-top: 4px; color: var(--muted); font-size: 10.5px; }
+.account-recent-row > .money-in, .account-recent-row > .money-out { flex: none; font-size: 12px; }
+
+/* ---------- 在线记录（规范见 STYLE_GUIDE.md 第 13 节） ---------- */
+.online-preview { grid-column: 1 / -1; padding: 10px 12px; background: var(--paper-2); color: var(--ink-2); font-size: 12px; line-height: 1.7; }
+.online-filter { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.online-actions { white-space: nowrap; }
+.online-recovery { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 12px; border: 1px solid var(--line-2); background: var(--paper); font-size: 12px; }
+.online-recovery-text { line-height: 1.8; }
+.online-recent { margin-top: 14px; }
+.quick-controls { gap: 8px; }
+.online-running-note { margin: -4px 0 12px; }

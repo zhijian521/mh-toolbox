@@ -35,6 +35,7 @@ mh-tool/
 │        ├─ core/                # 无 UI 依赖的基础层
 │        │  ├─ util.js           # U：日期/金额/转义等纯函数
 │        │  ├─ data.js           # D：状态、常量、领域逻辑、持久化
+│        │  ├─ online.js         # D：在线记录、参数快照、跨日点卡结算
 │        │  └─ ui.js             # UI：Toast/弹窗/表单生成器/SVG 图标库/下拉与日历组件
 │        ├─ layout/
 │        │  ├─ titlebar.js       # 自绘标题栏（拖拽/最大化/关闭）
@@ -49,6 +50,14 @@ mh-tool/
 2. 页面一律实现为 `Views.<pageId> = function () { ... }`，往 `#view` 渲染并自行绑定事件。
 3. 跨页面共享的状态放 `D.state`；跨页面共享的交互放 `UI`（弹窗/Toast/表单）。
 4. 全局命名空间仅四个：`U`（工具）、`D`（数据）、`UI`（组件）、`Views`（页面）。
+
+### 记账模块导航
+
+- 侧栏「收益」对应 `Views.quick`，「账号」对应 `Views.account`，均默认进入快速记录。
+- `transactions` 和 `accountRecords` 是模块内的完整列表，分别声明 `parent: 'quick'` 与 `parent: 'account'`；侧栏不单独渲染这些页面，选中状态跟随父模块。
+- 快速页在 `Views._pages` 中通过 `records` 指定列表路由；顶栏据此显示「查看记录」与本模块记账按钮，列表显示「返回快速记录」。
+- 总览顶栏仅保留角色筛选；分区入口打开对应的快速记录页。两个列表的筛选状态独立保留，跨页面切换保留收益计时。
+- 总览两区时间范围放在 `Views._dashboardRanges`，收益默认本日、账号默认本月；账号首页范围放在 `Views._accountRange`，默认本月。三处共用 `UI.dateRange`，快捷项在前、起止日历在后，切换页面、角色和保存后保留范围。
 
 ## IPC API（preload 暴露为 window.mh）
 
@@ -68,21 +77,26 @@ mh-tool/
 |---|---|
 | `characters` | id, name, level, school, server |
 | `transactions` | id, ledger(earnings/account), recordType(money/item), characterId, date, kind, currency(cash/reserve/rmb), amount, category, minutes, note, fee, channel；物品包含 itemName/quantity/unitPrice/status/saleId；结算包含 itemRecordId；装备关联包含 equipmentId/gearAction |
+| `sessions` | id, characterId, mode(range/duration/legacy), source(timer/manual/legacy), date, startAt/endAt（本地时间对应的时间戳）, minutes, accounts, cardPrice, cost（万）, note, createdAt |
+| `activeSession` | 未结束的 id, characterId, startAt, accounts, cardPrice, createdAt；开始即落盘，普通重启等待用户恢复 |
 | `goals` | id, characterId, type(money/gear/progress), title, target, current, unit, status, deadline, logs[] |
 | `equipment` | id, characterId, slot, name, level, attributes, special, gems, status |
 | `gearLogs` | id, equipmentId, characterId, date, action, amount, note |
 | `itemPrices` | 物品 id → 单价（**单位: 梦幻币**，与网页版单价文件互通） |
 | `quickSettings` | accounts(在线角色数), cardPrice(梦幻币/点) |
 
-> 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 2。
+> 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 3。
 
-共享账本列表和筛选位于 `views/records.js`，收益表单位于 `transactions.js`，账号表单位于 `account.js`；金额、结算和装备关联逻辑集中在 `core/data.js`。
+共享账本列表和筛选位于 `views/records.js`，收益表单位于 `transactions.js`，账号快速记录、快捷表单预设和账号表单位于 `account.js`；金额、结算和装备关联逻辑集中在 `core/data.js`。
+
+在线数据逻辑位于 `core/online.js`，表单、恢复提示和列表位于 `views/online.js`；`quick.js` 负责首页和计时显示。`onlineRecords` 与 `transactions` 都归属收益模块，通过内部页签切换。`D.saveSession` 同步生成每日点卡流水，`D.earningsStats` 按独立在线时长计算净时薪，活动用时不重复累计。
 
 ## 如何新增一个页面
 
 1. `src/renderer/js/views/xxx.js`：实现 `Views.xxx = function () {...}`；
 2. `index.html` 在 `layout/app.js` 之前加 `<script>`；
 3. `layout/app.js` 的 `Views._pages` 注册 `{ id, t, icon, sub }`（图标用 `UI.icon` 已有条目或先在 `core/ui.js` 补）；
+   模块内二级页面增加 `parent`，父模块通过 `records` 指向记录列表，无需新增侧栏菜单。
 4. 样式：按 `STYLE_GUIDE.md` 写入 `styles.css` 对应分区（新页面在文件尾部新增一节）；
 5. 验证：`npm run smoke` + `npm run shots`，截图确认。
 
@@ -137,6 +151,6 @@ npm run dist       # 打包安装版 + 便携版到 dist/
 ## 已知约定
 
 - 游戏币显示走 `U.fmtMoney`（万/亿自动换算）；可能含人民币的金额走 `U.fmtAmount(value, currency)`。
-- `source='quick'` 的记录归收益账本：物品点击 → 物品估值（金币直接记实际收入）；结束游戏 → 点卡成本。
+- `source='quick'` 的物品速记归收益账本（金币直接记实际收入）；自动或手动在线记录通过 `sessionId` 关联 `source='online'` 的每日点卡成本。
 - 界面禁止 emoji 图标；`✕`/`✓` 为约定排版符号。
 - 样式 Token 全部在 `styles.css :root`，改风格先改 `docs/STYLE_GUIDE.md`。

@@ -2,6 +2,7 @@
 /* 日常收益：游戏币、日常成本、物品获得与出售 */
 Views.transactions = function () { Views.recordList('earnings'); };
 Views.txModal = function (tx, moving) {
+  if (tx && tx.sessionId) { Views.onlineModal(D.state.sessions.find(s => s.id === tx.sessionId)); return; }
   if (!D.state.characters.length) { UI.toast('请先创建角色', 'err'); Views.go('characters'); return; }
   const isNew = !tx;
   const sold = tx && tx.recordType === 'item' && tx.status === 'sold';
@@ -35,7 +36,7 @@ Views.txModal = function (tx, moving) {
       { key: 'quantity', label: '数量', type: 'number', required: true, min: 1, step: 1 },
       { key: 'unitPrice', label: '参考单价（万 / 件）', type: 'number', required: true, min: 0, step: '0.01', hint: '只记估值，出售后按实际成交额计算收入' },
       { key: 'status', label: '物品状态', type: 'select', options: sold ? [{ v: 'sold', t: '已出售（删除成交记录可恢复持有）' }] : [{ v: 'held', t: '持有' }, { v: 'self', t: '自用' }] },
-      { key: 'minutes', label: '本次用时（分钟）', type: 'number', min: 0, hint: '选填，用于游戏币时薪' },
+      { key: 'minutes', label: '活动用时（分钟）', type: 'number', min: 0, hint: '选填，仅记录活动耗时；在线净时薪使用独立在线记录' },
       { key: 'note', label: '备注', type: 'text', full: true }
     ],
     onRender: function (form, api) {

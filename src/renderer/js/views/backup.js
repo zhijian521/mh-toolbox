@@ -10,6 +10,7 @@ Views.backup = async function () {
         '<div class="card"><div class="card-title">数据概览</div>' +
           '<div class="kv"><span class="k">角色</span><span class="v">' + U.fmtInt(s.characters.length) + ' 个</span></div>' +
           '<div class="kv"><span class="k">收益记录</span><span class="v">' + U.fmtInt(D.earnings().length) + ' 笔（含物品）</span></div>' +
+          '<div class="kv"><span class="k">在线记录</span><span class="v">' + U.fmtInt(s.sessions.length) + ' 段</span></div>' +
           '<div class="kv"><span class="k">账号账本</span><span class="v">' + U.fmtInt(D.accounts().length) + ' 笔</span></div>' +
           '<div class="kv"><span class="k">目标</span><span class="v">' + U.fmtInt(s.goals.length) + ' 个</span></div>' +
           '<div class="kv"><span class="k">装备档案</span><span class="v">' + U.fmtInt(s.equipment.length) + ' 件（变动 ' + U.fmtInt(s.gearLogs.length) + ' 次）</span></div>' +
@@ -49,11 +50,14 @@ Views.backup = async function () {
     const ok = await UI.confirmModal({ title: '导入备份', message: '导入将覆盖当前全部数据，确定继续吗？', danger: true, confirmText: '覆盖导入' });
     if (!ok) return;
     D.state = D.normalize(r.data);
+    Views.clearQuickTimer();
+    Views._quick.recovering = !!D.state.activeSession;
     D.setCharFilter('all');
     await D.persist();
     Views.refreshHeader();
     UI.toast('导入成功 ✓');
     Views.backup();
+    if (Views._quick.recovering) Views.recoverOnline();
   });
   el.querySelector('[data-act="wipe"]').addEventListener('click', async function () {
     const ok1 = await UI.confirmModal({ title: '清空数据', message: '确定要清空全部数据吗？此操作不可恢复！', danger: true, confirmText: '我要清空' });
@@ -61,6 +65,7 @@ Views.backup = async function () {
     const ok2 = await UI.confirmModal({ title: '再次确认', message: '真的确定吗？建议先导出备份！', danger: true, confirmText: '确认清空' });
     if (!ok2) return;
     D.state = D.normalize({});
+    Views.clearQuickTimer();
     D.setCharFilter('all');
     await D.persist();
     Views.refreshHeader();

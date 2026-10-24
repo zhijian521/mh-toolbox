@@ -13,7 +13,7 @@
     "shots": "electron . --screenshot",
     "demo": "electron . --demo",
     "test": "node --test tests/ledgers.test.cjs",
-    "test:electron": "electron tests/ledgers.electron.cjs",
+    "test:electron": "electron tests/ledgers.electron.cjs && electron tests/online.electron.cjs",
     "dist": "electron-builder --win"
   },
   "devDependencies": {

@@ -1,7 +1,7 @@
 'use strict';
 /* 总览页 */
 const Views = window.Views = window.Views || {};
-Views._range = 'month';
+Views._dashboardRanges = { earnings: { preset: 'today' }, account: { preset: 'month' } };
 
 Views.statHtml = function (label, value, cls, sub) {
   return '<div class="stat ' + (cls || '') + '"><div class="k">' + U.esc(label) + '</div><div class="v">' + U.esc(value) + '</div><div class="d">' + U.esc(sub || '') + '</div></div>';
@@ -42,13 +42,14 @@ Views.incomeRanking = function (records) {
 };
 Views.dashboard = function () {
   const el = document.getElementById('view');
-  const ranges = [{ v: 'today', t: '今日' }, { v: 'week', t: '本周' }, { v: 'month', t: '本月' }, { v: 'year', t: '今年' }, { v: 'all', t: '全部' }];
-  const range = U.rangeFor(Views._range);
+  const range = U.rangeFor(Views._dashboardRanges.earnings);
+  const accountRange = U.rangeFor(Views._dashboardRanges.account);
   const earnings = D.txIn(D.charFilter, range.from, range.to);
-  const accounts = D.txIn(D.charFilter, range.from, range.to, 'account');
-  const st = D.stats(earnings);
+  const accounts = D.txIn(D.charFilter, accountRange.from, accountRange.to, 'account');
+  const st = D.earningsStats(D.charFilter, range.from, range.to);
   const held = D.stats(D.scope(D.earnings()));
   const end = range.to && range.to < U.today() ? range.to : U.today();
+  const accountEnd = accountRange.to && accountRange.to < U.today() ? accountRange.to : U.today();
   const goals = D.scope(D.state.goals).filter(function (g) { return g.status === 'active'; }).slice(0, 4);
   if (!D.state.characters.length && !D.state.transactions.length) {
     el.innerHTML = '<div class="empty"><p>先创建一个角色，开始记录你的养老生活。</p><div class="btns"><button class="btn btn-gold" data-page="characters">创建角色</button><button class="btn" data-act="demo">加载示例数据</button></div></div>';
@@ -56,19 +57,18 @@ Views.dashboard = function () {
     el.querySelector('[data-act="demo"]').onclick = function () { Views.loadDemoData(); };
     return;
   }
-  el.innerHTML = '<div class="filter-bar"><div class="seg">' + ranges.map(function (r) {
-    return '<button class="seg-btn' + (r.v === Views._range ? ' on' : '') + '" data-range="' + r.v + '">' + r.t + '</button>';
-  }).join('') + '</div><span class="badge">' + (range.from ? range.from + ' 至 ' + range.to : '全部时间') + '</span><span class="ledger-hint">下方两类账本共用角色与时间筛选</span></div>' +
-    '<section class="ledger-section" data-ledger="earnings"><div class="ledger-section-head"><div><h2>日常收益</h2><p>游戏币与物品分开记，看看日常赚了多少</p></div><button class="btn btn-sm" data-page="transactions">查看收益记录</button></div>' +
+  el.innerHTML = '<section class="ledger-section" data-ledger="earnings"><div class="ledger-section-head"><div><h2>日常收益</h2><p>游戏币与物品分开记，看看日常赚了多少</p></div><button class="btn btn-sm" data-page="quick">进入收益</button></div>' +
+    '<div data-range-filter="earnings"></div>' +
     '<div class="stat-grid earnings-stats">' +
       Views.statHtml('游戏币收入', U.fmtMoney(st.income), 'good', '现金 ' + U.fmtMoney(st.income - st.reserveIncome) + ' · 储备 ' + U.fmtMoney(st.reserveIncome)) +
       Views.statHtml('日常成本', U.fmtMoney(st.expense), 'bad', '点卡消耗、药品、修理等') +
       Views.statHtml('净收益', U.fmtMoney(st.net), st.net >= 0 ? 'good' : 'bad', '游戏币收入 − 日常成本') +
       Views.statHtml('持有物品估值', U.fmtMoney(held.itemEstimate), 'hi', '当前持有 · 不受时间筛选影响') +
-      Views.statHtml('游戏币时薪', st.hourly == null ? '—' : U.fmtMoney(st.hourly) + '/时', '', '仅按填有用时的游戏币记录计算') + '</div>' +
+      Views.statHtml('在线净时薪', st.hourly == null ? '—' : U.fmtMoney(st.hourly) + '/时', '', '净收益 ÷ 已记录在线时长 · 已结算') + '</div>' +
     '<div class="ledger-overview-grid"><div class="card"><div class="card-title">每日游戏币净收益<span class="sub">所选范围内 · 近 14 天</span></div>' + Views.ledgerTrend(earnings, end, 'cash') + Views.incomeRanking(earnings) + '</div>' +
       '<div class="card"><div class="card-title">最近收益记录</div>' + Views.recentRecords(earnings, false) + '</div></div></section>' +
-    '<section class="ledger-section" data-ledger="account"><div class="ledger-section-head"><div><h2>账号账本</h2><p>装备买卖、藏宝阁交易与充值，按币种单独统计</p></div><button class="btn btn-sm" data-page="account">查看账号账本</button></div>' +
+    '<section class="ledger-section" data-ledger="account"><div class="ledger-section-head"><div><h2>账号账本</h2><p>装备买卖、藏宝阁交易与充值，按币种单独统计</p></div><button class="btn btn-sm" data-page="account">进入账号</button></div>' +
+    '<div data-range-filter="account"></div>' +
     '<div class="ledger-overview-grid">' + ['rmb', 'cash'].map(function (currency) {
       const sum = D.accountStats(accounts, currency);
       const rmb = currency === 'rmb';
@@ -76,14 +76,19 @@ Views.dashboard = function () {
         Views.statHtml(rmb ? '总投入' : '交易支出', U.fmtAmount(sum.expense, currency), 'bad') +
         Views.statHtml(rmb ? '总回款' : '交易收入', U.fmtAmount(sum.income, currency), 'good') +
         Views.statHtml(rmb ? '净支出' : '收支差额', U.fmtAmount(rmb ? -sum.net : sum.net, currency), '') +
-        '</div><p class="ledger-hint">每日收支差额 · 所选范围内近 14 天</p>' + Views.ledgerTrend(accounts, end, currency) + '</div>';
+        '</div><p class="ledger-hint">每日收支差额 · 所选范围内近 14 天</p>' + Views.ledgerTrend(accounts, accountEnd, currency) + '</div>';
     }).join('') + '</div><div class="card"><div class="card-title">最近账号记录<span class="sub">人民币、梦幻币分别记账，不折算合计</span></div>' + Views.recentRecords(accounts, true) + '</div></section>' +
     '<section class="ledger-section"><div class="ledger-section-head"><div><h2>进行中的目标</h2><p>当前角色的养老计划</p></div><button class="btn btn-sm" data-page="goals">查看目标</button></div>' +
       (goals.length ? '<div class="goal-overview-grid">' + goals.map(function (g) {
         const pct = g.target ? Math.min(100, Math.round(g.current / g.target * 100)) : 0;
         return '<div class="card"><div class="card-title">' + U.esc(g.title) + '</div><div class="ledger-summary compact"><span>' + U.esc(g.current + ' / ' + g.target + ' ' + (g.unit || '万')) + '</span><b>' + pct + '%</b></div><div class="progress"><i style="width:' + pct + '%"></i></div></div>';
       }).join('') + '</div>' : '<div class="empty"><p>还没有进行中的目标</p></div>') + '</section>';
-  el.querySelectorAll('[data-range]').forEach(function (b) { b.onclick = function () { Views._range = b.dataset.range; Views.dashboard(); }; });
+  ['earnings', 'account'].forEach(function (ledger) {
+    UI.dateRange(el.querySelector('[data-range-filter="' + ledger + '"]'), {
+      value: Views._dashboardRanges[ledger], label: ledger === 'earnings' ? '收益统计时间' : '账号统计时间',
+      onChange: function (value) { Views._dashboardRanges[ledger] = value; Views.dashboard(); }
+    });
+  });
   el.querySelectorAll('[data-page]').forEach(function (b) { b.onclick = function () { Views.go(b.dataset.page); }; });
 };
 
@@ -97,6 +102,7 @@ Views.loadDemoData = async function (autoConfirm, persist) {
     });
     if (!ok) return;
   }
+  Views.clearQuickTimer();
 
   /* 固定种子伪随机，保证每次生成的示例数据一致 */
   let seed = 20261023;

@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 function domain() {
   const context = vm.createContext({ window: {}, localStorage: { getItem() { return null; }, setItem() {} } });
-  for (const file of ['util', 'data']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer/js/core/' + file + '.js'), 'utf8'), context);
+  for (const file of ['util', 'data', 'online']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer/js/core/' + file + '.js'), 'utf8'), context);
   return context.window.D;
 }
 function fixture() {
@@ -25,7 +25,7 @@ test('旧数据按账本迁移，金额和原始备份对象不变，重复迁�
   const D = domain(), original = fixture(), before = JSON.stringify(original);
   const first = D.normalize(original);
   assert.equal(JSON.stringify(original), before);
-  assert.equal(first.schemaVersion, 2);
+  assert.equal(first.schemaVersion, 3);
   assert.equal(first.transactions.find(t => t.id === 'g1').ledger, 'account');
   assert.equal(first.transactions.find(t => t.id === 'g1').amount, 620);
   assert.equal(first.transactions.find(t => t.id === 'q1').recordType, 'item');
@@ -80,4 +80,97 @@ test('新备份往返保留物品结算关系、币种、手续费及装备关�
   assert.equal(D.accountStats(D.accounts(), 'rmb').net, 183);
   D.removeTransaction(sale.id);
   assert.equal(D.stats(D.earnings()).itemEstimate, 150);
+});
+
+function onlineDomain() {
+  const D = domain();
+  D.state = D.normalize({ characters: [{ id: 'c1' }, { id: 'c2' }] });
+  D.persist = async () => {};
+  return D;
+}
+const onlineInput = { characterId: 'c1', mode: 'duration', date: '2020-02-28', minutes: 180, accounts: 5, cardPrice: 15000 };
+
+test('旧在线记录迁移保留原金额，不推测起止和价格，备份往返幂等', () => {
+  const D = domain();
+  const original = { schemaVersion: 2, characters: [{ id: 'c1' }], transactions: [
+    { id: 'old', characterId: 'c1', ledger: 'earnings', recordType: 'money', source: 'quick', category: '点卡', kind: 'expense', date: '2020-02-28', minutes: 90, amount: 77.77 },
+    { id: 'manual', characterId: 'c1', ledger: 'earnings', category: '点卡', kind: 'expense', date: '2020-02-28', minutes: 90, amount: 50 }
+  ] };
+  const before = JSON.stringify(original);
+  D.state = D.normalize(original);
+  assert.equal(JSON.stringify(original), before);
+  assert.equal(D.state.sessions.length, 1);
+  const session = D.state.sessions[0];
+  assert.equal(session.mode, 'legacy'); assert.equal(session.cost, 77.77);
+  assert.equal(session.minutes, 90); assert.equal(session.accounts, null); assert.equal(session.startAt, undefined);
+  assert.equal(JSON.stringify(D.normalize(JSON.parse(JSON.stringify(D.state)))), JSON.stringify(D.state));
+});
+
+test('手动在线生成唯一点卡成本，在线小时不乘角色数，活动耗时不重复计入时薪', async () => {
+  const D = onlineDomain();
+  assert.equal(D.earningsStats('all', '', '').hourly, null);
+  const session = await D.saveSession(onlineInput);
+  assert.equal(session.cost, 135);
+  assert.equal(D.state.transactions.length, 1);
+  D.state.transactions.push({ id: 'earned', ledger: 'earnings', recordType: 'money', date: onlineInput.date,
+    characterId: 'c1', kind: 'income', amount: 300, minutes: 900, currency: 'cash' });
+  const stats = D.earningsStats('c1', onlineInput.date, onlineInput.date);
+  assert.equal(stats.onlineMinutes, 180); assert.equal(stats.net, 165); assert.equal(stats.hourly, 55);
+  await D.saveSession(Object.assign({}, session, { minutes: 120 }));
+  assert.equal(D.state.sessions.length, 1);
+  assert.equal(D.state.transactions.filter(t => t.sessionId === session.id).length, 1);
+  assert.equal(D.state.transactions.find(t => t.sessionId === session.id).amount, 90);
+});
+
+test('跨天在线按本地日期分摊，费用舍入守恒；编辑归属和日期重建流水，删除无残留', async () => {
+  const D = onlineDomain();
+  const session = await D.saveSession(Object.assign({}, onlineInput, { mode: 'range',
+    startAt: new Date(2020, 1, 28, 23, 30).getTime(), endAt: new Date(2020, 1, 29, 1, 30).getTime() }));
+  const first = D.onlineStats('c1', '2020-02-28', '2020-02-28');
+  const second = D.onlineStats('c1', '2020-02-29', '2020-02-29');
+  assert.equal(first.minutes, 30); assert.equal(first.cost, 22.5);
+  assert.equal(second.minutes, 90); assert.equal(second.cost, 67.5);
+  assert.equal(D.stats(D.txIn('c1', '2020-02-28', '2020-02-28')).expense, first.cost);
+  const uneven = await D.saveSession(Object.assign({}, session, { cardPrice: 12345, endAt: new Date(2020, 1, 29, 1, 31, 17).getTime() }));
+  const sum = D.state.transactions.filter(t => t.sessionId === session.id).reduce((total, t) => total + Math.round(t.amount * 100), 0);
+  assert.equal(sum, Math.round(uneven.cost * 100));
+  await D.saveSession(Object.assign({}, session, { characterId: 'c2', startAt: new Date(2020, 2, 1, 1).getTime(), endAt: new Date(2020, 2, 1, 2).getTime() }));
+  assert.equal(D.txIn('c1', '', '').length, 0); assert.equal(D.txIn('c2', '', '').length, 1);
+  D.removeTransaction(D.state.transactions[0].id);
+  assert.equal(D.state.sessions.length, 0); assert.equal(D.state.transactions.length, 0);
+});
+
+test('在线校验阻止重叠、反向、未来及无效时长，邻接时段可保存', async () => {
+  const D = onlineDomain();
+  const range = Object.assign({}, onlineInput, { mode: 'range', startAt: new Date(2020, 1, 28, 10).getTime(), endAt: new Date(2020, 1, 28, 11).getTime() });
+  await D.saveSession(range);
+  await assert.rejects(D.saveSession(range), /重叠/);
+  await assert.rejects(D.saveSession(Object.assign({}, range, { startAt: range.endAt + 1000 })), /时长|结束时间/);
+  await assert.rejects(D.saveSession(Object.assign({}, range, { startAt: Date.now(), endAt: Date.now() + 10000 })), /当前时间/);
+  await assert.rejects(D.saveSession(Object.assign({}, onlineInput, { minutes: 0 })), /时长/);
+  await assert.rejects(D.saveSession(Object.assign({}, onlineInput, { minutes: 1441 })), /24 小时/);
+  await assert.rejects(D.saveSession(Object.assign({}, onlineInput, { date: '2020-02-30' })), /日期/);
+  await D.saveSession(Object.assign({}, range, { startAt: range.endAt, endAt: range.endAt + 3600000 }));
+  assert.equal(D.state.sessions.length, 2);
+});
+
+test('计时保存参数快照、调整开始时间；结束失败可恢复重试且不重复结算', async () => {
+  const D = onlineDomain();
+  const active = await D.startSession('c1');
+  D.state.quickSettings = { accounts: 1, cardPrice: 20000 }; D.setCharFilter('c2');
+  assert.equal(active.accounts, 5); assert.equal(active.cardPrice, 15000); assert.equal(active.characterId, 'c1');
+  await assert.rejects(D.startSession('c2'), /未结束/);
+  await D.adjustSessionStart(Date.now() - 7200000);
+  const endAt = D.state.activeSession.startAt + 7200000;
+  const input = Object.assign({}, D.state.activeSession, { mode: 'range', endAt, source: 'timer' });
+  D.persist = async () => { throw new Error('磁盘写入失败'); };
+  await assert.rejects(D.saveSession(input, active.id), /磁盘/);
+  assert.equal(D.state.activeSession.id, active.id); assert.equal(D.state.sessions.length, 0); assert.equal(D.state.transactions.length, 0);
+  D.persist = async () => {};
+  const session = await D.saveSession(input, active.id);
+  assert.equal(session.cost, 90); assert.equal(session.characterId, 'c1'); assert.equal(D.state.activeSession, null);
+  await assert.rejects(D.saveSession(input, active.id), /已结束/);
+  assert.equal(D.state.sessions.length, 1);
+  D.state = D.normalize(JSON.parse(JSON.stringify(D.state)));
+  assert.equal(D.state.sessions[0].id, session.id);
 });

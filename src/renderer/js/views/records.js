@@ -22,7 +22,7 @@ Views.recordList = function (ledger) {
   const shown = list.slice(f.page * 50, (f.page + 1) * 50);
   const cats = account ? D.accountCats : D.incomeCats.concat(D.expenseCats);
   const allCats = Array.from(new Set(cats.concat(list.map(function (t) { return t.category; }))));
-  el.innerHTML =
+  el.innerHTML = (account ? '' : Views.earningsTabs('transactions')) +
     '<div class="filter-bar ledger-filters">' +
       '<span class="xmount" data-mount="kind"></span>' +
       '<span class="xmount" data-mount="type"></span>' +
@@ -50,7 +50,7 @@ Views.recordList = function (ledger) {
           (item ? '参考估值，不计入游戏币收入' : account ? (t.currency === 'rmb' ? '人民币' : t.currency === 'reserve' ? '储备金' : '梦幻币') + (t.fee ? ' · 手续费 ' + U.fmtAmount(t.fee, t.currency) : '') : t.currency === 'reserve' ? '储备金' : '游戏币') + '</div></td>' +
         '<td class="ledger-actions">' + (item && t.status !== 'sold' ? '<button class="btn btn-sm btn-ghost" data-act="sell">出售</button>' : '') +
           '<button class="btn btn-sm btn-ghost" data-act="edit">编辑</button>' +
-          (!item && !t.itemRecordId && !t.equipmentId && t.currency !== 'rmb' && t.currency !== 'reserve' ? '<button class="btn btn-sm btn-ghost" data-act="move">转账本</button>' : '') +
+          (!item && !t.sessionId && !t.itemRecordId && !t.equipmentId && t.currency !== 'rmb' && t.currency !== 'reserve' ? '<button class="btn btn-sm btn-ghost" data-act="move">转账本</button>' : '') +
           '<button class="btn btn-sm btn-ghost btn-danger" data-act="del">删除</button></td></tr>';
     }).join('') : '<tr><td colspan="6"><div class="empty"><p>暂无记录，可以新增一笔或调整筛选条件。</p></div></td></tr>') +
     '</tbody></table></div><div class="ledger-pagination"><span>共 ' + list.length + ' 笔 · 第 ' + (f.page + 1) + ' / ' + pages + ' 页</span>' +
@@ -64,6 +64,7 @@ Views.recordList = function (ledger) {
     ? [{ v: '', t: '全部币种' }, { v: 'rmb', t: '人民币' }, { v: 'cash', t: '梦幻币' }]
     : [{ v: '', t: '全部内容' }, { v: 'money', t: '游戏币' }, { v: 'item', t: '物品' }]);
   select('category', 'category', [{ v: '', t: '全部分类' }].concat(allCats.map(function (c) { return { v: c, t: c }; })));
+  if (!account) Views.bindEarningsTabs(el);
   ['from', 'to'].forEach(function (key) {
     UI.date(el.querySelector('[data-mount="' + key + '"]'), { value: f[key], placeholder: key === 'from' ? '开始日期' : '结束日期', onChange: function (v) { f[key] = v; f.page = 0; render(); } });
   });
@@ -80,11 +81,14 @@ Views.recordList = function (ledger) {
     const move = row.querySelector('[data-act="move"]');
     if (move) move.onclick = function () { account ? Views.txModal(tx, true) : Views.accountModal(tx, true); };
     row.querySelector('[data-act="del"]').onclick = async function () {
-      const linked = tx.saleId ? '关联的出售收入也会删除。' : tx.itemRecordId ? '物品会恢复为持有。' : tx.equipmentId ? '关联的装备变动也会删除。' : '';
+      const linked = tx.sessionId ? '整段在线记录与所有日期的关联点卡支出会一并删除。' : tx.saleId ? '关联的出售收入也会删除。' : tx.itemRecordId ? '物品会恢复为持有。' : tx.equipmentId ? '关联的装备变动也会删除。' : '';
       const ok = await UI.confirmModal({ title: '删除记录', message: '确定删除这条记录吗？' + linked, danger: true, confirmText: '删除' });
       if (!ok) return;
-      D.removeTransaction(tx.id);
-      try { await D.persist(); UI.toast('已删除'); render(); } catch (e) { UI.toast(e.message, 'err'); }
+      try {
+        if (tx.sessionId) await D.commitOnline(() => D.removeSession(tx.sessionId));
+        else { D.removeTransaction(tx.id); await D.persist(); }
+        UI.toast('已删除'); render();
+      } catch (e) { UI.toast(e.message, 'err'); }
     };
   });
 };

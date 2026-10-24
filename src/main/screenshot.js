@@ -9,7 +9,15 @@ const isShot = process.argv.includes('--screenshot');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function capture(win, name) {
-  const img = await win.webContents.capturePage();
+  await win.webContents.executeJavaScript(
+    'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))');
+  let img = await win.webContents.capturePage();
+  // 窗口首帧偶尔尚未绘制，避免生成空的 PNG 文件。
+  for (let attempt = 0; img.isEmpty() && attempt < 3; attempt++) {
+    await wait(250);
+    img = await win.webContents.capturePage();
+  }
+  if (img.isEmpty()) throw new Error('窗口尚未绘制，截图失败：' + name);
   const dir = path.join(process.cwd(), 'docs', 'screenshots');
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, name), img.toPNG());
@@ -32,6 +40,8 @@ function attachDevFlows(win) {
     });
   }
   if (isShot) {
+    // 截图时持续绘制后台窗口，防止取到上一个页面的画面。
+    win.webContents.setBackgroundThrottling(false);
     win.webContents.on('did-finish-load', async () => {
       try {
         await wait(500);
@@ -60,6 +70,15 @@ function attachDevFlows(win) {
         await win.webContents.executeJavaScript("Views.go('account')", true);
         await wait(250);
         await capture(win, 'shot-05-account.png');
+        await win.webContents.executeJavaScript("Views.go('accountRecords')", true);
+        await wait(250);
+        await capture(win, 'shot-06-account-records.png');
+        await win.webContents.executeJavaScript("Views.go('onlineRecords')", true);
+        await wait(250);
+        await capture(win, 'shot-07-online-records.png');
+        await win.webContents.executeJavaScript('Views.onlineModal()', true);
+        await wait(150);
+        await capture(win, 'shot-08-online-form.png');
       } catch (e) {
         console.error('screenshot failed:', e);
       }

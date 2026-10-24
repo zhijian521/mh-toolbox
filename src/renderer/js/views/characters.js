@@ -35,16 +35,19 @@ Views.characters = function () {
     card.querySelector('[data-act="edit"]').addEventListener('click', function () { Views.charModal(c); });
     card.querySelector('[data-act="del"]').addEventListener('click', async function () {
       const n = D.state.transactions.filter(function (t) { return t.characterId === c.id; }).length +
+        D.state.sessions.filter(function (s) { return s.characterId === c.id; }).length +
         D.state.goals.filter(function (g) { return g.characterId === c.id; }).length +
         D.state.equipment.filter(function (e) { return e.characterId === c.id; }).length;
       const ok = await UI.confirmModal({
         title: '删除角色',
-        message: '确定删除角色「' + c.name + '」吗？其名下 ' + n + ' 条相关记录（收益/账号账本/目标/装备）会一并删除，且无法恢复。',
+        message: '确定删除角色「' + c.name + '」吗？其名下 ' + n + ' 条相关记录（收益/在线/账号账本/目标/装备）会一并删除，且无法恢复。',
         danger: true, confirmText: '确认删除'
       });
       if (!ok) return;
       D.state.characters = D.state.characters.filter(function (x) { return x.id !== c.id; });
       D.state.transactions = D.state.transactions.filter(function (x) { return x.characterId !== c.id; });
+      D.state.sessions = D.state.sessions.filter(function (s) { return s.characterId !== c.id; });
+      if (D.state.activeSession && D.state.activeSession.characterId === c.id) { D.state.activeSession = null; Views.clearQuickTimer(); }
       D.state.goals = D.state.goals.filter(function (x) { return x.characterId !== c.id; });
       const eqIds = D.state.equipment.filter(function (x) { return x.characterId === c.id; }).map(function (x) { return x.id; });
       D.state.equipment = D.state.equipment.filter(function (x) { return x.characterId !== c.id; });

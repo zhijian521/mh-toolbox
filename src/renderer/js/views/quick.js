@@ -1,6 +1,11 @@
 'use strict';
 /* 快速记录页：参考网页版 mh-toolbox OnlineRecord（在线计时 / 点卡 / 物品掉落速记） */
-Views._quick = Views._quick || { isOnline: false, startTime: null, interval: null };
+Views._quick = {
+  interval: null, recovering: false, busy: false,
+  get isOnline() { return !!D.state.activeSession && !this.recovering; },
+  get startTime() { return D.state.activeSession ? D.state.activeSession.startAt : null; }
+};
+Views._quickRange = { preset: 'today' };
 
 Views.QUICK_ITEMS = [
   { id: 1, name: '60武器', img: '60武器.png' }, { id: 2, name: '70武器', img: '70武器.png' }, { id: 3, name: '80武器', img: '80武器.png' },
@@ -55,24 +60,15 @@ Views.quick = function () {
   const settings = D.state.quickSettings;
   const charId = Views.quickCharId();
   const char = D.charById(charId);
-  const today = U.today();
+  const range = U.rangeFor(Views._quickRange);
+  const active = D.state.activeSession;
 
-  const quickTxs = D.state.transactions.filter(function (t) {
-    return t.ledger === 'earnings' && t.source === 'quick' && t.date === today && t.characterId === charId;
-  });
-  const cardTxs = quickTxs.filter(function (t) { return t.kind === 'expense'; });
+  const quickTxs = D.txIn(D.charFilter, range.from, range.to).filter(t => t.source === 'quick');
   const lootTxs = quickTxs.filter(function (t) { return t.kind === 'income'; }).sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
   const saved = {
-    hours: cardTxs.reduce(function (s, t) { return s + (t.minutes || 0); }, 0) / 60,
-    card: cardTxs.reduce(function (s, t) { return s + t.amount; }, 0),
-    loot: lootTxs.reduce(function (s, t) { return s + (t.recordType === 'item' && t.status === 'held' ? D.itemValue(t) : 0); }, 0),
-    coins: D.txIn(charId, today, today).reduce(function (s, t) { return s + (t.recordType !== 'item' && t.kind === 'income' ? t.amount : 0); }, 0)
+    loot: lootTxs.reduce(function (s, t) { return s + (t.recordType === 'item' && t.status === 'held' ? D.itemValue(t) : 0); }, 0)
   };
-  const liveHours = q.isOnline && q.startTime ? (Date.now() - q.startTime) / 3600000 : 0;
-  const liveCost = liveHours * settings.cardPrice * 6 * settings.accounts / 10000;
-  const totalHours = saved.hours + liveHours;
-  const totalCard = saved.card + liveCost;
-  const balance = saved.coins - totalCard;
+  const stats = D.earningsStats(D.charFilter, range.from, range.to, q.isOnline);
   const priceText = settings.cardPrice >= 10000 ? (settings.cardPrice / 10000).toFixed(1) + '万' : settings.cardPrice.toLocaleString('zh-CN');
 
   function itemCard(item) {
@@ -83,26 +79,33 @@ Views.quick = function () {
   }
 
   el.innerHTML =
-    '<div class="filter-bar">' +
+    '<div data-range-filter="quick"></div>' +
+    (active && q.recovering ? '<div class="online-recovery"><span>有未结束的在线记录 · ' + U.esc(D.charName(active.characterId)) +
+      '</span><button class="btn btn-sm" data-act="recover">继续计时 / 补填结束时间</button></div>' : '') +
+    '<div class="filter-bar quick-controls">' +
       (q.isOnline
-        ? '<span class="quick-live"><span class="quick-dot"></span><span id="quick-time">00:00:00</span></span>'
+        ? '<span class="quick-live"><span class="quick-dot"></span><span id="quick-time">00:00:00</span> · ' + U.esc(D.charName(active.characterId)) + '</span><button class="btn btn-sm btn-ghost" data-act="adjust-start">调整开始时间</button>'
         : '<span class="badge">未开始计时</span>') +
-      '<span class="badge gold">记录到 · ' + U.esc(char.name) + '</span>' +
+      '<span class="badge gold">今日新记录 · ' + U.esc(char.name) + '</span>' +
       '<button class="quick-chip" data-act="accounts">' + UI.icon('user', 13) + ' ' + U.esc(String(settings.accounts)) + ' 角色</button>' +
       '<button class="quick-chip" data-act="cardprice">' + UI.icon('coin', 13) + ' 点卡 ' + U.esc(priceText) + '</button>' +
       '<span class="spacer"></span>' +
       '<button class="btn btn-sm btn-ghost" data-act="export">导出单价</button>' +
       '<button class="btn btn-sm btn-ghost" data-act="import">导入单价</button>' +
-      (q.isOnline
+      '<button class="btn" data-act="add-online">补记在线</button>' +
+      (active && q.recovering ? '' : q.isOnline
         ? '<button class="btn btn-danger" data-act="stop">■ 结束游戏</button>'
         : '<button class="btn btn-gold" data-act="start">▶ 开始游戏</button>') +
     '</div>' +
+    (active ? '<p class="ledger-hint online-running-note">本次计时 · ' + U.esc(D.charName(active.characterId)) + ' · ' + active.accounts +
+      ' 角色 · ' + U.fmtMoney(active.cardPrice / 10000) + '/点；上方设置用于下一次计时</p>' : '') +
 
-    '<div class="stat-grid">' +
-      '<div class="stat"><div class="k">今日在线</div><div class="v" id="quick-h">' + totalHours.toFixed(2) + ' 小时</div><div class="d">按结束游戏的时间累计</div></div>' +
-      '<div class="stat bad"><div class="k">点卡消耗</div><div class="v" id="quick-card">' + U.esc(U.fmtMoney(totalCard)) + '</div><div class="d">' + settings.accounts + ' 角色 · ' + priceText + '/点 · 6点/时</div></div>' +
-      '<div class="stat hi"><div class="k">持有物品估值</div><div class="v" id="quick-loot">' + U.esc(U.fmtMoney(saved.loot)) + '</div><div class="d">今日速记物品 · 出售后结算收入</div></div>' +
-      '<div class="stat ' + (balance >= 0 ? 'good' : 'bad') + '"><div class="k">游戏币结余</div><div class="v" id="quick-balance">' + U.esc(U.fmtMoney(balance)) + '</div><div class="d">今日游戏币收入 − 速记点卡消耗</div></div>' +
+    '<div class="stat-grid earnings-stats">' +
+      '<div class="stat"><div class="k">在线时长</div><div class="v" id="quick-h">' + (stats.onlineMinutes / 60).toFixed(2) + ' 小时</div><div class="d">所选范围 · 含正在计时</div></div>' +
+      '<div class="stat bad"><div class="k">点卡消耗</div><div class="v" id="quick-card">' + U.esc(U.fmtMoney(stats.cardCost)) + '</div><div class="d">按每段在线记录的角色数和单价计算</div></div>' +
+      '<div class="stat hi"><div class="k">持有物品估值</div><div class="v" id="quick-loot">' + U.esc(U.fmtMoney(saved.loot)) + '</div><div class="d">所选范围速记物品 · 出售后结算收入</div></div>' +
+      '<div class="stat ' + (stats.net >= 0 ? 'good' : 'bad') + '"><div class="k">游戏币净收益</div><div class="v" id="quick-balance">' + U.esc(U.fmtMoney(stats.net)) + '</div><div class="d">游戏币收入 − 全部日常成本</div></div>' +
+      '<div class="stat"><div class="k">在线净时薪</div><div class="v" id="quick-hourly">' + (stats.hourly == null ? '—' : U.fmtMoney(stats.hourly) + '/时') + '</div><div class="d">游戏币净收益 ÷ 已记录在线时长</div></div>' +
     '</div>' +
 
     '<div class="quick-main">' +
@@ -114,7 +117,7 @@ Views.quick = function () {
         '<div class="quick-item-grid">' + Views.QUICK_UNSET.map(itemCard).join('') + '</div>' +
       '</div>' +
       '<div class="card quick-result">' +
-        '<div class="card-title">今日战绩</div>' +
+        '<div class="card-title">掉落记录<span class="sub">所选时间范围</span></div>' +
         '<div class="quick-result-list">' +
           (lootTxs.length ? lootTxs.map(function (t) {
             const item = Views.quickItemById(t.itemId);
@@ -124,14 +127,27 @@ Views.quick = function () {
               '<span class="quick-row-price ' + (t.recordType === 'item' ? 'money-estimate' : '') + '">' + U.esc(U.fmtMoney(t.amount)) + '</span>' +
               '<button class="quick-row-x" title="移除">✕</button></div>';
           }).join('')
-          : '<div class="quick-result-empty">点击左侧物品图标<br>快速记录今日掉落</div>') +
+          : '<div class="quick-result-empty">该时间范围内暂无速记掉落<br>点击物品图标记录今日掉落</div>') +
         '</div>' +
         '<div class="quick-result-footer">' +
           '<span>共 <b>' + lootTxs.length + '</b> 条 · 持有估值 <b>' + U.esc(U.fmtMoney(saved.loot)) + '</b></span>' +
-          '<button class="btn btn-sm btn-ghost" data-act="tolist">收益记录</button>' +
+          '<button class="btn btn-sm btn-ghost" data-act="tolist">查看全部记录</button>' +
         '</div>' +
       '</div>' +
-    '</div>';
+    '</div>' +
+    '<div class="card online-recent"><div class="card-title">最近在线记录<span class="sub">所选范围 · 展示完整时段</span>' +
+      '<button class="btn btn-sm btn-ghost" data-act="online-list">查看在线记录</button></div>' +
+      Views.onlineRows(Views.sessionsIn(range).slice(0, 5)) + '</div>';
+
+  UI.dateRange(el.querySelector('[data-range-filter]'), { value: Views._quickRange, label: '收益统计时间',
+    onChange: value => { Views._quickRange = value; Views.quick(); } });
+  Views.bindOnlineRows(el);
+  el.querySelector('[data-act="add-online"]').onclick = () => Views.onlineModal();
+  el.querySelector('[data-act="online-list"]').onclick = () => { Views._onlineRange = Object.assign({}, Views._quickRange); Views.go('onlineRecords'); };
+  const recovery = el.querySelector('[data-act="recover"]');
+  if (recovery) recovery.onclick = Views.recoverOnline;
+  const adjust = el.querySelector('[data-act="adjust-start"]');
+  if (adjust) adjust.onclick = Views.adjustOnlineStart;
 
   /* 事件绑定 */
   el.querySelectorAll('.quick-item').forEach(function (card) {
@@ -175,66 +191,49 @@ Views.quick = function () {
 Views.quickTick = function () {
   const q = Views._quick;
   if (!q.isOnline || !q.startTime) return;
-  const settings = D.state.quickSettings;
-  const charId = Views.quickCharId();
-  const today = U.today();
-  const cardTxs = D.state.transactions.filter(function (t) {
-    return t.ledger === 'earnings' && t.source === 'quick' && t.date === today && t.characterId === charId && t.kind === 'expense';
-  });
-  const savedHours = cardTxs.reduce(function (s, t) { return s + (t.minutes || 0); }, 0) / 60;
-  const savedCard = cardTxs.reduce(function (s, t) { return s + t.amount; }, 0);
+  const range = U.rangeFor(Views._quickRange);
+  const stats = D.earningsStats(D.charFilter, range.from, range.to, true);
   const diff = Date.now() - q.startTime;
-  const liveH = diff / 3600000;
-  const liveC = liveH * settings.cardPrice * 6 * settings.accounts / 10000;
-  const lootTx = D.state.transactions.filter(function (t) {
-    return t.ledger === 'earnings' && t.recordType !== 'item' && t.date === today && t.characterId === charId && t.kind === 'income';
-  });
-  const loot = lootTx.reduce(function (s, t) { return s + t.amount; }, 0);
 
   const p2 = function (n) { return String(n).padStart(2, '0'); };
   const tEl = document.getElementById('quick-time');
   if (tEl) tEl.textContent = p2(Math.floor(diff / 3600000)) + ':' + p2(Math.floor(diff / 60000) % 60) + ':' + p2(Math.floor(diff / 1000) % 60);
   const hEl = document.getElementById('quick-h');
-  if (hEl) hEl.textContent = (savedHours + liveH).toFixed(2) + ' 小时';
+  if (hEl) hEl.textContent = (stats.onlineMinutes / 60).toFixed(2) + ' 小时';
   const cEl = document.getElementById('quick-card');
-  if (cEl) cEl.textContent = U.fmtMoney(savedCard + liveC);
+  if (cEl) cEl.textContent = U.fmtMoney(stats.cardCost);
   const bEl = document.getElementById('quick-balance');
-  if (bEl) bEl.textContent = U.fmtMoney(loot - savedCard - liveC);
+  if (bEl) { bEl.textContent = U.fmtMoney(stats.net); bEl.parentElement.className = 'stat ' + (stats.net >= 0 ? 'good' : 'bad'); }
+  const hourly = document.getElementById('quick-hourly');
+  if (hourly) hourly.textContent = stats.hourly == null ? '—' : U.fmtMoney(stats.hourly) + '/时';
 };
 
-Views.quickStart = function () {
+Views.quickStart = async function () {
   const q = Views._quick;
-  if (q.isOnline) return;
-  q.isOnline = true;
-  q.startTime = Date.now();
-  if (!q.interval) q.interval = setInterval(Views.quickTick, 1000);
-  UI.toast('开始记录游戏时间');
-  Views.quick();
+  if (q.busy || D.state.activeSession) return;
+  q.busy = true;
+  try {
+    await D.startSession(Views.quickCharId());
+    q.recovering = false;
+    if (!q.interval) q.interval = setInterval(Views.quickTick, 1000);
+    UI.toast('开始记录游戏时间');
+    Views.rerender();
+  } catch (error) { UI.toast(error.message, 'err'); }
+  finally { q.busy = false; }
 };
 
 Views.quickStop = async function () {
   const q = Views._quick;
-  if (!q.isOnline || !q.startTime) return;
-  const settings = D.state.quickSettings;
-  const h = (Date.now() - q.startTime) / 3600000;
-  q.isOnline = false;
-  q.startTime = null;
-  if (q.interval) { clearInterval(q.interval); q.interval = null; }
-  if (h > 0) {
-    const cost = h * settings.cardPrice * 6 * settings.accounts / 10000;
-    D.state.transactions.push({
-      id: U.uid(), ledger: 'earnings', recordType: 'money', characterId: Views.quickCharId(), date: U.today(),
-      kind: 'expense', currency: 'cash', amount: Math.round(cost * 100) / 100,
-      category: '点卡', minutes: Math.round(h * 60),
-      note: '在线 ' + h.toFixed(2) + ' 小时 × ' + settings.accounts + ' 角色',
-      source: 'quick', createdAt: Date.now()
-    });
-    await D.persist();
-    UI.toast('本段在线 ' + h.toFixed(2) + ' 小时，点卡 -' + U.fmtMoney(cost));
-  } else {
-    UI.toast('本次在线时长不足，未记入点卡', 'info');
-  }
-  Views.quick();
+  const active = D.state.activeSession;
+  if (q.busy || !q.isOnline || !active) return;
+  q.busy = true;
+  try {
+    const session = await D.saveSession(Object.assign({}, active, { mode: 'range', endAt: Date.now(), source: 'timer' }), active.id);
+    Views.clearQuickTimer();
+    UI.toast('本段在线 ' + (session.minutes / 60).toFixed(2) + ' 小时，点卡 -' + U.fmtMoney(session.cost));
+    Views.rerender();
+  } catch (error) { UI.toast(error.message, 'err'); }
+  finally { q.busy = false; }
 };
 
 Views.quickAddLoot = async function (item) {

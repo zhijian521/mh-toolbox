@@ -38,7 +38,8 @@
         <label class="char-filter">角色
           <span id="char-select-mount"></span>
         </label>
-        <button id="quick-add" class="btn btn-gold">＋ 记一笔</button>
+        <button id="ledger-records" class="btn" hidden>查看记录</button>
+        <button id="quick-add" class="btn btn-gold" hidden>＋ 手动记一笔</button>
       </div>
     </header>
     <main id="view"></main>
@@ -48,10 +49,12 @@
 <div id="toast-root"></div>
 <script src="js/core/util.js"></script>
 <script src="js/core/data.js"></script>
+<script src="js/core/online.js"></script>
 <script src="js/core/ui.js"></script>
 <script src="js/layout/dev.js"></script>
 <script src="js/views/dashboard.js"></script>
 <script src="js/views/quick.js"></script>
+<script src="js/views/online.js"></script>
 <script src="js/views/records.js"></script>
 <script src="js/views/transactions.js"></script>
 <script src="js/views/account.js"></script>

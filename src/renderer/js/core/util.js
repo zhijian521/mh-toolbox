@@ -54,6 +54,11 @@ U.fmtMinutes = function (m) {
 };
 
 U.rangeFor = function (key) {
+  /* 快捷项按当前本地日期计算；自定义范围可只设一个边界。 */
+  if (typeof key === 'object') {
+    if (key.preset === 'custom') return { from: key.from, to: key.to };
+    key = key.preset;
+  }
   const now = new Date();
   const today = U.fmtDate(now);
   if (key === 'today') return { from: today, to: today };

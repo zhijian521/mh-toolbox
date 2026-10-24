@@ -227,6 +227,7 @@ UI.icons = {
   ledger: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
   target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
   sword: '<path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/>',
+  pet: '<ellipse cx="5" cy="10" rx="2" ry="2.5"/><ellipse cx="9" cy="5" rx="2" ry="2.5"/><ellipse cx="15" cy="5" rx="2" ry="2.5"/><ellipse cx="19" cy="10" rx="2" ry="2.5"/><path d="M12 11c-2 0-3 2-4 4-1 1-2 2-2 3.5S7 21 9 21c1.5 0 2-1 3-1s1.5 1 3 1c2 0 3-1 3-2.5S17 16 16 15c-1-2-2-4-4-4z"/>',
   user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   archive: '<path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/>',
   book: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
@@ -382,7 +383,7 @@ UI.date = function (mount, opts) {
   }
   function renderTrigger() {
     mount.innerHTML = '<input type="hidden"' + (opts.name ? ' name="' + U.esc(opts.name) + '"' : '') + ' value="' + U.esc(value) + '">' +
-      '<button type="button" class="xsel"><span class="xsel-t' + (value ? '' : ' ph') + '">' + U.esc(value || opts.placeholder || '选择日期') + '</span>' + UI.icon('calendar', 13) + '</button>';
+      '<button type="button" class="xsel"' + (opts.label ? ' aria-label="' + U.esc(opts.label) + '"' : '') + '><span class="xsel-t' + (value ? '' : ' ph') + '">' + U.esc(value || opts.placeholder || '选择日期') + '</span>' + UI.icon('calendar', 13) + '</button>';
     trigger = mount.querySelector('button');
     trigger.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -438,6 +439,7 @@ UI.date = function (mount, opts) {
       renderTrigger();
       syncHidden('');
       UI.closePop();
+      mount.dispatchEvent(new Event('change', { bubbles: true }));
       if (opts.onChange) opts.onChange('');
     });
     pop.querySelectorAll('.xday').forEach(function (b) {
@@ -448,6 +450,7 @@ UI.date = function (mount, opts) {
       renderTrigger();
       syncHidden(ds);
       UI.closePop();
+      mount.dispatchEvent(new Event('change', { bubbles: true }));
       if (opts.onChange) opts.onChange(ds);
     }
   }
@@ -457,4 +460,42 @@ UI.date = function (mount, opts) {
     set: function (v) { value = v || ''; if (value) { const d = U.parseDate(value); vy = d.getFullYear(); vm = d.getMonth(); } renderTrigger(); syncHidden(value); },
     el: mount
   };
+};
+
+/* 统计页共用的快捷时间与自定义日期范围。 */
+UI.dateRange = function (mount, opts) {
+  const value = opts.value;
+  const range = U.rangeFor(value);
+  const presets = [
+    { v: 'today', t: '本日' }, { v: 'week', t: '本周' }, { v: 'month', t: '本月' },
+    { v: 'year', t: '本年' }, { v: 'all', t: '全部' }
+  ];
+  mount.classList.add('filter-bar', 'date-range-filter');
+  mount.setAttribute('role', 'group');
+  mount.setAttribute('aria-label', opts.label);
+  mount.innerHTML = '<div class="seg" role="group" aria-label="快捷时间">' + presets.map(function (p) {
+    const selected = p.v === value.preset;
+    return '<button type="button" class="seg-btn' + (selected ? ' on' : '') + '" data-range="' + p.v +
+      '" aria-pressed="' + selected + '">' + p.t + '</button>';
+  }).join('') + '</div><div class="date-range-fields"><span class="xmount" data-date="from"></span>' +
+    '<span class="ledger-hint">至</span><span class="xmount" data-date="to"></span></div>';
+  mount.querySelectorAll('[data-range]').forEach(function (button) {
+    button.addEventListener('click', function () { opts.onChange({ preset: button.dataset.range }); });
+  });
+  const dates = {};
+  ['from', 'to'].forEach(function (key) {
+    const label = key === 'from' ? '开始日期' : '结束日期';
+    dates[key] = UI.date(mount.querySelector('[data-date="' + key + '"]'), {
+      value: range[key], placeholder: label, label: label,
+      onChange: function (date) {
+        const next = Object.assign({ preset: 'custom' }, range, { [key]: date });
+        if (next.from && next.to && next.from > next.to) {
+          dates[key].set(range[key]);
+          UI.toast('开始日期不能晚于结束日期', 'err');
+          return;
+        }
+        opts.onChange(next);
+      }
+    });
+  });
 };

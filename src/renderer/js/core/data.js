@@ -1,7 +1,7 @@
 'use strict';
 /* 数据层：状态、常量、持久化 */
 const D = window.D = {
-  state: { schemaVersion: 2, characters: [], transactions: [], goals: [], equipment: [], gearLogs: [] },
+  state: { schemaVersion: 3, characters: [], transactions: [], sessions: [], activeSession: null, goals: [], equipment: [], gearLogs: [] },
   charFilter: localStorage.getItem('mh.charFilter') || 'all',
 
   incomeCats: ['捉鬼', '押镖', '师门', '封妖', '副本', '周末活动', '节日活动', '摆摊卖货', '物品掉落', '宝图', '牧场', '种植', '帮派产出', '其他收入'],
@@ -29,13 +29,13 @@ const D = window.D = {
     const res = await window.mh.loadData();
     if (!res || !res.ok) throw new Error('读取数据失败：' + (res && res.error || '未知错误'));
     this.state = this.normalize(res.data || {});
-    if (res.data && res.data.schemaVersion !== 2) await this.persist();
+    if (res.data && res.data.schemaVersion !== 3) await this.persist();
   },
 
   normalize(data) {
     data = data && typeof data === 'object' ? data : {};
     const s = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       characters: Array.isArray(data.characters) ? data.characters : [],
       transactions: Array.isArray(data.transactions) ? data.transactions.map((t) => Object.assign({}, t)) : [],
       goals: Array.isArray(data.goals) ? data.goals.map((g) => Object.assign({}, g)) : [],
@@ -85,7 +85,7 @@ const D = window.D = {
       ? { accounts: Number(data.quickSettings.accounts) || 5, cardPrice: Number(data.quickSettings.cardPrice) || 15000 }
       : { accounts: 5, cardPrice: 15000 };
     s.itemPrices = data.itemPrices && typeof data.itemPrices === 'object' ? data.itemPrices : {};
-    return s;
+    return this.normalizeOnline(s, data);
   },
 
   async persist() {
@@ -127,7 +127,7 @@ const D = window.D = {
   stats(txs) {
     const r = {
       income: 0, expense: 0, net: 0, cashNet: 0, reserveNet: 0, reserveIncome: 0,
-      minutes: 0, count: txs.length, itemEstimate: 0, itemCount: 0, timedNet: 0, timedMinutes: 0
+      minutes: 0, count: txs.length, itemEstimate: 0, itemCount: 0
     };
     txs.forEach(function (t) {
       if (t.ledger === 'account') return;
@@ -140,14 +140,9 @@ const D = window.D = {
       if (t.kind === 'income' && t.currency === 'reserve') r.reserveIncome += amt;
       if (t.currency === 'reserve') r.reserveNet += (t.kind === 'income' ? amt : -amt);
       else r.cashNet += (t.kind === 'income' ? amt : -amt);
-      if (t.minutes) {
-        r.minutes += t.minutes;
-        r.timedNet += (t.kind === 'income' ? amt : -amt);
-        r.timedMinutes += t.minutes;
-      }
+      if (t.minutes && !t.sessionId) r.minutes += t.minutes;
     });
     r.net = r.income - r.expense;
-    r.hourly = r.timedMinutes ? (r.timedNet / (r.timedMinutes / 60)) : null;
     return r;
   },
 
@@ -181,6 +176,7 @@ const D = window.D = {
   removeTransaction(id) {
     const tx = this.state.transactions.find((t) => t.id === id);
     if (!tx) return;
+    if (tx.sessionId) { this.removeSession(tx.sessionId); return; }
     if (tx.itemRecordId) {
       const item = this.state.transactions.find((t) => t.id === tx.itemRecordId);
       if (item) { item.status = 'held'; delete item.saleId; }
