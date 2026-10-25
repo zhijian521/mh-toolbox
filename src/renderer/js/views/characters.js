@@ -95,6 +95,7 @@ Views.charModal = function (character) {
     values, fields: sections.flatMap((section) => section.fields || []),
     returnFocus: () => Views.charFocusTarget(savedId),
     onRender: (element, api, overlay) => {
+      overlay.classList.add('char-modal');
       form = element;
       form.classList.add('char-edit-form');
       for (const section of sections) {
@@ -287,6 +288,7 @@ Views.charOrderModal = function (character) {
     fields: [{ key: 'position', label: character.pinned ? '置顶角色中的位置' : '普通角色中的位置', type: 'select', full: true,
       options: group.map((item, index) => ({ v: String(index), t: '第 ' + (index + 1) + ' 位 · ' + item.name })),
       hint: '置顶角色始终排在普通角色前；取消置顶后回到普通组首位。' }],
+    onRender: (_form, _api, overlay) => overlay.classList.add('char-modal'),
     onSubmit: async (data) => {
       await D.saveCharacterOrder(character.id, { position: Number(data.position) });
       Views.charRefresh(character.id, 'sort');
@@ -345,7 +347,8 @@ Views.charCopyProgressModal = function (character) {
       { key: 'skipEmpty', label: '跳过未记录项', type: 'check', default: true,
         hint: '保留目标已有数值及独有技能，技能按来源顺序排列；明确填写的 0 正常复制。关闭后完整覆盖所选项目。' },
     ],
-    onRender: (form, api) => {
+    onRender: (form, api, overlay) => {
+      overlay.classList.add('char-modal');
       for (const [key] of sections) form.querySelector('[data-field="' + key + '"]').classList.remove('full');
       const preview = document.createElement('section');
       preview.className = 'char-copy-preview'; preview.setAttribute('aria-label', '复制预览');
