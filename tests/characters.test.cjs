@@ -117,3 +117,68 @@ test('删除角色失败恢复全部关联，成功删除仅清理该角色与�
   for (const key of ['equipment', 'gearLogs', 'sessions', 'goals']) assert.equal(D.state[key].length, 0);
   assert.equal(D.state.activeSession, null);
 });
+
+test('统一档案一次保存基础与全部养成，非法数据和写入失败均整体回滚', async () => {
+  const D = domain();
+  const before = JSON.stringify(D.state);
+  const data = { name: '统一编辑', level: 129, school: '大唐官府', server: '紫禁城', progress: {
+    schoolSkills: [{ name: '为官之道', level: 139 }], auxiliarySkills: [{ name: '强身术', level: 0 }],
+    training: { attack: 17 }, petTraining: { attack: 15 }, qianyuanPills: 3, potentialFruits: 100, note: '完整档案',
+  } };
+  await assert.rejects(D.saveCharacter({ ...data, progress: { ...data.progress, potentialFruits: -1 } }, 'c1'), /整数/);
+  assert.equal(JSON.stringify(D.state), before);
+  D.persist = async () => { throw new Error('写入失败'); };
+  await assert.rejects(D.saveCharacter(data, 'c1'), /写入失败/);
+  assert.equal(JSON.stringify(D.state), before);
+  let writes = 0;
+  D.persist = async () => { writes++; };
+  await D.saveCharacter(data, 'c1');
+  assert.equal(writes, 1);
+  assert.equal(D.charById('c1').name, '统一编辑');
+  assert.equal(D.charById('c1').progress.schoolSkills[0].level, 139);
+  assert.equal(D.charById('c1').progress.auxiliarySkills[0].level, 0);
+  assert.equal(D.charById('c1').progress.petTraining.attack, 15);
+  assert.equal(D.charById('c1').progress.potentialFruits, 100);
+});
+
+test('旧顺序保持，新角色加入普通组首位，置顶和组内排序在备份恢复后保留', async () => {
+  const D = domain();
+  D.charById('c1').createdAt = 1; D.charById('c2').createdAt = 2;
+  const ids = () => D.orderedCharacters().map((item) => item.id).join(',');
+  assert.equal(ids(), 'c2,c1');
+  const third = await D.saveCharacter({ name: '第三位' });
+  assert.equal(ids(), third.id + ',c2,c1');
+  await D.saveCharacterOrder('c1', { pinned: true });
+  await D.saveCharacterOrder('c2', { pinned: true });
+  assert.equal(ids(), 'c2,c1,' + third.id);
+  await D.saveCharacterOrder('c1', { position: 0 });
+  assert.equal(ids(), 'c1,c2,' + third.id);
+  await D.saveCharacter({ name: '改名' }, 'c2');
+  assert.equal(ids(), 'c1,c2,' + third.id);
+  D.state = D.normalize(plain(D.state));
+  assert.equal(ids(), 'c1,c2,' + third.id);
+  await D.saveCharacterOrder('c1', { pinned: false });
+  assert.equal(ids(), 'c2,c1,' + third.id);
+  await D.saveCharacterOrder('c1', { position: 1 });
+  assert.equal(ids(), 'c2,' + third.id + ',c1');
+  const fourth = await D.saveCharacter({ name: '第四位' });
+  assert.equal(ids(), 'c2,' + fourth.id + ',' + third.id + ',c1');
+  assert.deepEqual(plain(D.normalize(plain(D.state))), plain(D.state));
+});
+
+test('置顶排序校验及写入失败均恢复原顺序、档案和装备', async () => {
+  const D = domain();
+  const before = JSON.stringify(D.state);
+  for (const change of [{ position: -1 }, { position: 2 }, { position: 0.5 }, { pinned: 'true' }]) {
+    await assert.rejects(D.saveCharacterOrder('c1', change));
+    assert.equal(JSON.stringify(D.state), before);
+  }
+  await assert.rejects(D.saveCharacterOrder('missing', { position: 0 }), /不存在/);
+  D.persist = async () => { throw new Error('排序写入失败'); };
+  await assert.rejects(D.saveCharacterOrder('c1', { pinned: true }), /排序写入失败/);
+  assert.equal(JSON.stringify(D.state), before);
+  D.persist = async () => {};
+  await D.saveCharacterOrder('c1', { pinned: true });
+  assert.equal(D.orderedCharacters()[0].id, 'c1');
+  assert.equal(D.state.equipment[0].id, 'sword');
+});

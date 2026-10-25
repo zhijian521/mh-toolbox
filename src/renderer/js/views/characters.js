@@ -3,17 +3,24 @@
 Views.characters = function () {
   const root = document.getElementById('view');
   const scrollTop = root.scrollTop;
-  const characters = D.state.characters.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const characters = D.orderedCharacters();
   root.innerHTML = '<div class="char-page">' +
     (characters.length ? '<div class="char-grid">' + characters.map(Views.charCardHtml).join('') + '</div>' :
       '<div class="empty"><div class="ic">' + UI.icon('user', 30) + '</div><p>为每个角色建立档案，记录技能和修炼。</p></div>') + '</div>';
   root.querySelectorAll('.char-card').forEach((card) => {
     const character = D.charById(card.dataset.id);
     card.querySelector('[data-act="edit"]').onclick = () => Views.charModal(character);
-    card.querySelector('[data-act="schoolSkills"]').onclick = () => Views.charSkillsModal(character, 'schoolSkills');
-    card.querySelector('[data-act="auxiliarySkills"]').onclick = () => Views.charSkillsModal(character, 'auxiliarySkills');
-    card.querySelector('[data-act="training"]').onclick = () => Views.charTrainingModal(character);
-    card.querySelector('[data-act="growth"]').onclick = () => Views.charGrowthModal(character);
+    card.querySelector('[data-act="pin"]').onclick = async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        await D.saveCharacterOrder(character.id, { pinned: !character.pinned });
+        Views.characters();
+        root.querySelector('.char-card[data-id="' + CSS.escape(character.id) + '"] [data-act="pin"]').focus({ preventScroll: true });
+      } catch (error) { UI.toast(error.message || '置顶失败，请重试', 'err'); }
+      finally { button.disabled = false; }
+    };
+    card.querySelector('[data-act="sort"]').onclick = () => Views.charOrderModal(character);
     card.querySelector('[data-act="copy"]').onclick = () => Views.charCopyProgressModal(character);
     card.querySelector('[data-act="del"]').onclick = () => Views.charDelete(character);
   });
@@ -22,8 +29,9 @@ Views.characters = function () {
 
 Views.charCardHtml = function (character) {
   const progress = D.normalizeCharacterProgress(character.progress);
-  const heading = (title, action) => '<div class="char-section-head"><h3>' + title + '</h3>' +
-    '<button class="btn btn-sm" data-act="' + action + '" aria-label="编辑' + title + '">编辑</button></div>';
+  const heading = (title) => '<div class="char-section-head"><h3>' + title + '</h3></div>';
+  const iconButton = (action, icon, label, extra = '') => '<button class="btn btn-sm char-icon-btn' +
+    (action === 'del' ? ' btn-danger' : '') + '" data-act="' + action + '" title="' + label + '" aria-label="' + label + '"' + extra + '>' + UI.icon(icon, 15) + '</button>';
   const value = (label, number, unit) => '<div class="char-value"><dt>' + U.esc(label) + '</dt><dd' +
     (number == null ? ' class="is-empty"' : '') + '>' + (number == null ? '—' : U.esc(number) +
     (unit ? '<small>' + unit + '</small>' : '')) + '</dd></div>';
@@ -34,29 +42,67 @@ Views.charCardHtml = function (character) {
   return '<article class="char-card" data-id="' + U.esc(character.id) + '" aria-label="' + U.esc(character.name) + '的角色档案">' +
     '<header class="char-top"><div class="char-identity">' + UI.icon('hero', 40) + '<div><h2 class="char-name">' + U.esc(character.name) +
     '</h2><p class="char-sub">' + U.esc([character.level ? character.level + ' 级' : '', character.school, character.server].filter(Boolean).join(' · ')) +
-    '</p></div></div><button class="btn btn-sm" data-act="edit">编辑档案</button></header>' +
-    '<section class="char-section">' + heading('师门技能', 'schoolSkills') + skills(progress.schoolSkills) + '</section>' +
-    '<section class="char-section">' + heading('修炼', 'training') + '<div class="char-training">' +
+    '</p></div></div><div class="char-toolbar">' +
+      iconButton('pin', 'pin', character.pinned ? '取消置顶' : '置顶角色', ' aria-pressed="' + (character.pinned === true) + '"') +
+      iconButton('sort', 'sort', '调整排序') + iconButton('copy', 'copy', '复制养成配置') + iconButton('del', 'trash', '删除角色') +
+      iconButton('edit', 'edit', '编辑档案') + '</div></header>' +
+    '<section class="char-section">' + heading('师门技能') + skills(progress.schoolSkills) + '</section>' +
+    '<section class="char-section">' + heading('修炼') + '<div class="char-training">' +
       training('人物', D.characterTraining, progress.training) + training('召唤兽', D.petTraining, progress.petTraining) + '</div></section>' +
-    '<section class="char-section">' + heading('辅助技能', 'auxiliarySkills') + skills(progress.auxiliarySkills) + '</section>' +
-    '<section class="char-section">' + heading('其他养成', 'growth') + '<dl class="char-growth">' +
+    '<section class="char-section">' + heading('辅助技能') + skills(progress.auxiliarySkills) + '</section>' +
+    '<section class="char-section">' + heading('其他养成') + '<dl class="char-growth">' +
       value('乾元丹', progress.qianyuanPills, '个') + value('潜能果', progress.potentialFruits, '个') + '</dl>' +
-      (progress.note ? '<p class="char-note">' + U.esc(progress.note) + '</p>' : '') + '</section>' +
-    '<footer class="char-actions"><button class="btn btn-sm" data-act="copy">复制养成配置</button><button class="btn btn-sm btn-danger" data-act="del">删除角色</button></footer></article>';
+      (progress.note ? '<p class="char-note">' + U.esc(progress.note) + '</p>' : '') + '</section></article>';
 };
 
 Views.charModal = function (character) {
+  const progress = D.normalizeCharacterProgress(character && character.progress);
+  const groups = [{ key: 'training', title: '人物修炼', fields: D.characterTraining },
+    { key: 'petTraining', title: '召唤兽修炼', fields: D.petTraining }];
+  let form;
   UI.formModal({
-    title: character ? '编辑角色' : '添加角色',
-    values: character || { name: '', level: '', school: '大唐官府', server: '' },
+    title: character ? '编辑角色档案' : '添加角色', wide: true,
+    values: Object.assign({}, character || { name: '', level: '', school: '大唐官府', server: '' }, progress,
+      Object.fromEntries(groups.flatMap((group) => group.fields.map((field) =>
+        [group.key + '_' + field.key, progress[group.key][field.key]])))),
     fields: [
       { key: 'name', label: '角色昵称', type: 'text', required: true, placeholder: '如：养老一号' },
       { key: 'level', label: '等级', type: 'number', min: 0, step: '1', placeholder: '如 69、109' },
       { key: 'school', label: '门派', type: 'select', options: D.schools },
       { key: 'server', label: '服务器', type: 'text', placeholder: '如：紫禁城' },
+      ...groups.flatMap((group) => group.fields.map((field) => ({
+        key: group.key + '_' + field.key, label: field.label, type: 'number', min: 0, step: '1', placeholder: '未记录',
+      }))),
+      { key: 'qianyuanPills', label: '乾元丹个数', type: 'number', min: 0, step: '1', placeholder: '未记录' },
+      { key: 'potentialFruits', label: '潜能果个数', type: 'number', min: 0, step: '1', placeholder: '未记录' },
+      { key: 'note', label: '养成备注', type: 'textarea', full: true, placeholder: '可记录经脉流派、坐骑成长、机缘等' },
     ],
+    onRender: (element, api) => {
+      form = element;
+      form.classList.add('char-edit-form');
+      const heading = (title) => '<h4 class="char-form-title">' + title + '</h4>';
+      form.insertAdjacentHTML('afterbegin', heading('基础信息'));
+      groups.forEach((group) => form.querySelector('[data-field="' + group.key + '_' + group.fields[0].key + '"]')
+        .insertAdjacentHTML('beforebegin', heading(group.title)));
+      form.querySelector('[data-field="qianyuanPills"]').insertAdjacentHTML('beforebegin', heading('其他养成'));
+      for (const [key, title] of [['schoolSkills', '师门技能'], ['auxiliarySkills', '辅助技能']]) {
+        const auxiliary = key === 'auxiliarySkills';
+        const anchor = form.querySelector('[data-field="' + (auxiliary ? 'qianyuanPills' : 'training_attack') + '"]').previousElementSibling;
+        anchor.insertAdjacentHTML('beforebegin', '<section class="char-skill-editor" data-skills="' + key + '">' +
+          '<div class="char-section-head"><h4>' + title + '</h4>' + (!auxiliary ?
+            '<button type="button" class="btn btn-sm" data-act="template">补齐门派技能</button>' : '') + '</div>' +
+          '<div class="char-skill-labels"><span>技能名称</span><span>等级</span></div><div class="char-skill-rows"></div>' +
+          '<button type="button" class="btn btn-sm char-skill-add" data-act="add-row">＋ 添加技能</button></section>');
+        Views.charBindSkillEditor(form.querySelector('[data-skills="' + key + '"]'), progress[key], auxiliary, api);
+      }
+    },
+    validate: () => form.reportValidity() ? '' : '请检查等级和数量，填写非负整数或留空',
     onSubmit: async (data) => {
-      await D.saveCharacter(data, character && character.id);
+      const values = Object.fromEntries(groups.map((group) => [group.key,
+        Object.fromEntries(group.fields.map((field) => [field.key, data[group.key + '_' + field.key]]))]));
+      for (const key of ['schoolSkills', 'auxiliarySkills']) values[key] = Views.charReadSkills(form.querySelector('[data-skills="' + key + '"]'));
+      for (const key of ['qianyuanPills', 'potentialFruits', 'note']) values[key] = data[key];
+      await D.saveCharacter({ name: data.name, level: data.level, school: data.school, server: data.server, progress: values }, character && character.id);
       Views.refreshHeader();
       Views.characters();
       UI.toast(character ? '角色档案已保存' : '角色已创建');
@@ -93,98 +139,51 @@ Views.charBindSkillRow = function (row, skill) {
   update(select.get());
 };
 
-Views.charSkillsModal = function (character, key) {
-  const auxiliary = key === 'auxiliarySkills';
-  const title = auxiliary ? '辅助技能' : '师门技能';
-  const skills = D.normalizeCharacterProgress(character.progress)[key];
-  const overlay = UI.openModal({
-    title: title + ' · ' + character.name,
-    body: '<form id="char-skills-form"><p class="char-form-hint">逐项填写技能名称和等级，等级留空表示未记录。</p>' +
-      (!auxiliary && D.schoolSkillNames[character.school] ? '<button type="button" class="btn btn-sm" data-act="template">补齐' + U.esc(character.school) + '技能</button>' : '') +
-      '<div class="char-skill-labels"><span>技能名称</span><span>等级</span></div><div class="char-skill-rows">' +
-      (skills.length ? skills : [{ name: '', level: null }]).map((skill) => Views.charSkillRow(skill, auxiliary)).join('') + '</div>' +
-      '<button type="button" class="btn btn-sm char-skill-add" data-act="add-row">＋ 添加技能</button></form>',
-    footer: '<button class="btn" data-act="cancel">取消</button><button class="btn btn-gold" data-act="ok">保存</button>',
-  });
-  const form = overlay.querySelector('form');
-  const rows = form.querySelector('.char-skill-rows');
-  [...rows.children].forEach((row, index) => Views.charBindSkillRow(row, skills[index] || { name: '' }));
-  rows.onclick = (event) => {
-    const button = event.target.closest('[data-act="remove"]');
-    if (button) { UI.closePop(); button.closest('.char-skill-row').remove(); }
-  };
-  form.querySelector('[data-act="add-row"]').onclick = () => {
-    rows.insertAdjacentHTML('beforeend', Views.charSkillRow({ name: '', level: null }, auxiliary));
-    Views.charBindSkillRow(rows.lastElementChild, { name: '' });
-    rows.lastElementChild.querySelector(auxiliary ? '[data-mount="skill"] button' : 'input').focus();
-  };
-  const readSkills = () => [...rows.querySelectorAll('.char-skill-row')].map((row) => ({
+Views.charReadSkills = function (editor) {
+  return [...editor.querySelectorAll('.char-skill-row')].map((row) => ({
     name: row.querySelector('[name="skillName"]').value.trim(), level: row.querySelector('[name="skillLevel"]').value,
   })).filter((skill) => skill.name || skill.level !== '');
-  const template = form.querySelector('[data-act="template"]');
+};
+
+Views.charBindSkillEditor = function (editor, skills, auxiliary, api) {
+  const rows = editor.querySelector('.char-skill-rows');
+  const append = (skill) => {
+    rows.insertAdjacentHTML('beforeend', Views.charSkillRow(skill, auxiliary));
+    Views.charBindSkillRow(rows.lastElementChild, skill);
+  };
+  (skills.length ? skills : [{ name: '', level: null }]).forEach(append);
+  rows.onclick = (event) => {
+    const button = event.target.closest('[data-act="remove"]');
+    if (button) { UI.closePop(); button.closest('.char-skill-row').remove(); editor.querySelector('[data-act="add-row"]').focus(); }
+  };
+  editor.querySelector('[data-act="add-row"]').onclick = () => {
+    append({ name: '', level: null });
+    rows.lastElementChild.querySelector(auxiliary ? '[data-mount="skill"] button' : 'input').focus();
+  };
+  const template = editor.querySelector('[data-act="template"]');
   if (template) template.onclick = () => {
-    const draft = readSkills();
+    const draft = Views.charReadSkills(editor);
     if (draft.some((skill) => !skill.name)) { UI.toast('请先填写已有行的技能名称', 'err'); return; }
-    const filled = D.fillSchoolSkills(character.school, draft);
-    rows.innerHTML = filled.map((skill) => Views.charSkillRow(skill, false)).join('');
+    const school = api.getVal('school');
+    if (!D.schoolSkillNames[school]) { UI.toast('当前门派暂无技能模板', 'err'); return; }
+    const filled = D.fillSchoolSkills(school, draft);
+    rows.innerHTML = '';
+    filled.forEach(append);
   };
-  UI.watchForm(overlay);
-  const submit = async () => {
-    const button = overlay.querySelector('[data-act="ok"]');
-    if (button.disabled || !form.reportValidity()) return;
-    const values = readSkills();
-    button.disabled = true; overlay._saving = true;
-    try {
-      await D.saveCharacterProgress(character.id, { [key]: values });
-      UI.closeModal();
-      Views.characters();
-      UI.toast(title + '已保存');
-    } catch (error) {
-      UI.toast(error.message || '保存失败，请重试', 'err');
-    } finally { button.disabled = false; overlay._saving = false; }
-  };
-  overlay.querySelector('[data-act="cancel"]').onclick = UI.requestCloseModal;
-  overlay.querySelector('[data-act="ok"]').onclick = submit;
-  form.onsubmit = (event) => { event.preventDefault(); submit(); };
 };
 
-Views.charTrainingModal = function (character) {
-  const progress = D.normalizeCharacterProgress(character.progress);
-  const groups = [{ key: 'training', title: '人物修炼', fields: D.characterTraining },
-    { key: 'petTraining', title: '召唤兽修炼', fields: D.petTraining }];
+Views.charOrderModal = function (character) {
+  const group = D.orderedCharacters().filter((item) => (item.pinned === true) === (character.pinned === true));
   UI.formModal({
-    title: '修炼 · ' + character.name,
-    values: Object.fromEntries(groups.flatMap((group) => group.fields.map((field) =>
-      [group.key + '_' + field.key, progress[group.key][field.key]]))),
-    fields: groups.flatMap((group) => group.fields.map((field) => ({
-      key: group.key + '_' + field.key, label: field.label, type: 'number', min: 0, step: '1', placeholder: '未记录',
-    }))),
-    onRender: (form) => groups.forEach((group) => {
-      form.querySelector('[data-field="' + group.key + '_' + group.fields[0].key + '"]').insertAdjacentHTML('beforebegin',
-        '<h4 class="char-form-title">' + group.title + '</h4>');
-    }),
+    title: '调整排序 · ' + character.name,
+    values: { position: String(group.findIndex((item) => item.id === character.id)) },
+    fields: [{ key: 'position', label: character.pinned ? '置顶角色中的位置' : '普通角色中的位置', type: 'select', full: true,
+      options: group.map((item, index) => ({ v: String(index), t: '第 ' + (index + 1) + ' 位 · ' + item.name })),
+      hint: '置顶角色始终排在普通角色前；取消置顶后回到普通组首位。' }],
     onSubmit: async (data) => {
-      await D.saveCharacterProgress(character.id, Object.fromEntries(groups.map((group) => [group.key,
-        Object.fromEntries(group.fields.map((field) => [field.key, data[group.key + '_' + field.key]]))])));
+      await D.saveCharacterOrder(character.id, { position: Number(data.position) });
       Views.characters();
-      UI.toast('修炼已保存');
-    },
-  });
-};
-
-Views.charGrowthModal = function (character) {
-  UI.formModal({
-    title: '其他养成 · ' + character.name,
-    values: D.normalizeCharacterProgress(character.progress),
-    fields: [
-      { key: 'qianyuanPills', label: '乾元丹个数', type: 'number', min: 0, step: '1', placeholder: '未记录' },
-      { key: 'potentialFruits', label: '潜能果个数', type: 'number', min: 0, step: '1', placeholder: '未记录' },
-      { key: 'note', label: '养成备注', type: 'textarea', full: true, placeholder: '可记录经脉流派、坐骑成长、机缘等' },
-    ],
-    onSubmit: async (data) => {
-      await D.saveCharacterProgress(character.id, data);
-      Views.characters();
-      UI.toast('养成记录已保存');
+      UI.toast('角色顺序已保存');
     },
   });
 };

@@ -141,6 +141,7 @@ UI.formModal = function (opts) {
     fields.map(function (f) { return UI.fieldHtml(f, values[f.key]); }).join('') + '</form>';
   const ov = UI.openModal({
     title: opts.title,
+    wide: opts.wide,
     body: body,
     footer:
       '<button class="btn" data-act="cancel">取消</button>' +
@@ -273,6 +274,11 @@ UI.formModal = function (opts) {
 
 /* ---------- 细线性 SVG 图标库（规范见 STYLE_GUIDE.md 第 6 节） ---------- */
 UI.icons = {
+  edit: '<path d="m16 3 5 5M4 20l4-1L21 6a2.1 2.1 0 0 0-3-3L5 16zM4 20h16"/>',
+  pin: '<path d="m16 3 5 5-4 1-3 5-4-4 5-3zM10 10l-3 1-2 2 6 6 2-2 1-3M8 16l-5 5"/>',
+  sort: '<path d="M7 3v18m-4-4 4 4 4-4M17 21V3m-4 4 4-4 4 4"/>',
+  copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
+  trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',
   helmet: '<path d="M4 14v-3a8 8 0 0 1 16 0v3M3 14h18v4H3zM8 18v3m8-3v3M12 3v7"/>',
   necklace: '<path d="M5 3v5a7 7 0 0 0 14 0V3M9 18l3-3 3 3-3 4z"/>',
   armor: '<path d="M8 3 3 6l2 6 3-1v10h8V11l3 1 2-6-5-3a4 4 0 0 1-8 0zM8 15h8"/>',

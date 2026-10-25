@@ -38,8 +38,8 @@ async function checks(phase) {
     const input = form.querySelector('[name="' + key + '"]');
     input.value = value; input.dispatchEvent(new Event('change', { bubbles: true }));
   };
-  const skill = (index, name, level) => {
-    const row = document.querySelectorAll('.char-skill-row')[index];
+  const skill = (index, name, level, key = 'schoolSkills') => {
+    const row = document.querySelectorAll('[data-skills="' + key + '"] .char-skill-row')[index];
     row.querySelector('[name="skillName"]').value = name;
     row.querySelector('[name="skillLevel"]').value = level;
   };
@@ -58,6 +58,7 @@ async function checks(phase) {
     check(progress.qianyuanPills === 3 && progress.potentialFruits === 100 && progress.note.includes('坐骑成长'), '重启保留养成数量和备注');
     check(progress.auxiliarySkills.length === 4 && progress.auxiliarySkills[3].name === '自定义辅助', '重启保留辅助技能自定义行');
     check(D.charById('c1').equipmentSets[0].slots['武器'] === 'sword', '角色编辑保留三套装备');
+    check(D.charById('c1').pinned && !D.charById('c2').pinned && D.orderedCharacters()[0].id === 'c1', '重启保留置顶和排序');
     check(D.charById('c2').progress.schoolSkills[0].level === 79, '另一角色独立保留');
     return JSON.stringify(D.state);
   }
@@ -69,9 +70,9 @@ async function checks(phase) {
     check(view.scrollWidth <= view.clientWidth && second.right <= innerWidth, '窄窗口无横向溢出');
     card('c2').scrollIntoView({ block: 'start' }); await frame();
     const scrollTop = view.scrollTop;
-    edit('c2', 'schoolSkills'); skill(0, '灵性', 80); await save();
+    edit('c2', 'edit'); skill(0, '灵性', 80); await save();
     check(Math.abs(view.scrollTop - scrollTop) <= 1 && D.charById('c1').progress.schoolSkills[0].level === 119, '下方角色编辑保留滚动且不改其他角色');
-    edit('c2', 'training');
+    edit('c2', 'edit');
     const modal = document.querySelector('.modal').getBoundingClientRect();
     check(modal.left >= 0 && modal.right <= innerWidth && modal.top >= 0 && modal.bottom <= innerHeight, '修炼弹窗适配窄窗口');
     UI.closeModal(); view.scrollTop = 0; await frame();
@@ -87,54 +88,78 @@ async function checks(phase) {
   const second = card('c2').getBoundingClientRect();
   check(first.right <= second.left && first.top === second.top, '角色卡片与装备页同样并排展示');
   const other = JSON.stringify(D.charById('c2'));
-  const originalProgress = JSON.stringify(D.charById('c1').progress);
-  edit('c1', 'schoolSkills'); skill(0, '为官之道', 119);
-  click('[data-act="add-row"]'); skill(1, '为官之道', 119);
+  check(card('c1').querySelectorAll('.char-toolbar button').length === 5 &&
+    !card('c1').querySelector('.char-section button, .char-actions'), '操作集中顶部，分区不再重复编辑');
+  check(['pin', 'sort', 'copy', 'del', 'edit'].every((action) => {
+    const button = card('c1').querySelector('[data-act="' + action + '"]');
+    return button.querySelector('svg') && button.title && button.getAttribute('aria-label');
+  }) && card('c1').querySelector('.char-toolbar button:last-child').dataset.act === 'edit', '图标操作带提示，编辑在最右侧');
+  const originalCharacter = JSON.stringify(D.charById('c1'));
+  edit('c1', 'edit'); field('name', '轻舟听雨'); field('level', 109);
+  field('server', '紫禁城'); skill(0, '为官之道', 119);
+  click('[data-skills="schoolSkills"] [data-act="add-row"]'); skill(1, '为官之道', 119);
   click('.modal [data-act="ok"]');
   await until(() => document.getElementById('toast-root').textContent.includes('技能名称重复'), '重复技能校验');
-  check(document.querySelector('.modal') && JSON.stringify(D.charById('c1').progress) === originalProgress, '无效技能保留表单且不改原档案');
+  check(document.querySelector('.modal') && JSON.stringify(D.charById('c1')) === originalCharacter, '无效技能保留完整表单且不改基础档案');
   skill(1, '无双一击', 119);
   for (const [index, name] of ['神兵鉴赏', '文韬武略', '十方无敌', '紫薇之术', '疾风步'].entries()) {
-    click('[data-act="add-row"]'); skill(index + 2, name, index === 0 ? '' : 119);
+    click('[data-skills="schoolSkills"] [data-act="add-row"]'); skill(index + 2, name, index === 0 ? '' : 119);
   }
-  click('[data-act="add-row"]'); await save();
-  check(D.charById('c1').progress.schoolSkills.length === 7 && D.charById('c1').progress.schoolSkills[2].level === null,
-    '师门逐项记录，空白行忽略，等级留空保留');
-  edit('c1', 'schoolSkills'); click('.char-skill-row [data-act="remove"]'); click('.modal [data-act="cancel"]');
-  check(D.charById('c1').progress.schoolSkills.length === 7, '取消技能编辑不修改档案');
-  edit('c1', 'training');
+  click('[data-skills="schoolSkills"] [data-act="add-row"]');
   for (const [key, value] of Object.entries({ training_attack: 17, training_magic: 0, training_defense: 17,
     training_resistance: 17, training_hunting: 3, petTraining_attack: 15, petTraining_magic: 10,
     petTraining_defense: 12, petTraining_resistance: 12 })) field(key, value);
-  await save();
-  check(D.charById('c1').progress.training.magic === 0 && D.charById('c1').progress.petTraining.attack === 15, '人物与召唤兽修炼分开保存');
-  edit('c1', 'auxiliarySkills');
   check(document.querySelector('[data-mount="skill"] .xsel') && !document.querySelector('datalist, select, input[list]'), '辅助技能使用统一下拉组件');
   for (const [index, name] of ['强身术', '强壮', '神速', '自定义辅助'].entries()) {
-    if (index) click('[data-act="add-row"]');
-    const row = document.querySelectorAll('.char-skill-row')[index];
+    if (index) click('[data-skills="auxiliarySkills"] [data-act="add-row"]');
+    const row = document.querySelectorAll('[data-skills="auxiliarySkills"] .char-skill-row')[index];
     row.querySelector('[data-mount="skill"] button').click();
     click('.xpop .xitem[data-v="' + (index === 3 ? 'custom' : name) + '"]');
     check(row.querySelector('[name="skillName"]').parentElement.hidden === (index !== 3), '选择常用或自定义辅助技能');
-    skill(index, name, [120, 20, 10, 0][index]);
+    skill(index, name, [120, 20, 10, 0][index], 'auxiliarySkills');
   }
+  field('qianyuanPills', 3); field('potentialFruits', 100); field('note', '经脉：浴血豪侠\n坐骑成长 2.3');
   const persist = D.persist;
-  D.persist = async () => { throw new Error('模拟技能写入失败'); };
+  D.persist = async () => { throw new Error('模拟档案写入失败'); };
   click('.modal [data-act="ok"]');
-  await until(() => document.getElementById('toast-root').textContent.includes('模拟技能写入失败'), '技能失败提示');
-  check(document.querySelectorAll('.char-skill-row').length === 4 && !D.charById('c1').progress.auxiliarySkills.length, '技能失败保留输入并回滚档案');
+  await until(() => document.getElementById('toast-root').textContent.includes('模拟档案写入失败'), '统一档案失败提示');
+  check(document.querySelectorAll('[data-skills="auxiliarySkills"] .char-skill-row').length === 4 &&
+    JSON.stringify(D.charById('c1')) === originalCharacter, '失败保留全部草稿并回滚基础和养成');
   D.persist = persist; await save();
-  edit('c1', 'auxiliarySkills');
+  const progress = D.charById('c1').progress;
+  check(progress.schoolSkills.length === 7 && progress.schoolSkills[2].level === null &&
+    progress.training.magic === 0 && progress.petTraining.attack === 15 && progress.qianyuanPills === 3 &&
+    progress.auxiliarySkills.length === 4 && progress.note.includes('坐骑成长'), '一次保存基础、技能、修炼和其他养成');
+  check(JSON.stringify(D.charById('c2')) === other, '统一编辑只更新目标角色');
+  edit('c1', 'edit');
   check(document.querySelectorAll('[data-mount="skill"] .xsel-t')[0].textContent === '强身术' &&
     document.querySelectorAll('[data-mount="skill"] .xsel-t')[3].textContent === '自定义技能' &&
-    document.querySelectorAll('.char-skill-row [name="skillName"]')[3].value === '自定义辅助', '重新打开保留常用选项与自定义名称');
+    document.querySelectorAll('[data-skills="auxiliarySkills"] [name="skillName"]')[3].value === '自定义辅助', '重开恢复常用选项和自定义名称');
   click('[data-mount="skill"] button');
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   check(!document.querySelector('.xpop'), '统一下拉支持 Esc 关闭');
-  edit('c1', 'growth'); field('qianyuanPills', 3); field('potentialFruits', 100); field('note', '经脉：浴血豪侠\n坐骑成长 2.3'); await save();
-  edit('c1', 'edit'); field('name', '轻舟听雨'); field('level', 109); await save();
-  check(D.charById('c1').progress.schoolSkills.length === 7 && D.charById('c1').equipmentSets[0].slots['武器'] === 'sword', '基础档案编辑保留养成与装备');
-  check(JSON.stringify(D.charById('c2')) === other, '各分区只更新目标角色');
+  click('[data-skills="schoolSkills"] .char-skill-row [data-act="remove"]');
+  click('.modal [data-act="cancel"]');
+  check(document.querySelector('.modal-discard'), '取消统一编辑提示未保存');
+  click('[data-act="discard"]');
+  check(D.charById('c1').progress.schoolSkills.length === 7, '取消编辑不修改技能');
+  const order = () => [...document.querySelectorAll('.char-card')].map((item) => item.dataset.id).join(',');
+  D.persist = async () => { throw new Error('模拟置顶失败'); };
+  edit('c1', 'pin');
+  await until(() => document.getElementById('toast-root').textContent.includes('模拟置顶失败'), '置顶失败提示');
+  check(!D.charById('c1').pinned && !card('c1').querySelector('[data-act="pin"]').disabled, '置顶失败回滚且可重试');
+  D.persist = persist;
+  edit('c1', 'sort');
+  check(document.querySelector('[data-xmount="position"] .xsel') && !document.querySelector('select'), '排序复用统一下拉');
+  field('position', '1'); await save(); check(order() === 'c2,c1', '普通组可调整位置');
+  edit('c1', 'pin'); await until(() => D.charById('c1').pinned, '置顶角色');
+  await until(() => card('c1').querySelector('[aria-pressed="true"]'), '置顶界面更新');
+  check(order() === 'c1,c2', '置顶角色在前');
+  edit('c2', 'pin'); await until(() => order() === 'c2,c1', '另一角色置顶');
+  edit('c1', 'sort'); field('position', '0'); await save();
+  check(order() === 'c1,c2', '置顶组可独立排序');
+  edit('c2', 'pin'); await until(() => !D.charById('c2').pinned, '取消置顶');
+  await until(() => card('c2').querySelector('[aria-pressed="false"]'), '取消置顶界面更新');
   click('#quick-add'); field('name', '重试角色'); field('level', 69);
   D.persist = async () => { throw new Error('模拟角色写入失败'); };
   click('.modal [data-act="ok"]');
@@ -143,12 +168,12 @@ async function checks(phase) {
   D.persist = persist; await save();
   const added = D.state.characters.find((character) => character.name === '重试角色');
   check(D.state.characters.length === 3, '重试只创建一次');
-  edit(added.id, 'growth'); field('qianyuanPills', 0); field('potentialFruits', ''); await save();
+  edit(added.id, 'edit'); field('qianyuanPills', 0); field('potentialFruits', ''); await save();
   check(card(added.id).querySelector('.char-growth dd').textContent === '0个' &&
     D.charById(added.id).progress.potentialFruits === null, '零数量正常展示，空值仍未记录');
-  edit(added.id, 'schoolSkills'); skill(0, '<img src=x onerror=alert(1)>', 0); await save();
+  edit(added.id, 'edit'); skill(0, '<img src=x onerror=alert(1)>', 0); await save();
   check(card(added.id).textContent.includes('<img') && !card(added.id).querySelector('img'), '用户技能名称安全转义');
-  edit(added.id, 'schoolSkills'); click('.char-skill-row [data-act="remove"]'); await save();
+  edit(added.id, 'edit'); click('[data-skills="schoolSkills"] .char-skill-row [data-act="remove"]'); await save();
   check(!D.charById(added.id).progress.schoolSkills.length, '移除最后一个技能可清空本分区');
   D.setCharFilter(added.id);
   edit(added.id, 'del'); click('.modal [data-act="no"]');
@@ -172,7 +197,7 @@ async function checks(phase) {
 app.whenReady().then(async () => {
   const errors = [];
   const win = new BrowserWindow({ show: false, width: 1280, height: 840, frame: false,
-    webPreferences: { preload: path.join(root, 'src/preload/preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+    webPreferences: { preload: path.join(root, 'src/preload/preload.js'), contextIsolation: true, nodeIntegration: false, offscreen: true, backgroundThrottling: false } });
   const deadline = setTimeout(() => { console.error('[characters] TIMEOUT', dir); app.exit(1); }, 45000);
   try {
     require('../src/main/ipc').registerIpc({ getWindow: () => win });
@@ -188,12 +213,12 @@ app.whenReady().then(async () => {
       await win.webContents.executeJavaScript("UI.closeModal(); document.getElementById('toast-root').innerHTML = ''; document.getElementById('view').scrollTop = 0", true);
       await new Promise((resolve) => setTimeout(resolve, 150));
       fs.writeFileSync(path.join(dir, 'characters-cards.png'), (await win.webContents.capturePage()).toPNG());
-      await win.webContents.executeJavaScript("document.querySelector('.char-card[data-id=\"c1\"] [data-act=\"schoolSkills\"]').click()", true);
+      await win.webContents.executeJavaScript("document.querySelector('.char-card[data-id=\"c1\"] [data-act=\"edit\"]').click()", true);
       await win.webContents.executeJavaScript('document.getAnimations().forEach(animation => animation.finish()); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))', true);
       await new Promise((resolve) => setTimeout(resolve, 180));
       fs.writeFileSync(path.join(dir, 'characters-skills.png'), (await win.webContents.capturePage()).toPNG());
       await win.webContents.executeJavaScript('UI.closeModal()', true);
-      await win.webContents.executeJavaScript("document.querySelector('.char-card[data-id=\"c1\"] [data-act=\"auxiliarySkills\"]').click(); document.querySelector('[data-mount=\"skill\"] button').click(); document.getAnimations().forEach(animation => animation.finish()); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))", true);
+      await win.webContents.executeJavaScript("document.querySelector('.char-card[data-id=\"c1\"] [data-act=\"edit\"]').click(); document.querySelector('[data-skills=\"auxiliarySkills\"]').scrollIntoView({ block: 'center' }); document.querySelector('[data-mount=\"skill\"] button').click(); document.getAnimations().forEach(animation => animation.finish()); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))", true);
       await new Promise((resolve) => setTimeout(resolve, 150));
       fs.writeFileSync(path.join(dir, 'characters-auxiliary.png'), (await win.webContents.capturePage()).toPNG());
       await win.webContents.executeJavaScript('UI.closeModal()', true);
@@ -205,8 +230,8 @@ app.whenReady().then(async () => {
       fs.writeFileSync(path.join(dir, 'characters-narrow.png'), (await win.webContents.capturePage()).toPNG());
     }
     assert.deepEqual(errors, []);
-    console.log('[characters] PASS: 全角色卡片、技能增删/自定义/空值、人物与召唤兽修炼、乾元丹/潜能果、档案编辑与装备保留');
-    console.log('[characters] PASS: 写入失败重试、安全转义、删除恢复、备份往返、真实重启、窄窗口与滚动位置');
+    console.log('[characters] PASS: 顶部图标与编辑顺序、统一档案一次保存、技能增删/自定义/空值、修炼与装备保留');
+    console.log('[characters] PASS: 置顶/分组排序、失败回滚重试、删除恢复、备份往返、真实重启、窄窗口与滚动位置');
     if (process.argv.includes('--screenshots')) console.log('[characters] screenshots:', dir);
     clearTimeout(deadline); win.close(); app.exit(0);
   } catch (error) {

@@ -436,7 +436,11 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .char-grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; }
 .char-card { flex: none; width: var(--character-card-width); max-width: 100%; padding: 14px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 4px; }
 .char-top, .char-section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.char-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.char-top { flex-wrap: wrap; row-gap: 12px; }
+.char-identity { display: flex; flex: 1 1 150px; align-items: center; gap: 10px; min-width: 0; }
+.char-toolbar { display: flex; flex: none; align-items: center; gap: 5px; margin-left: auto; }
+.char-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; }
+.char-icon-btn[aria-pressed="true"] { color: var(--gold2); border-color: var(--gold); background: var(--paper-2); }
 .char-identity > svg { flex: none; color: var(--ink-3); stroke-width: 1; }
 .char-identity > div { min-width: 0; }
 .char-name { color: var(--ink); font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
@@ -456,14 +460,15 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .char-training-values { display: flex; flex-direction: column; gap: 6px; }
 .char-training-values dd:not(.is-empty) { color: var(--blue); }
 .char-note { margin-top: 10px; color: var(--ink-2); font-size: 11px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
-.char-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 14px; }
-.char-form-hint { margin-bottom: 14px; color: var(--ink-3); font-size: 11px; line-height: 1.8; }
 .char-skill-labels, .char-skill-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px 44px; gap: 8px; align-items: center; }
 .char-skill-labels { margin-bottom: 6px; color: var(--ink-3); font-size: 11px; }
 .char-skill-rows { display: flex; flex-direction: column; gap: 8px; }
 .char-skill-name { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .char-skill-add { margin-top: 12px; }
 .char-form-title { grid-column: 1 / -1; margin-top: 4px; color: var(--ink); font-size: 12px; font-weight: 600; }
+.char-edit-form > .char-form-title:not(:first-child), .char-skill-editor { margin-top: 14px; }
+.char-skill-editor { grid-column: 1 / -1; min-width: 0; }
+.char-skill-editor h4 { font-size: 12px; font-weight: 600; }
 
 /* ---------- 时间线 ---------- */
 .timeline { position: relative; padding-left: 16px; }

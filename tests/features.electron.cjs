@@ -67,14 +67,19 @@ async function checks() {
   release(); D.persist = persist;
   await until(() => !document.querySelector('.modal'), '保存结束');
 
-  Views.charSkillsModal(D.charById('c1'), 'schoolSkills');
+  Views.charModal(D.charById('c1'));
   click('[data-act="template"]');
-  check(document.querySelectorAll('.char-skill-row').length === 8, '补齐门派模板保留自定义行');
+  check(document.querySelectorAll('[data-skills="schoolSkills"] .char-skill-row').length === 8, '补齐门派模板保留自定义行');
   check(document.querySelector('[name="skillLevel"]').value === '119' && document.querySelectorAll('[name="skillLevel"]')[1].value === '0', '模板保留等级');
   await save();
-  Views.charCopyProgressModal(D.charById('c1')); field('schoolSkills', false); await save();
+  click('.char-card[data-id="c1"] [data-act="copy"]'); field('schoolSkills', false); await save();
   check(D.charById('c1').progress.training.attack === 12 && D.charById('c1').progress.qianyuanPills === 3 &&
     D.charById('c1').progress.schoolSkills.length === 8, '复制选中项目保留其余');
+
+  Views.charModal(D.charById('c1')); field('school', '普陀山'); click('[data-act="template"]');
+  check([...document.querySelectorAll('[data-skills="schoolSkills"] [name="skillName"]')].some((input) => input.value === '灵性'),
+    '统一档案模板使用当前选择的门派');
+  UI.closeModal();
 
   Views.go('transactions');
   Views.txModal(); field('amount', 1);
@@ -165,7 +170,7 @@ app.whenReady().then(async () => {
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, importBackups[0]))), JSON.parse(before));
     win.setSize(1024, 680);
     await new Promise((resolve) => setTimeout(resolve, 250));
-    await run("Views.go('characters'); Views.charSkillsModal(D.charById('c1'), 'schoolSkills'); document.fonts.ready");
+    await run("Views.go('characters'); Views.charModal(D.charById('c1')); document.fonts.ready");
     await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     assert.equal(await run('document.querySelector(".modal").getBoundingClientRect().bottom <= innerHeight'), true);
     await run("document.getElementById('toast-root').replaceChildren(); new Promise(resolve => setTimeout(resolve, 250))");
