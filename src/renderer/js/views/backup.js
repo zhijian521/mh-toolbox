@@ -17,8 +17,8 @@ Views.backup = async function () {
           '<div class="kv"><span class="k">数据文件</span><span class="v">' + U.esc(info.dataFile) + '</span></div>' +
         '</div>' +
         '<div class="card"><div class="card-title">备份与恢复</div>' +
-          '<p style="font-size:12.5px;color:var(--muted);line-height:1.7;margin-bottom:14px">所有数据仅保存在本机，不上传云端。建议定期导出 JSON 备份，换电脑或重装前先导出。</p>' +
-          '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+          '<p class="backup-note">所有数据仅保存在本机，不上传云端。建议定期导出 JSON 备份，换电脑或重装前先导出。</p>' +
+          '<div class="backup-actions">' +
             '<button class="btn btn-gold" data-act="export">导出备份</button>' +
             '<button class="btn" data-act="import">导入备份</button>' +
             '<button class="btn" data-act="demo">加载示例数据</button>' +
@@ -31,8 +31,8 @@ Views.backup = async function () {
           '<div class="kv"><span class="k">技术</span><span class="v">Electron 桌面应用 · 本地 JSON 存储</span></div>' +
           '<div class="kv"><span class="k">记账单位</span><span class="v">梦幻币按「万」、人民币按「元」记录；物品估值独立统计。</span></div>' +
         '</div>' +
-        '<div class="card"><div class="card-title" style="color:var(--red)">危险区</div>' +
-          '<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">清空将删除本机全部记录，请务必先导出备份。</p>' +
+        '<div class="card"><div class="card-title danger-title">危险区</div>' +
+          '<p class="backup-note">清空将删除本机全部记录，请务必先导出备份。</p>' +
           '<button class="btn btn-danger" data-act="wipe">清空全部数据</button>' +
         '</div>' +
       '</div>' +

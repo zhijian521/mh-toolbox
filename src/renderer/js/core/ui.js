@@ -88,7 +88,7 @@ UI.confirmModal = function (opts) {
   return new Promise((resolve) => {
     const ov = UI.openModal({
       title: opts.title || '确认操作',
-      body: '<p style="line-height:1.7">' + U.esc(opts.message || '确定要执行该操作吗？') + '</p>',
+      body: '<p class="confirm-message">' + U.esc(opts.message || '确定要执行该操作吗？') + '</p>',
       footer: '<button class="btn" data-act="no">取消</button>' +
         '<button class="btn ' + (opts.danger ? 'btn-danger' : 'btn-gold') + '" data-act="yes">' + U.esc(opts.confirmText || '确定') + '</button>',
       onClose: () => resolve(false),

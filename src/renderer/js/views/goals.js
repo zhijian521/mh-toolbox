@@ -15,7 +15,7 @@ Views.goals = function () {
 
   el.innerHTML =
     '<div class="filter-bar">' +
-      '<div class="seg" style="background:var(--panel2)">' +
+      '<div class="seg">' +
         [['active', '进行中'], ['done', '已完成'], ['all', '全部']].map(function (a) {
           return '<button type="button" class="seg-btn' + (f.status === a[0] ? ' on' : '') + '" data-s="' + a[0] + '">' + a[1] + '</button>';
         }).join('') + '</div>' +
@@ -36,7 +36,7 @@ Views.goals = function () {
       '<div class="goal-meta"><span>' + U.esc(D.charName(g.characterId)) + '</span>' + (dl ? '<span>' + U.esc(dl) + '</span>' : '') + (g.doneAt && done ? '<span>' + U.esc(g.doneAt) + ' 达成</span>' : '') + '</div>' +
       '<div class="goal-nums"><span>进度 <b>' + pct + '%</b></span><span><b>' + U.fmtNumber(g.current) + U.esc(g.unit || '万') + '</b> / ' + U.fmtNumber(g.target) + U.esc(g.unit || '万') + '</span></div>' +
       '<div class="progress' + (done ? ' ok' : '') + '"><i style="width:' + pct + '%"></i></div>' +
-      (g.note ? '<div style="font-size:12px;color:var(--muted)">' + U.esc(g.note) + '</div>' : '') +
+      (g.note ? '<div class="goal-note">' + U.esc(g.note) + '</div>' : '') +
       '<div class="goal-actions">' +
         (done ? '<button class="btn btn-sm" data-act="reopen">恢复进行</button>'
               : '<button class="btn btn-sm btn-gold" data-act="progress">＋ 记进度</button>' +

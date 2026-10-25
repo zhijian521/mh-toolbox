@@ -47,7 +47,7 @@ Views.filteredRecords = function (ledger) {
 };
 
 Views.recordTable = function (shown, account) {
-  return '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>日期 / 角色</th><th>类型 / 分类</th><th>记录内容</th>' +
+  return '<div class="tbl-wrap"><table class="tbl ledger-table"><thead><tr><th>日期 / 角色</th><th>类型 / 分类</th><th>记录内容</th>' +
       (account ? '<th>渠道</th>' : '<th>状态 / 用时</th>') +
       '<th class="num">' + (account ? '实收 / 实付' : '金额 / 估值') + '</th><th class="ledger-actions">操作</th></tr></thead><tbody>' +
     (shown.length ? shown.map(function (t) {
