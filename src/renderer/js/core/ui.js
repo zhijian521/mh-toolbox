@@ -22,6 +22,7 @@ UI.closeModal = function () {
 };
 
 UI.openModal = function (opts) {
+  UI.closePop();
   const root = document.getElementById('modal-root');
   root.innerHTML =
     '<div class="modal-overlay">' +
@@ -68,7 +69,7 @@ UI.fieldHtml = function (f, val) {
       inner = '<div class="xmount" data-xmount="' + f.key + '"><input type="hidden" name="' + f.key + '" value="' + U.esc(v) + '"></div>';
       break;
     case 'textarea':
-      inner = '<textarea name="' + f.key + '" placeholder="' + U.esc(f.placeholder || '') + '">' + U.esc(v) + '</textarea>';
+      inner = '<textarea name="' + f.key + '" aria-label="' + U.esc(f.label) + '" placeholder="' + U.esc(f.placeholder || '') + '">' + U.esc(v) + '</textarea>';
       break;
     case 'segment': {
       const cur = v !== '' ? String(v) : String(f.options[0].v);
@@ -79,11 +80,11 @@ UI.fieldHtml = function (f, val) {
       break;
     }
     case 'check':
-      return '<div class="frow full" data-field="' + f.key + '"><div class="check-line"><input type="checkbox" name="' + f.key + '"' + (v ? ' checked' : '') + '> <span>' + U.esc(f.label) + (f.hint ? ' <span class="hint">' + U.esc(f.hint) + '</span>' : '') + '</span></div></div>';
+      return '<div class="frow full" data-field="' + f.key + '"><label class="check-line"><input type="checkbox" name="' + f.key + '"' + (v ? ' checked' : '') + '> <span>' + U.esc(f.label) + (f.hint ? ' <span class="hint">' + U.esc(f.hint) + '</span>' : '') + '</span></label></div>';
     default: {
       const step = f.step ? ' step="' + f.step + '"' : '';
       const min = f.min != null ? ' min="' + f.min + '"' : '';
-      inner = '<input type="' + (f.type || 'text') + '" name="' + f.key + '" value="' + U.esc(v) + '" placeholder="' + U.esc(f.placeholder || '') + '"' + step + min + '>';
+      inner = '<input type="' + (f.type || 'text') + '" name="' + f.key + '" aria-label="' + U.esc(f.label) + '" value="' + U.esc(v) + '" placeholder="' + U.esc(f.placeholder || '') + '"' + step + min + '>';
     }
   }
   return '<div class="frow' + (f.full ? ' full' : '') + '" data-field="' + f.key + '">' +
@@ -128,6 +129,7 @@ UI.formModal = function (opts) {
     form._xcomps[f.key] = f.type === 'select'
       ? UI.select(m, { name: f.key, options: f.options, value: initVal, placeholder: f.placeholder })
       : UI.date(m, { name: f.key, value: initVal, placeholder: f.placeholder || '选择日期' });
+    m.querySelector('button').setAttribute('aria-label', f.label);
   });
 
   const hiddenFields = new Set();
@@ -223,6 +225,18 @@ UI.formModal = function (opts) {
 
 /* ---------- 细线性 SVG 图标库（规范见 STYLE_GUIDE.md 第 6 节） ---------- */
 UI.icons = {
+  helmet: '<path d="M4 14v-3a8 8 0 0 1 16 0v3M3 14h18v4H3zM8 18v3m8-3v3M12 3v7"/>',
+  necklace: '<path d="M5 3v5a7 7 0 0 0 14 0V3M9 18l3-3 3 3-3 4z"/>',
+  armor: '<path d="M8 3 3 6l2 6 3-1v10h8V11l3 1 2-6-5-3a4 4 0 0 1-8 0zM8 15h8"/>',
+  belt: '<rect x="2" y="8" width="20" height="8" rx="1"/><rect x="9" y="7" width="6" height="10" rx="1"/><path d="M12 12h4"/>',
+  boots: '<path d="M5 3h6v10l8 3v5H3v-7l2-2zM5 7h6M3 18h16"/>',
+  ring: '<circle cx="12" cy="15" r="6"/><path d="m8 5 4-3 4 3-4 5z"/>',
+  earring: '<path d="M8 7a4 4 0 1 1 4 4v3M8 17l4-4 4 4-4 5z"/>',
+  bracelet: '<ellipse cx="12" cy="12" rx="9" ry="7"/><ellipse cx="12" cy="11" rx="6" ry="4"/><path d="M3 12v2a9 7 0 0 0 18 0v-2"/>',
+  pendant: '<path d="M8 2c0 5 4 4 4 7 0-3 4-2 4-7M7 10h10l2 8-7 4-7-4zM9 14h6m-6 3h6"/>',
+  'jade-yang': '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3"/>',
+  'jade-yin': '<circle cx="12" cy="12" r="9"/><path d="M14 4a7 7 0 1 0 6 11M9 8l1 1m-3 4 1 1"/>',
+  hero: '<path d="M9 5h6l1 3-1 4-3 2-3-2-1-4zM10 4l1-2h2l1 2M7 14l-3 7h16l-3-7-5 3zM7 14l-3 2-2 5m15-7 3 2 2 5M9 17l-1 4m7-4 1 4M10 19h4"/>',
   chart: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
   ledger: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
   target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
@@ -263,7 +277,10 @@ Object.assign(UI.icons, {
 /* ---------- 弹层基座（下拉菜单 / 日历共用） ---------- */
 UI.closePop = function () {
   const old = document.querySelector('.xpop');
-  if (old) old.remove();
+  if (old) {
+    if (old._anchor && old.id && old._anchor.getAttribute('aria-describedby') === old.id) old._anchor.removeAttribute('aria-describedby');
+    old.remove();
+  }
   document.removeEventListener('mousedown', UI._popOut, true);
 };
 

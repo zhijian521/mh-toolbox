@@ -48,9 +48,9 @@ function registerIpc(opts) {
   ipcMain.handle('mh:saveData', (_e, data) => {
     try {
       const file = dataFilePath();
-      const oldVersion = fs.existsSync(file) ? readJson(file).schemaVersion : 3;
-      if (data.schemaVersion === 3 && oldVersion !== 3) {
-        const suffix = oldVersion === 2 ? 'online' : 'ledgers';
+      const oldVersion = fs.existsSync(file) ? readJson(file).schemaVersion : data.schemaVersion;
+      if (data.schemaVersion >= 3 && (!oldVersion || oldVersion < data.schemaVersion)) {
+        const suffix = oldVersion === 3 ? 'equipment' : oldVersion === 2 ? 'online' : 'ledgers';
         fs.copyFileSync(file, file + '.before-' + suffix + '-' + Date.now() + '.bak');
       }
       atomicWriteJson(file, data);

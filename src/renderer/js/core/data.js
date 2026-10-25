@@ -1,7 +1,7 @@
 'use strict';
 /* 数据层：状态、常量、持久化 */
 const D = window.D = {
-  state: { schemaVersion: 3, characters: [], transactions: [], sessions: [], activeSession: null, goals: [], equipment: [], gearLogs: [] },
+  state: { schemaVersion: 4, characters: [], transactions: [], sessions: [], activeSession: null, goals: [], equipment: [], gearLogs: [] },
   charFilter: localStorage.getItem('mh.charFilter') || 'all',
 
   incomeCats: ['捉鬼', '押镖', '师门', '封妖', '副本', '周末活动', '节日活动', '摆摊卖货', '物品掉落', '宝图', '牧场', '种植', '帮派产出', '其他收入'],
@@ -9,8 +9,17 @@ const D = window.D = {
   accountCats: ['装备交易', '召唤兽交易', '点卡充值', '游戏币买入', '游戏币卖出', '养成投入', '其他收支'],
   channels: ['游戏内', '藏宝阁', '官方充值', '其他'],
   itemStatuses: { held: '持有', sold: '已出售', self: '自用' },
-  slots: ['武器', '头盔', '项链', '衣服', '腰带', '鞋子', '戒指', '耳饰', '手镯', '佩饰', '其他'],
+  slots: ['武器', '头盔', '项链', '衣服', '腰带', '鞋子', '戒指', '耳饰', '手镯', '佩饰', '玉魄·阳', '玉魄·阴', '其他'],
   schools: ['大唐官府', '方寸山', '化生寺', '女儿村', '神木林', '凌波城', '花果山', '天机城', '魔王寨', '阴曹地府', '狮驼岭', '盘丝洞', '无底洞', '女魃墓', '天宫', '龙宫', '五庄观', '普陀山', '九黎城', '东海渊', '其他'],
+  characterTraining: [
+    { key: 'attack', label: '攻击修炼' }, { key: 'magic', label: '法术修炼' },
+    { key: 'defense', label: '防御修炼' }, { key: 'resistance', label: '抗法修炼' }, { key: 'hunting', label: '猎术修炼' },
+  ],
+  petTraining: [
+    { key: 'attack', label: '攻击控制力' }, { key: 'magic', label: '法术控制力' },
+    { key: 'defense', label: '防御控制力' }, { key: 'resistance', label: '抗法控制力' },
+  ],
+  auxiliarySkillNames: ['强身术', '强壮', '神速', '冥想', '烹饪技巧', '中药医理', '打造技巧', '裁缝技巧', '炼金术', '淬灵之术', '养生之道', '健身术', '巧匠之术', '熔炼技巧'],
   goalTypes: [
     { v: 'money', t: '存钱目标' },
     { v: 'gear', t: '装备目标' },
@@ -22,6 +31,8 @@ const D = window.D = {
     { v: 'craft', t: '打造', dir: -1 },
     { v: 'replace', t: '替换', dir: 0 },
     { v: 'gem', t: '镶嵌宝石', dir: -1 },
+    { v: 'dust', t: '镶嵌灵尘', dir: -1 },
+    { v: 'consecrate', t: '开光强化', dir: -1 },
     { v: 'other', t: '其他', dir: 0 }
   ],
 
@@ -29,14 +40,16 @@ const D = window.D = {
     const res = await window.mh.loadData();
     if (!res || !res.ok) throw new Error('读取数据失败：' + (res && res.error || '未知错误'));
     this.state = this.normalize(res.data || {});
-    if (res.data && res.data.schemaVersion !== 3) await this.persist();
+    if (res.data && res.data.schemaVersion !== 4) await this.persist();
   },
 
   normalize(data) {
     data = data && typeof data === 'object' ? data : {};
     const s = {
-      schemaVersion: 3,
-      characters: Array.isArray(data.characters) ? data.characters : [],
+      schemaVersion: 4,
+      characters: Array.isArray(data.characters) ? data.characters.map((c) => Object.assign({}, c, {
+        progress: this.normalizeCharacterProgress(c.progress),
+      })) : [],
       transactions: Array.isArray(data.transactions) ? data.transactions.map((t) => Object.assign({}, t)) : [],
       goals: Array.isArray(data.goals) ? data.goals.map((g) => Object.assign({}, g)) : [],
       equipment: Array.isArray(data.equipment) ? data.equipment.map((e) => Object.assign({}, e)) : [],
@@ -85,6 +98,7 @@ const D = window.D = {
       ? { accounts: Number(data.quickSettings.accounts) || 5, cardPrice: Number(data.quickSettings.cardPrice) || 15000 }
       : { accounts: 5, cardPrice: 15000 };
     s.itemPrices = data.itemPrices && typeof data.itemPrices === 'object' ? data.itemPrices : {};
+    this.normalizeEquipment(s, data);
     return this.normalizeOnline(s, data);
   },
 
@@ -102,6 +116,104 @@ const D = window.D = {
   chars() { return this.state.characters; },
   charById(id) { return this.state.characters.find(function (c) { return c.id === id; }); },
   charName(id) { const c = this.charById(id); return c ? c.name : '未知角色'; },
+
+  /* 养成是版本 4 的可选字段，旧档案中的空值与已录入的 0 分开保存。 */
+  characterNumber(value) {
+    if (value == null || (typeof value === 'string' && !value.trim())) return null;
+    if (!['number', 'string'].includes(typeof value)) return null;
+    const number = Number(value);
+    return Number.isSafeInteger(number) && number >= 0 ? number : null;
+  },
+
+  normalizeCharacterProgress(value) {
+    const data = value && typeof value === 'object' ? value : {};
+    const skills = (list) => Array.isArray(list) ? list.filter((skill) => skill && typeof skill.name === 'string' && skill.name.trim())
+      .map((skill) => ({ name: skill.name.trim(), level: this.characterNumber(skill.level) })) : [];
+    const training = (key, fields) => Object.fromEntries(fields.map((field) =>
+      [field.key, this.characterNumber(data[key] && data[key][field.key])]));
+    return {
+      schoolSkills: skills(data.schoolSkills), auxiliarySkills: skills(data.auxiliarySkills),
+      training: training('training', this.characterTraining), petTraining: training('petTraining', this.petTraining),
+      qianyuanPills: this.characterNumber(data.qianyuanPills), potentialFruits: this.characterNumber(data.potentialFruits),
+      note: typeof data.note === 'string' ? data.note : '',
+    };
+  },
+
+  /** 新建和编辑角色只在写入成功后确认；失败恢复角色集合，表单可直接重试。 */
+  async saveCharacter(data, id) {
+    const previous = id && this.charById(id);
+    if (id && !previous) throw new Error('角色不存在');
+    const name = String(data.name == null ? previous && previous.name || '' : data.name).trim();
+    if (!name) throw new Error('请填写角色昵称');
+    const level = data.level === undefined && previous ? previous.level : data.level;
+    if (level != null && level !== '' && this.characterNumber(level) === null) throw new Error('角色等级需填写非负整数');
+    const saved = Object.assign({}, previous || { id: U.uid(), createdAt: Date.now() }, {
+      name, level: this.characterNumber(level),
+      school: data.school === undefined && previous ? previous.school : data.school || '',
+      server: data.server === undefined && previous ? previous.server : String(data.server || '').trim(),
+      progress: this.normalizeCharacterProgress(data.progress === undefined && previous ? previous.progress : data.progress),
+    });
+    const snapshot = this.state.characters;
+    this.state.characters = previous ? snapshot.map((character) => character.id === id ? saved : character) : [...snapshot, saved];
+    try {
+      this.equipmentProfile(saved.id);
+      await this.persist();
+      return saved;
+    } catch (error) {
+      this.state.characters = snapshot;
+      throw error;
+    }
+  },
+
+  async saveCharacterProgress(id, changes) {
+    const character = this.charById(id);
+    if (!character) throw new Error('角色不存在');
+    const progress = this.normalizeCharacterProgress(character.progress);
+    const checkNumber = (value, label) => {
+      if (value != null && value !== '' && this.characterNumber(value) === null) throw new Error(label + '需填写非负整数');
+    };
+    for (const [key, value] of Object.entries(changes)) {
+      if (!Object.hasOwn(progress, key)) throw new Error('未知的角色养成项目');
+      if (['schoolSkills', 'auxiliarySkills'].includes(key)) {
+        if (!Array.isArray(value)) throw new Error('技能记录格式不正确');
+        const names = new Set();
+        value.forEach((skill) => {
+          if (!skill || typeof skill.name !== 'string' || !skill.name.trim()) throw new Error('请填写技能名称');
+          const name = skill.name.trim();
+          if (names.has(name)) throw new Error('技能名称重复：' + name);
+          names.add(name);
+          checkNumber(skill.level, name + '等级');
+        });
+      } else if (key === 'training' || key === 'petTraining') {
+        const fields = key === 'training' ? this.characterTraining : this.petTraining;
+        if (!value || typeof value !== 'object') throw new Error('修炼记录格式不正确');
+        fields.forEach((field) => checkNumber(value[field.key], field.label));
+      } else if (key !== 'note') {
+        checkNumber(value, key === 'qianyuanPills' ? '乾元丹数量' : '潜能果数量');
+      }
+      progress[key] = value;
+    }
+    return this.saveCharacter({ progress }, id);
+  },
+
+  /** 角色删除与全部关联记录一并落盘，失败时整体恢复。 */
+  async removeCharacter(id) {
+    if (!this.charById(id)) throw new Error('角色不存在');
+    const snapshot = JSON.parse(JSON.stringify(this.state));
+    const equipmentIds = new Set(this.state.equipment.filter((eq) => eq.characterId === id).map((eq) => eq.id));
+    this.state.characters = this.state.characters.filter((character) => character.id !== id);
+    ['transactions', 'sessions', 'goals', 'equipment'].forEach((key) => {
+      this.state[key] = this.state[key].filter((item) => item.characterId !== id);
+    });
+    this.state.gearLogs = this.state.gearLogs.filter((log) => log.characterId !== id && !equipmentIds.has(log.equipmentId));
+    if (this.state.activeSession && this.state.activeSession.characterId === id) this.state.activeSession = null;
+    try {
+      await this.persist();
+    } catch (error) {
+      this.state = snapshot;
+      throw error;
+    }
+  },
 
   /* 按全局角色筛选（不筛选日期） */
   scope(list) {
@@ -191,6 +303,7 @@ const D = window.D = {
     if (!eq) return;
     const trade = this.gearLogsOf(id).find((l) => ['buy', 'sell'].includes(l.action));
     eq.status = trade ? (trade.action === 'sell' ? 'sold' : 'active') : (eq.tradeBaseStatus || eq.status);
+    if (eq.status === 'sold') this.clearEquipmentReferences(id);
   },
 
   syncAccountEquipment(tx) {
@@ -227,6 +340,7 @@ const D = window.D = {
 
   gearLogsOf(eqId) {
     return this.state.gearLogs
+      .slice().reverse()
       .filter(function (l) { return l.equipmentId === eqId; })
       .sort(function (a, b) { return b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0); });
   }

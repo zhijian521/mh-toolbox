@@ -2,11 +2,15 @@
 /* 应用入口：路由与全局 UI */
 Views._pages = [
   { id: 'dashboard', t: '总览', icon: 'chart', sub: '日常收益 · 账号收支 · 目标进度' },
-  { id: 'quick', t: '收益', icon: 'bolt', sub: '在线计时 · 物品速记 · 日常收支', records: 'transactions' },
-  { id: 'account', t: '账号', icon: 'archive', sub: '装备交易 · 藏宝阁收支 · 点卡充值', records: 'accountRecords' },
+  { id: 'quick', t: '收益', icon: 'bolt', sub: '在线计时 · 物品速记 · 日常收支', records: 'transactions',
+    addLabel: '＋ 手动记一笔', onAdd: () => Views.txModal() },
+  { id: 'account', t: '账号', icon: 'archive', sub: '装备交易 · 藏宝阁收支 · 点卡充值', records: 'accountRecords',
+    addLabel: '＋ 记账号收支', onAdd: () => Views.accountModal() },
   { id: 'goals', t: '目标', icon: 'target', sub: '存钱、装备与养成目标' },
-  { id: 'equipment', t: '装备', icon: 'sword', sub: '装备档案与更新时间线' },
-  { id: 'characters', t: '角色', icon: 'user', sub: '管理你的养老角色' },
+  { id: 'equipment', t: '装备', icon: 'sword', sub: '角色装备栏 · 三套搭配 · 灵饰与玉魄', addLabel: '＋ 新增装备',
+    onAdd: () => Views.eqModal(null, Views._eq.warehouse ? { characterId: Views._eq.characterId } : {}) },
+  { id: 'characters', t: '角色', icon: 'user', sub: '角色档案 · 技能修炼 · 养成记录',
+    addLabel: '＋ 添加角色', onAdd: () => Views.charModal() },
   { id: 'backup', t: '备份与设置', icon: 'archive', sub: '数据备份、导入与关于' },
   { id: 'transactions', t: '收益记录', sub: '游戏币、物品获得与日常成本', parent: 'quick' },
   { id: 'onlineRecords', t: '在线记录', sub: '自动计时 · 手动补记 · 点卡成本', parent: 'quick' },
@@ -31,9 +35,11 @@ Views.renderHeader = function () {
   const page = Views._pages.find(function (p) { return p.id === Views._current; });
   document.getElementById('page-title').textContent = page.t;
   document.getElementById('page-sub').textContent = page.sub;
+  document.querySelector('.char-filter').hidden = ['equipment', 'characters'].includes(page.id);
   const add = document.getElementById('quick-add');
-  add.hidden = !page.records;
-  add.textContent = page.id === 'account' ? '＋ 记账号收支' : '＋ 手动记一笔';
+  add.hidden = !page.onAdd;
+  add.textContent = page.addLabel || '';
+  add.disabled = page.id === 'equipment' && !D.state.characters.length;
   const records = document.getElementById('ledger-records');
   records.hidden = !page.records && !page.parent;
   records.textContent = page.parent ? '返回快速记录' : '查看记录';
@@ -82,7 +88,10 @@ Views.rerender = function () {
       Views.rerender();
     }
   });
-  document.getElementById('quick-add').addEventListener('click', function () { Views._current === 'account' ? Views.accountModal() : Views.txModal(); });
+  document.getElementById('quick-add').addEventListener('click', function () {
+    const page = Views._pages.find((item) => item.id === Views._current);
+    if (page.onAdd) page.onAdd();
+  });
   document.getElementById('ledger-records').addEventListener('click', function () {
     const page = Views._pages.find(function (p) { return p.id === Views._current; });
     Views.go(page.parent || page.records);
@@ -90,6 +99,14 @@ Views.rerender = function () {
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') UI.closeModal();
   });
+  const hideEquipmentTip = function (event) {
+    const pop = document.querySelector('.eq-tooltip-pop');
+    if (!pop) return;
+    if (event.type === 'scroll' && document.activeElement === pop._anchor) Views.eqPositionTooltip();
+    else UI.closePop();
+  };
+  document.getElementById('view').addEventListener('scroll', hideEquipmentTip, { passive: true });
+  window.addEventListener('resize', hideEquipmentTip);
 
   Titlebar.init();
   if (window.Dev) Dev.restore();

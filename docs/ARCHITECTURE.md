@@ -35,6 +35,7 @@ mh-tool/
 │        ├─ core/                # 无 UI 依赖的基础层
 │        │  ├─ util.js           # U：日期/金额/转义等纯函数
 │        │  ├─ data.js           # D：状态、常量、领域逻辑、持久化
+│        │  ├─ equipment.js      # D：三套装备方案、玉魄、引用与迁移
 │        │  ├─ online.js         # D：在线记录、参数快照、跨日点卡结算
 │        │  └─ ui.js             # UI：Toast/弹窗/表单生成器/SVG 图标库/下拉与日历组件
 │        ├─ layout/
@@ -75,21 +76,25 @@ mh-tool/
 
 | 集合 | 字段要点 |
 |---|---|
-| `characters` | id, name, level, school, server |
+| `characters` | id, name, level, school, server；progress（schoolSkills[]、auxiliarySkills[]：name/level；training、petTraining；qianyuanPills、potentialFruits、note）；equipmentSets[3]（name、slots：部位→装备 ID）、activeEquipmentSet、viewedEquipmentSet、pendingEquipmentSlots、soulJade（unlocked、attribute、level） |
 | `transactions` | id, ledger(earnings/account), recordType(money/item), characterId, date, kind, currency(cash/reserve/rmb), amount, category, minutes, note, fee, channel；物品包含 itemName/quantity/unitPrice/status/saleId；结算包含 itemRecordId；装备关联包含 equipmentId/gearAction |
 | `sessions` | id, characterId, mode(range/duration/legacy), source(timer/manual/legacy), date, startAt/endAt（本地时间对应的时间戳）, minutes, accounts, cardPrice, cost（万）, note, createdAt |
 | `activeSession` | 未结束的 id, characterId, startAt, accounts, cardPrice, createdAt；开始即落盘，普通重启等待用户恢复 |
 | `goals` | id, characterId, type(money/gear/progress), title, target, current, unit, status, deadline, logs[] |
-| `equipment` | id, characterId, slot, name, level, attributes, special, gems, status |
+| `equipment` | id, characterId, slot, name, level, attributes, special, gems, status；玉魄含 jade（base、extra1、extra2、dustLevel、holes、enchantments[]、durability） |
 | `gearLogs` | id, equipmentId, characterId, date, action, amount, note |
 | `itemPrices` | 物品 id → 单价（**单位: 梦幻币**，与网页版单价文件互通） |
 | `quickSettings` | accounts(在线角色数), cardPrice(梦幻币/点) |
 
-> 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 3。
+> 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 4。
 
 共享账本列表和筛选位于 `views/records.js`，收益表单位于 `transactions.js`，账号快速记录、快捷表单预设和账号表单位于 `account.js`；金额、结算和装备关联逻辑集中在 `core/data.js`。
 
+角色养成的归一化、验证、保存和关联删除位于 `core/data.js`，卡片与分区编辑位于 `views/characters.js`。`progress` 是版本 4 的可选字段，旧档案默认未记录；空值存为 `null`，明确填写的 0 原样保存。人物五项修炼与召唤兽四项修炼独立记录，师门和辅助技能使用可增删的名称/等级列表。新建、编辑和删除写入失败时回滚内存；基础档案编辑保留养成与装备信息，JSON 备份直接携带养成字段。
+
 在线数据逻辑位于 `core/online.js`，表单、恢复提示和列表位于 `views/online.js`；`quick.js` 负责首页和计时显示。`onlineRecords` 与 `transactions` 都归属收益模块，通过内部页签切换。`D.saveSession` 同步生成每日点卡流水，`D.earningsStats` 按独立在线时长计算净时薪，活动用时不重复累计。
+
+装备领域逻辑位于 `core/equipment.js`，在 `data.js` 之后加载。`views/equipment.js` 负责全部角色的独立装备卡片、角色仓库与属性卡；装备页不使用全局角色筛选，方案和格子事件限定在各自卡片内，进出仓库保留列表滚动位置。三套方案只引用装备 ID，当前使用和正在查看分别保存；资产 `status` 保留旧在用值兼容历史买卖，界面穿戴状态由方案引用推导。售出、删档和部位/角色变更清理引用，撤销出售只恢复持有。命魂之玉修炼存于角色，阴阳玉魄分别为独立装备资产。装备相关保存使用 `D.commitEquipment`，写入失败整体回滚内存。
 
 ## 如何新增一个页面
 

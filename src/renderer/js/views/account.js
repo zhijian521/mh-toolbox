@@ -91,7 +91,7 @@ Views.accountModal = function (tx, moving, preset) {
     date: U.today(), kind: 'expense', currency: 'rmb', category: '装备交易', channel: '藏宝阁',
     amount: '', fee: 0, equipmentId: '', gearAction: '', note: ''
   }, tx || {}, moving ? { category: '其他收支', fee: 0 } : {}, preset || {});
-  if (!['craft', 'gem'].includes(values.gearAction)) values.gearAction = '';
+  if (!['craft', 'gem', 'dust', 'consecrate'].includes(values.gearAction)) values.gearAction = '';
   const categories = D.accountCats.slice();
   if (!categories.includes(values.category)) categories.push(values.category);
   UI.formModal({
@@ -107,7 +107,8 @@ Views.accountModal = function (tx, moving, preset) {
       { key: 'amount', label: '成交金额', type: 'number', required: true, min: 0, step: '0.01' },
       { key: 'fee', label: '手续费', type: 'number', min: 0, step: '0.01', hint: '收入扣除、支出加上；与成交金额币种一致' },
       { key: 'equipmentId', label: '关联装备', type: 'select', options: [{ v: '', t: '不关联装备' }], hint: '先在装备页建档；关联后自动记入更新时间线' },
-      { key: 'gearAction', label: '装备变动', type: 'select', options: [{ v: '', t: '按收支方向（买入 / 卖出）' }, { v: 'craft', t: '打造' }, { v: 'gem', t: '镶嵌宝石' }] },
+      { key: 'gearAction', label: '装备变动', type: 'select', options: [{ v: '', t: '按收支方向（买入 / 卖出）' },
+        ...D.gearActions.filter((action) => ['craft', 'gem', 'dust', 'consecrate'].includes(action.v)).map((action) => ({ v: action.v, t: action.t }))] },
       { key: 'note', label: '记录内容 / 备注', type: 'text', full: true, placeholder: '如：藏宝阁购入简易武器 / 充值 100 元点卡' }
     ],
     onRender: function (form, api) {
@@ -119,6 +120,11 @@ Views.accountModal = function (tx, moving, preset) {
       const update = function () {
         const equipment = ['装备交易', '养成投入'].includes(api.getVal('category'));
         api.show('equipmentId', equipment); api.show('gearAction', equipment);
+        const references = api.getVal('equipmentId') ? D.equipmentReferences(api.getVal('equipmentId')) : [];
+        form.querySelector('[data-field="equipmentId"] .hint').textContent = equipment &&
+          api.getVal('kind') === 'income' && !api.getVal('gearAction') && references.length
+          ? '售出将清空这些方案的对应格子：' + references.map((reference) => reference.name).join('、')
+          : '先在装备页建档；关联后自动记入更新时间线';
         const unit = api.getVal('currency') === 'rmb' ? '元' : '万梦幻币';
         form.querySelector('[data-field="amount"] label').textContent = '成交金额（' + unit + '）';
         form.querySelector('[data-field="fee"] label').textContent = '手续费（' + unit + '）';
@@ -141,7 +147,7 @@ Views.accountModal = function (tx, moving, preset) {
       if (data.equipmentId && ['装备交易', '养成投入'].includes(data.category)) {
         const eq = D.state.equipment.find(function (e) { return e.id === data.equipmentId; });
         if (!eq || eq.characterId !== data.characterId) return '请选择属于当前角色的装备';
-        if (['craft', 'gem'].includes(data.gearAction) && data.kind === 'income') return '打造、镶嵌宝石应记为支出';
+        if (['craft', 'gem', 'dust', 'consecrate'].includes(data.gearAction) && data.kind === 'income') return '打造、镶嵌与开光强化应记为支出';
       }
       return '';
     },
@@ -152,10 +158,13 @@ Views.accountModal = function (tx, moving, preset) {
         equipmentId: ['装备交易', '养成投入'].includes(data.category) ? data.equipmentId : '',
         gearAction: ['装备交易', '养成投入'].includes(data.category) ? data.gearAction : ''
       });
-      if (isNew) D.state.transactions.push(record); else Object.assign(tx, record);
-      D.syncAccountEquipment(record);
-      if (previousEquipment && previousEquipment !== record.equipmentId) D.syncEquipmentStatus(previousEquipment);
-      await D.persist(); UI.toast(moving ? '已转入账号账本' : '已保存'); Views.rerender();
+      await D.commitEquipment(() => {
+        if (isNew) D.state.transactions.push(record);
+        else Object.assign(D.state.transactions.find((item) => item.id === tx.id), record);
+        D.syncAccountEquipment(record);
+        if (previousEquipment && previousEquipment !== record.equipmentId) D.syncEquipmentStatus(previousEquipment);
+      });
+      UI.toast(moving ? '已转入账号账本' : '已保存'); Views.rerender();
     }
   });
 };
