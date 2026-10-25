@@ -458,19 +458,42 @@ table.tbl { width: 100%; border-collapse: collapse; color: var(--ui-text); font-
 .progress.ok > i { background: var(--green); }
 
 /* ---------- 目标卡片 ---------- */
-.goal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.goal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); align-items: start; gap: 14px; }
 .goal-card {
   background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
-  padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; position: relative;
 }
 .goal-card.done { border-color: rgba(74, 124, 89, 0.45); }
 .goal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-.goal-title { color: var(--ui-title); font-family: var(--font-serif); font-weight: 400; font-size: var(--ui-section-size); }
+.goal-title { color: var(--ui-title); font-family: var(--font-serif); font-weight: 400; font-size: var(--ui-section-size); overflow-wrap: anywhere; }
+.goal-tools { display: flex; flex: none; gap: 5px; }
+.goal-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 29px; min-height: 29px; padding: 0; }
+.goal-icon-btn.is-pinned { color: var(--red); background: var(--nav-active-bg); border-color: var(--red); }
+.goal-drag-handle { cursor: grab; user-select: none; }
+.goal-drag-handle svg { pointer-events: none; }
+.goal-drag-handle:active { cursor: grabbing; }
+.goal-card.is-dragging { opacity: .45; }
+.goal-card[data-drop-side]::after { content: ''; position: absolute; background: var(--red); border-radius: 2px; pointer-events: none; }
+.goal-card[data-drop-side="left"]::after { left: -7px; top: 0; bottom: 0; width: 3px; }
+.goal-card[data-drop-side="right"]::after { right: -7px; top: 0; bottom: 0; width: 3px; }
+.goal-card[data-drop-side="top"]::after { top: -7px; left: 0; right: 0; height: 3px; }
+.goal-card[data-drop-side="bottom"]::after { bottom: -7px; left: 0; right: 0; height: 3px; }
 .goal-meta { font-size: var(--ui-caption-size); color: var(--ui-muted); display: flex; gap: 8px; flex-wrap: wrap; }
 .goal-nums { display: flex; justify-content: space-between; font-size: var(--ui-caption-size); color: var(--ui-muted); font-variant-numeric: tabular-nums; }
-.goal-nums b { color: var(--gold2); font-weight: 700; }
-.goal-note { color: var(--ui-text); font-size: var(--ui-body-size); line-height: 1.7; }
+.goal-nums b { color: var(--gold2); font-size: var(--ui-body-size); font-weight: 400; }
+.goal-note { color: var(--ui-text); font-size: var(--ui-body-size); line-height: 1.7; overflow-wrap: anywhere; }
 .goal-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 2px; }
+.goal-caption, .goal-history-hint { color: var(--ui-muted); font-size: var(--ui-caption-size); }
+.goal-history-hint { margin-bottom: 12px; }
+.goal-member { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; gap: 10px; padding: 5px 0; font-variant-numeric: tabular-nums; }
+.goal-member-name { color: var(--ui-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goal-member-value { color: var(--ui-text); }
+.goal-member-state { min-width: 70px; text-align: right; color: var(--ui-muted); font-size: var(--ui-caption-size); }
+.goal-member-state.complete { color: var(--green); }
+.goal-member-state.unknown, .goal-overdue { color: var(--red); }
+.goal-form-preview { grid-column: 1 / -1; padding: 10px 12px; background: var(--paper-2); border-radius: 3px; color: var(--ui-text); font-size: var(--ui-caption-size); line-height: 1.7; }
+.goal-modal .xsel { width: 100%; justify-content: space-between; }
+.goal-filters input { flex: 1; min-width: 150px; }
 
 /*== 角色与技能养成 ==*/
 .char-page { max-width: 1366px; margin: 0 auto; }

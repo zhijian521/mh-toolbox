@@ -98,7 +98,7 @@ mh-tool/
 | `transactions` | id, ledger(earnings/account), recordType(money/item), characterId, date, kind, currency(cash/reserve/rmb), amount, category, minutes, note, fee, channel；物品包含 itemName/quantity/unitPrice/status/saleId；结算包含 itemRecordId/saleQuantity；装备关联包含 equipmentId/gearAction |
 | `sessions` | id, characterId, mode(range/duration/legacy), source(timer/manual/legacy), date, startAt/endAt（本地时间对应的时间戳）, minutes, accounts, cardPrice, cost（万）, note, createdAt |
 | `activeSession` | 未结束的 id, characterId, startAt, accounts, cardPrice, createdAt；开始即落盘，普通重启等待用户恢复 |
-| `goals` | id, characterId, type(money/gear/progress), title, target, current, unit, status, deadline, doneAt, baseProgress, logs[]（id/date/delta/note） |
+| `goals` | id, characterId（`all` 或角色 ID）, pinned, sortOrder, type(money/gear/progress), title, target, tracking（null 或 category/key）, current, unit, status, deadline, doneAt, baseProgress, logs[]（id/date/delta/note） |
 | `equipment` | id, characterId, slot, name, level, attributes, special, gems, status；截图录入含 ocrText（识别原文）；玉魄含 jade（base、extra1、extra2、dustLevel、holes、enchantments[]、durability） |
 | `gearLogs` | id, equipmentId, characterId, date, action, amount, note |
 | `itemPrices` | 物品 id → 单价（**单位: 梦幻币**，与网页版单价文件互通） |
@@ -111,6 +111,10 @@ mh-tool/
 > 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 5。
 
 共享账本列表和筛选位于 `views/records.js`，收益表单位于 `transactions.js`，账号快速记录、快捷表单预设和账号表单位于 `account.js`；金额、库存与装备关联在 `core/ledger.js`，统计在 `statistics.js`，CSV 编码在 `export.js`。
+
+目标领域位于 `core/goals.js`。`characterId: 'all'` 动态涵盖全部角色，单角色筛选仍展示全体目标；目标页和总览共用 `D.goalsFor` 与纯读取的 `D.goalSummary`，不缩小全体目标的计算范围。跟随目标的 `target` 是每个角色的门槛，`tracking` 指向辅助/师门技能、人物/召唤兽修炼、等级、乾元丹或潜能果；进度逐个封顶再汇总，未知值保持 null，只有存在成员且全部达标才完成，调低、清空或新增角色会重新判断。状态与当前值从档案即时派生，存储的 `status/current/logs` 仅用于手动累计模式。`D.saveGoalGrowth` 在同一提交中调用 `applyCharacter` 更新指定项目并生成角色养成记录，任一校验或落盘失败全部回滚；养成目标历史筛选原始角色记录，删除目标不删除档案及养成记录。存钱和装备目标沿用手动流水及完成/恢复操作。
+
+`D.orderedGoals` 按置顶组优先、组内 sortOrder、创建时间排列，新目标放到普通组首位，编辑不重排；总览同样优先置顶。`D.saveGoalOrder` 在提交队列内读取最新目标，通过相邻目标 ID 保存前后位置，置顶和普通组不能跨组拖动；从自动排序拖动时先按可见 ID 顺序排列对应位置，再移动目标，隐藏目标保留相对顺序。保存失败整体回滚，排序字段随备份及重启保留。`Views.goalBindOrdering` 仅在本次网格绑定拖放、方向键和边缘滚动，不重复绑定全局事件；拖放取消或结束清理插入线和滚动帧。每个角色进度直接展示，页面统一滚动。
 
 角色养成的归一化、验证、保存、排序和关联删除位于 `core/characters.js`，卡片与统一档案编辑位于 `views/characters.js`。未记录值存为 `null`，明确填写的 0 原样保存；人物五项修炼与召唤兽四项修炼独立记录。师门和辅助技能使用可增删、调整顺序的名称/等级列表，技能区达到 580px 时每行两项，否则单列；顺序随档案及备份保存。`D.orderedCharacters` 按置顶组优先、组内 sortOrder 升序排列；新角色加入普通组首位，置顶切换加入目标组首位，组内调整使用 `D.saveCharacterOrder` 串行提交并支持失败回滚；编辑已有档案不计算新角色位置。
 

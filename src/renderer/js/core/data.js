@@ -26,6 +26,15 @@ const D = window.D = {
     { v: 'gear', t: '装备目标' },
     { v: 'progress', t: '养成目标' }
   ],
+  goalMetrics: [
+    { v: 'auxiliarySkills', t: '辅助技能', unit: '级' },
+    { v: 'training', t: '人物修炼', unit: '级' },
+    { v: 'petTraining', t: '召唤兽修炼', unit: '级' },
+    { v: 'schoolSkills', t: '师门技能', unit: '级' },
+    { v: 'level', t: '角色等级', unit: '级' },
+    { v: 'qianyuanPills', t: '乾元丹', unit: '个' },
+    { v: 'potentialFruits', t: '潜能果', unit: '个' },
+  ],
   gearActions: [
     { v: 'buy', t: '购入', dir: -1 },
     { v: 'sell', t: '售出', dir: 1 },

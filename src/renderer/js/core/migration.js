@@ -67,6 +67,12 @@ Object.assign(D, {
       }
     });
     s.goals.forEach((g) => {
+      g.pinned = g.pinned === true;
+      g.sortOrder = this.characterNumber(g.sortOrder);
+      const metric = g.type === 'progress' && g.tracking && this.goalMetrics.find((item) => item.v === g.tracking.category);
+      g.tracking = metric ? { category: metric.v, key: ['schoolSkills', 'auxiliarySkills', 'training', 'petTraining'].includes(metric.v) &&
+        typeof g.tracking.key === 'string' ? g.tracking.key.trim() : '' } : null;
+      if (metric) g.unit = metric.unit;
       g.target = Number(g.target) || 0;
       g.current = Number(g.current) || 0;
       g.logs = Array.isArray(g.logs) ? g.logs : [];

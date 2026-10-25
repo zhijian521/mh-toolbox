@@ -1,19 +1,177 @@
 'use strict';
-/* 目标及进度流水，基础进度保留旧档案中未列入流水的数值。 */
+/* 手动累计目标与跟随角色档案的养成目标。 */
 Object.assign(D, {
+  orderedGoals(goals = this.state.goals) {
+    return goals.slice().sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true) ||
+      (this.characterNumber(a.sortOrder) ?? Infinity) - (this.characterNumber(b.sortOrder) ?? Infinity) ||
+      (b.createdAt || 0) - (a.createdAt || 0));
+  },
+
+  saveGoalOrder(id, changes) {
+    return this.commit(() => {
+      const goal = this.state.goals.find((item) => item.id === id);
+      if (!goal) throw new Error('目标不存在');
+      const pinning = changes.pinned !== undefined;
+      const pinned = pinning ? changes.pinned : goal.pinned === true;
+      if (typeof pinned !== 'boolean') throw new Error('置顶状态不正确');
+      let group = this.orderedGoals().filter((item) => (item.pinned === true) === pinned || item.id === id);
+      if (!pinning) {
+        const target = this.state.goals.find((item) => item.id === changes.targetId);
+        if (!target || target.id === id || !['before', 'after'].includes(changes.position)) throw new Error('请选择有效的排序位置');
+        if ((target.pinned === true) !== pinned) throw new Error('置顶目标与普通目标分别排序');
+        if (changes.visibleIds) {
+          const positions = new Map(changes.visibleIds.map((key, index) => [key, index]));
+          if (positions.size !== changes.visibleIds.length || !positions.has(id) || !positions.has(target.id) ||
+            changes.visibleIds.some((key) => !group.some((item) => item.id === key))) throw new Error('目标列表已变更，请重试');
+          // 从自动排序拖动时，先保存可见目标的展示顺序，隐藏目标保留相对顺序。
+          const visible = group.filter((item) => positions.has(item.id)).sort((a, b) => positions.get(a.id) - positions.get(b.id));
+          let index = 0;
+          group = group.map((item) => positions.has(item.id) ? visible[index++] : item);
+        }
+      }
+      group = group.filter((item) => item.id !== id);
+      const position = pinning ? 0 : group.findIndex((item) => item.id === changes.targetId) + Number(changes.position === 'after');
+      group.splice(position, 0, goal);
+      group.forEach((item, index) => { item.pinned = pinned; item.sortOrder = index; });
+    });
+  },
+
+  goalCharacters(goal) {
+    return this.orderedCharacters().filter((character) => goal.characterId === 'all' || character.id === goal.characterId);
+  },
+
+  goalsFor(characterId = this.charFilter) {
+    return this.state.goals.filter((goal) => characterId === 'all' || goal.characterId === 'all' || goal.characterId === characterId);
+  },
+
+  goalMetricOptions(category, characterId) {
+    if (category === 'training') return this.characterTraining.map((field) => ({ v: field.key, t: field.label }));
+    if (category === 'petTraining') return this.petTraining.map((field) => ({ v: field.key, t: field.label }));
+    if (!['schoolSkills', 'auxiliarySkills'].includes(category)) return [];
+    const characters = this.goalCharacters({ characterId });
+    const names = category === 'auxiliarySkills' ? this.auxiliarySkillNames :
+      characters.flatMap((character) => this.schoolSkillNames[character.school] || []);
+    return [...new Set([...names, ...characters.flatMap((character) => character.progress[category].map((skill) => skill.name))])]
+      .map((name) => ({ v: name, t: name }));
+  },
+
+  goalMetricLabel(tracking) {
+    const metric = this.goalMetrics.find((item) => item.v === tracking.category);
+    if (['training', 'petTraining'].includes(tracking.category)) {
+      return this.goalMetricOptions(tracking.category).find((item) => item.v === tracking.key)?.t || '未知修炼';
+    }
+    return ['schoolSkills', 'auxiliarySkills'].includes(tracking.category) ? tracking.key : metric?.t || '未知项目';
+  },
+
+  goalCharacterValue(character, tracking) {
+    const { category, key } = tracking;
+    if (category === 'level') return this.characterNumber(character.level);
+    const progress = character.progress;
+    if (['schoolSkills', 'auxiliarySkills'].includes(category)) {
+      return this.characterNumber(progress[category].find((skill) => skill.name === key)?.level);
+    }
+    return this.characterNumber(['training', 'petTraining'].includes(category) ? progress[category][key] : progress[category]);
+  },
+
+  /* 全体目标始终按完整成员计算；超额部分封顶，不能抵消其他角色的不足。 */
+  goalSummary(goal) {
+    if (!goal.tracking) {
+      return { current: goal.current, target: goal.target, status: goal.status,
+        pct: goal.target > 0 ? Math.min(100, Math.max(0, Math.round(goal.current / goal.target * 100))) : 0 };
+    }
+    const members = this.goalCharacters(goal).map((character) => {
+      const value = this.goalCharacterValue(character, goal.tracking);
+      return { id: character.id, name: character.name, value, done: value !== null && value >= goal.target,
+        remaining: value === null ? null : Math.max(0, goal.target - value) };
+    });
+    const achieved = members.filter((member) => member.done).length;
+    const unknown = members.filter((member) => member.value === null).length;
+    const current = members.reduce((sum, member) => sum + Math.min(goal.target, member.value || 0), 0);
+    const target = goal.target * members.length;
+    const status = members.length > 0 && achieved === members.length ? 'done' : 'active';
+    return { members, achieved, unknown, current, target, status,
+      pct: target > 0 ? Math.min(status === 'done' ? 100 : 99, Math.round(current / target * 100)) : 0 };
+  },
+
+  goalDefaultTitle(goal) {
+    const subject = goal.characterId === 'all' ? '全部角色' : this.charName(goal.characterId);
+    return subject + ' · ' + (goal.tracking ? this.goalMetricLabel(goal.tracking) : this.goalTypeText(goal.type)) +
+      '达到 ' + goal.target + goal.unit;
+  },
+
   saveGoal(input, id) {
     return this.commit(() => {
       const previous = id && this.state.goals.find((goal) => goal.id === id);
       if (id && !previous) throw new Error('目标不存在');
-      if (!this.charById(input.characterId) || !String(input.title || '').trim()) throw new Error('请填写角色与目标标题');
-      if (!Number.isFinite(input.target) || input.target < 0) throw new Error('目标数值需为非负数');
-      const goal = Object.assign({}, previous || {
-        id: U.uid(), createdAt: Date.now(), current: 0, baseProgress: 0, status: 'active', logs: [],
-      }, input, { title: input.title.trim(), unit: input.unit || '万' });
-      if (previous) Object.assign(previous, goal); else this.state.goals.push(goal);
+      if (!this.state.characters.length || input.characterId !== 'all' && !this.charById(input.characterId)) throw new Error('请选择有效角色');
+      if (!Number.isFinite(input.target) || input.target <= 0) throw new Error('目标数值需大于 0');
+      const type = input.type || previous?.type || 'money';
+      if (!this.goalTypes.some((item) => item.v === type)) throw new Error('无效的目标类型');
+      const tracking = input.tracking === undefined ? previous?.tracking || null : input.tracking;
+      const metric = tracking && this.goalMetrics.find((item) => item.v === tracking.category);
+      if (tracking) {
+        if (type !== 'progress' || !metric) throw new Error('请选择有效的养成项目');
+        if (!Number.isSafeInteger(input.target)) throw new Error('养成目标需填写正整数');
+        if (['schoolSkills', 'auxiliarySkills'].includes(tracking.category) &&
+          (typeof tracking.key !== 'string' || !tracking.key.trim())) throw new Error('请选择技能');
+        if (['training', 'petTraining'].includes(tracking.category) &&
+          !this.goalMetricOptions(tracking.category).some((item) => item.v === tracking.key)) throw new Error('请选择修炼项目');
+      }
+      if (input.deadline && (!/^\d{4}-\d{2}-\d{2}$/.test(input.deadline) ||
+        U.fmtDate(U.parseDate(input.deadline)) !== input.deadline)) throw new Error('请选择有效的期望完成日期');
+      const goal = { ...(previous || {
+        id: U.uid(), createdAt: Date.now(), pinned: false, sortOrder: 0, current: 0, baseProgress: 0, status: 'active', logs: [],
+      }), characterId: input.characterId, type, target: input.target,
+        tracking: tracking ? { category: tracking.category,
+          key: ['schoolSkills', 'auxiliarySkills', 'training', 'petTraining'].includes(tracking.category) ? tracking.key.trim() : '' } : null,
+        unit: metric ? metric.unit : String(input.unit || '万').trim() || '万',
+        deadline: input.deadline || '', note: String(input.note || '').trim() };
+      goal.title = String(input.title || '').trim() || this.goalDefaultTitle(goal);
+      if (previous) Object.assign(previous, goal);
+      else {
+        this.orderedGoals().filter((item) => !item.pinned).forEach((item, index) => { item.sortOrder = index + 1; });
+        this.state.goals.push(goal);
+      }
       this.recalculateGoal(previous || goal);
       return previous || goal;
     });
+  },
+
+  /** 在同一事务中更新各角色对应的养成值，同时生成原有角色养成记录。 */
+  saveGoalGrowth(id, values, record = {}) {
+    return this.commit(() => {
+      const goal = this.state.goals.find((item) => item.id === id);
+      if (!goal?.tracking) throw new Error('该目标未跟随角色档案');
+      const members = this.goalCharacters(goal);
+      const { category, key } = goal.tracking;
+      let count = 0;
+      for (const [characterId, input] of Object.entries(values)) {
+        const character = members.find((member) => member.id === characterId);
+        if (!character) throw new Error('目标角色已变更，请重新打开进度表单');
+        const value = this.characterNumber(input);
+        if (input !== '' && input != null && value === null) throw new Error('养成进度需填写非负整数或留空');
+        if (value === this.goalCharacterValue(character, goal.tracking)) continue;
+        const changes = category === 'level' ? { level: value } : { progress: this.normalizeCharacterProgress(character.progress) };
+        if (['schoolSkills', 'auxiliarySkills'].includes(category)) {
+          const skill = changes.progress[category].find((item) => item.name === key);
+          if (skill) skill.level = value; else changes.progress[category].push({ name: key, level: value });
+        } else if (['training', 'petTraining'].includes(category)) changes.progress[category][key] = value;
+        else if (category !== 'level') changes.progress[category] = value;
+        this.applyCharacter(changes, characterId, record);
+        count++;
+      }
+      if (!count) throw new Error('没有需要更新的进度');
+      return count;
+    });
+  },
+
+  goalGrowthHistory(goal) {
+    const groups = { schoolSkills: '师门技能', auxiliarySkills: '辅助技能', training: '人物修炼', petTraining: '召唤兽修炼',
+      level: '基础信息', qianyuanPills: '其他养成', potentialFruits: '其他养成' };
+    const label = goal.tracking.category === 'level' ? '等级' : this.goalMetricLabel(goal.tracking);
+    return this.characterGrowthHistory(goal.characterId).flatMap((entry) => entry.changes
+      .filter((change) => change.group === groups[goal.tracking.category] && change.label === label)
+      .map((change) => ({ ...entry, change })));
   },
 
   removeGoal(id) {
@@ -25,6 +183,7 @@ Object.assign(D, {
       if (!['active', 'done'].includes(status)) throw new Error('无效的目标状态');
       const goal = this.state.goals.find((item) => item.id === id);
       if (!goal) throw new Error('目标不存在');
+      if (goal.tracking) throw new Error('养成目标按角色档案自动判断是否达成');
       if (status === 'done') {
         if (goal.target > goal.current) {
           const total = goal.baseProgress + goal.logs.reduce((sum, log) => sum + log.delta, 0);
@@ -43,6 +202,7 @@ Object.assign(D, {
     return this.commit(() => {
       const goal = this.state.goals.find((item) => item.id === id);
       if (!goal) throw new Error('目标不存在');
+      if (goal.tracking) throw new Error('请更新角色养成进度');
       if (!Number.isFinite(input.delta) || !/^\d{4}-\d{2}-\d{2}$/.test(input.date) ||
         U.fmtDate(U.parseDate(input.date)) !== input.date) throw new Error('请填写有效日期与进度变化');
       const previous = logId && goal.logs.find((log) => log.id === logId);
@@ -59,6 +219,7 @@ Object.assign(D, {
     return this.commit(() => {
       const goal = this.state.goals.find((item) => item.id === id);
       if (!goal) throw new Error('目标不存在');
+      if (goal.tracking) throw new Error('请在角色养成记录中查看原始变更');
       goal.logs = goal.logs.filter((log) => log.id !== logId);
       this.recalculateGoal(goal);
     });

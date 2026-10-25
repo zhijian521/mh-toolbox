@@ -287,6 +287,7 @@ UI.formModal = function (opts) {
 
 /* ---------- 细线性 SVG 图标库（规范见 STYLE_GUIDE.md 第 6 节） ---------- */
 UI.icons = {
+  grip: '<circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/>',
   edit: '<path d="m16 3 5 5M4 20l4-1L21 6a2.1 2.1 0 0 0-3-3L5 16zM4 20h16"/>',
   pin: '<path d="m16 3 5 5-4 1-3 5-4-4 5-3zM10 10l-3 1-2 2 6 6 2-2 1-3M8 16l-5 5"/>',
   sort: '<path d="M7 3v18m-4-4 4 4 4-4M17 21V3m-4 4 4-4 4 4"/>',

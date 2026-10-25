@@ -50,7 +50,8 @@ Views.dashboard = function () {
   const held = D.stats(D.scope(D.earnings()));
   const end = range.to && range.to < U.today() ? range.to : U.today();
   const accountEnd = accountRange.to && accountRange.to < U.today() ? accountRange.to : U.today();
-  const goals = D.scope(D.state.goals).filter(function (g) { return g.status === 'active'; }).slice(0, 4);
+  const goals = D.orderedGoals(D.goalsFor()).map((goal) => ({ goal, summary: D.goalSummary(goal) }))
+    .filter(({ summary }) => summary.status === 'active').slice(0, 4);
   if (!D.state.characters.length && !D.state.transactions.length) {
     el.innerHTML = '<div class="empty"><p>先创建一个角色，开始记录你的养老生活。</p><div class="btns"><button class="btn btn-gold" data-page="characters">创建角色</button><button class="btn" data-act="demo">加载示例数据</button></div></div>';
     el.querySelector('[data-page]').onclick = function () { Views.go('characters'); };
@@ -79,9 +80,11 @@ Views.dashboard = function () {
         '</div><p class="ledger-hint">每日收支差额 · 所选范围内近 14 天</p>' + Views.ledgerTrend(accounts, accountEnd, currency) + '</div>';
     }).join('') + '</div><div class="card"><div class="card-title">最近账号记录<span class="sub">人民币、梦幻币分别记账，不折算合计</span></div>' + Views.recentRecords(accounts, true) + '</div></section>' +
     '<section class="ledger-section"><div class="ledger-section-head"><div><h2>进行中的目标</h2><p>当前角色的养老计划</p></div><button class="btn btn-sm" data-page="goals">查看目标</button></div>' +
-      (goals.length ? '<div class="goal-overview-grid">' + goals.map(function (g) {
-        const pct = g.target ? Math.min(100, Math.round(g.current / g.target * 100)) : 0;
-        return '<div class="card"><div class="card-title">' + U.esc(g.title) + '</div><div class="ledger-summary compact"><span>' + U.esc(g.current + ' / ' + g.target + ' ' + (g.unit || '万')) + '</span><b>' + pct + '%</b></div><div class="progress"><i style="width:' + pct + '%"></i></div></div>';
+      (goals.length ? '<div class="goal-overview-grid">' + goals.map(function ({ goal, summary }) {
+        const text = goal.tracking ? summary.achieved + ' / ' + summary.members.length + ' 个角色达标 · 每人 ' + goal.target + goal.unit :
+          U.fmtNumber(goal.current) + ' / ' + U.fmtNumber(goal.target) + ' ' + (goal.unit || '万');
+        return '<div class="card"><div class="card-title">' + U.esc(goal.title) + '</div><div class="ledger-summary compact"><span>' +
+          U.esc(text) + '</span><b>' + summary.pct + '%</b></div><div class="progress"><i style="width:' + summary.pct + '%"></i></div></div>';
       }).join('') + '</div>' : '<div class="empty"><p>还没有进行中的目标</p></div>') + '</section>';
   ['earnings', 'account'].forEach(function (ledger) {
     UI.dateRange(el.querySelector('[data-range-filter="' + ledger + '"]'), {
