@@ -23,6 +23,74 @@ Object.assign(D, {
     };
   },
 
+  normalizeCharacterHistory(value) {
+    if (!Array.isArray(value)) return [];
+    const text = (value) => typeof value === 'string' ? value : '';
+    const snapshot = (value) => typeof value === 'string' ? value : this.characterNumber(value);
+    return value.filter((entry) => entry && typeof entry.id === 'string' && typeof entry.date === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(entry.date) && U.fmtDate(U.parseDate(entry.date)) === entry.date && Array.isArray(entry.changes)).map((entry) => ({
+      id: entry.id, date: entry.date, createdAt: this.characterNumber(entry.createdAt) ?? 0,
+      source: entry.source === 'copy' ? 'copy' : 'edit', sourceName: text(entry.sourceName), note: text(entry.note),
+      changes: entry.changes.filter((change) => change && typeof change.label === 'string').map((change) => ({
+        group: text(change.group), label: change.label, from: snapshot(change.from), to: snapshot(change.to), unit: text(change.unit),
+        kind: ['added', 'removed', 'recorded', 'cleared', 'increase', 'decrease', 'changed'].includes(change.kind) ? change.kind : 'changed',
+      })),
+    })).filter((entry) => entry.changes.length);
+  },
+
+  characterGrowthChanges(previous, saved) {
+    const changes = [];
+    const add = (group, label, from, to, unit = '', kind) => {
+      if (from === to && !kind) return;
+      kind = kind || (from == null ? 'recorded' : to == null ? 'cleared' :
+        typeof from === 'number' && typeof to === 'number' ? (to > from ? 'increase' : 'decrease') : 'changed');
+      changes.push({ group, label, from, to, unit, kind });
+    };
+    add('基础信息', '等级', this.characterNumber(previous.level), saved.level, '级');
+    add('基础信息', '门派', previous.school || null, saved.school || null);
+    const before = this.normalizeCharacterProgress(previous.progress), after = saved.progress;
+    for (const [key, group] of [['schoolSkills', '师门技能'], ['auxiliarySkills', '辅助技能']]) {
+      const oldSkills = new Map(before[key].map((skill) => [skill.name, skill.level]));
+      const newSkills = new Map(after[key].map((skill) => [skill.name, skill.level]));
+      for (const [name, level] of newSkills) {
+        add(group, name, oldSkills.get(name) ?? null, level, '级', oldSkills.has(name) ? undefined : 'added');
+      }
+      for (const [name, level] of oldSkills) {
+        if (!newSkills.has(name)) add(group, name, level, null, '级', 'removed');
+      }
+    }
+    for (const [key, group, fields] of [['training', '人物修炼', this.characterTraining], ['petTraining', '召唤兽修炼', this.petTraining]]) {
+      for (const field of fields) add(group, field.label, before[key][field.key], after[key][field.key], '级');
+    }
+    add('其他养成', '乾元丹', before.qianyuanPills, after.qianyuanPills, '个');
+    add('其他养成', '潜能果', before.potentialFruits, after.potentialFruits, '个');
+    return changes;
+  },
+
+  characterGrowthEntry(previous, saved, record) {
+    const changes = this.characterGrowthChanges(previous, saved);
+    if (!changes.length) return null;
+    const date = record.date === undefined ? U.today() : record.date;
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) || U.fmtDate(U.parseDate(date)) !== date) {
+      throw new Error('请选择有效的变更日期');
+    }
+    if (date > U.today()) throw new Error('变更日期不能晚于今天');
+    return {
+      id: U.uid(), date, createdAt: Date.now(), source: record.source === 'copy' ? 'copy' : 'edit',
+      sourceName: typeof record.sourceName === 'string' ? record.sourceName : '',
+      note: typeof record.note === 'string' ? record.note.trim() : '', changes,
+    };
+  },
+
+  characterGrowthHistory(characterId = 'all', range = {}) {
+    /* 同毫秒保存时，稳定排序保留后追加的记录在前，不按随机 ID 推断先后。 */
+    return this.state.characters.filter((character) => characterId === 'all' || character.id === characterId)
+      .flatMap((character) => (character.growthHistory || []).slice().reverse().filter((entry) =>
+        (!range.from || entry.date >= range.from) && (!range.to || entry.date <= range.to))
+        .map((entry) => ({ ...entry, characterId: character.id, characterName: character.name })))
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+  },
+
   orderedCharacters(characters = this.state.characters) {
     return characters.slice().sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true) ||
       (this.characterNumber(a.sortOrder) ?? Infinity) - (this.characterNumber(b.sortOrder) ?? Infinity) ||
@@ -46,11 +114,11 @@ Object.assign(D, {
   },
 
   /** 新建和编辑角色只在写入成功后确认；失败恢复角色集合，表单可直接重试。 */
-  saveCharacter(data, id) {
-    return this.commit(() => this.applyCharacter(data, id));
+  saveCharacter(data, id, record = {}) {
+    return this.commit(() => this.applyCharacter(data, id, record));
   },
 
-  applyCharacter(data, id) {
+  applyCharacter(data, id, record = {}) {
     const previous = id && this.charById(id);
     if (id && !previous) throw new Error('角色不存在');
     const name = String(data.name == null ? previous && previous.name || '' : data.name).trim();
@@ -63,7 +131,10 @@ Object.assign(D, {
       school: data.school === undefined && previous ? previous.school : data.school || '',
       server: data.server === undefined && previous ? previous.server : String(data.server || '').trim(),
       progress: this.normalizeCharacterProgress(data.progress === undefined && previous ? previous.progress : data.progress),
+      growthHistory: previous ? (previous.growthHistory || []).slice() : [],
     });
+    const entry = previous && this.characterGrowthEntry(previous, saved, record);
+    if (entry) saved.growthHistory.push(entry);
     if (previous) {
       this.state.characters = this.state.characters.map((character) => character.id === id ? saved : character);
     } else {
@@ -75,11 +146,11 @@ Object.assign(D, {
     return saved;
   },
 
-  async saveCharacterProgress(id, changes) {
+  async saveCharacterProgress(id, changes, record = {}) {
     return this.commit(() => {
       const character = this.charById(id);
       if (!character) throw new Error('角色不存在');
-      return this.applyCharacter({ progress: Object.assign({}, this.normalizeCharacterProgress(character.progress), changes) }, id);
+      return this.applyCharacter({ progress: Object.assign({}, this.normalizeCharacterProgress(character.progress), changes) }, id, record);
     });
   },
 
@@ -115,7 +186,8 @@ Object.assign(D, {
     return this.commit(() => {
       const changes = this.characterCopyChanges(id, sourceId, keys, skipEmpty);
       if (!Object.keys(changes).length) throw new Error('所选项目没有可复制的变更');
-      return this.applyCharacter({ progress: Object.assign({}, this.normalizeCharacterProgress(this.charById(id).progress), changes) }, id);
+      return this.applyCharacter({ progress: Object.assign({}, this.normalizeCharacterProgress(this.charById(id).progress), changes) }, id,
+        { source: 'copy', sourceName: this.charById(sourceId).name });
     });
   },
 

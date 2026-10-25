@@ -20,6 +20,7 @@ Views.characters = function () {
       finally { button.disabled = false; }
     };
     card.querySelector('[data-act="sort"]').onclick = () => Views.charOrderModal(character);
+    card.querySelector('[data-act="history"]').onclick = () => Views.charHistoryModal(character.id);
     card.querySelector('[data-act="copy"]').onclick = () => Views.charCopyProgressModal(character);
     card.querySelector('[data-act="del"]').onclick = () => Views.charDelete(character);
   });
@@ -56,7 +57,8 @@ Views.charCardHtml = function (character) {
     '</h2><p class="char-sub">' + U.esc([character.level ? character.level + ' 级' : '', character.school, character.server].filter(Boolean).join(' · ')) +
     '</p></div></div><div class="char-toolbar">' +
       iconButton('pin', 'pin', character.pinned ? '取消置顶' : '置顶角色', ' aria-pressed="' + (character.pinned === true) + '"') +
-      iconButton('sort', 'sort', '调整排序') + iconButton('copy', 'copy', '复制养成配置') + iconButton('del', 'trash', '删除角色') +
+      iconButton('sort', 'sort', '调整排序') + iconButton('history', 'calendar', '查看养成记录') +
+      iconButton('copy', 'copy', '复制养成配置') + iconButton('del', 'trash', '删除角色') +
       iconButton('edit', 'edit', '编辑档案') + '</div></header>' +
     '<section class="char-section">' + heading('师门技能') + skills(progress.schoolSkills) + '</section>' +
     '<section class="char-section">' + heading('修炼') + '<div class="char-training">' +
@@ -85,6 +87,14 @@ Views.charModal = function (character) {
       { key: 'note', label: '养成备注', type: 'textarea', full: true, placeholder: '可记录经脉流派、坐骑成长、机缘等' } ] },
   ];
   const values = Object.assign({}, character || { name: '', level: '', school: '大唐官府', server: '' }, progress);
+  if (character) {
+    sections.find((section) => section.key === 'growth').fields.push(
+      { key: 'changeDate', label: '变更日期', type: 'date', default: U.today(),
+        hint: '养成变化自动记入此日，可补选实际提升日期。' },
+      { key: 'changeNote', label: '本次变更说明', type: 'text', placeholder: '选填，如：周末补满人物修炼',
+        hint: '仅随本次变化保存，昵称、备注和排序等调整不生成记录。' },
+    );
+  }
   for (const key of ['training', 'petTraining']) {
     for (const [field, value] of Object.entries(progress[key])) values[key + '_' + field] = value;
   }
@@ -125,7 +135,7 @@ Views.charModal = function (character) {
       }
       for (const [key, editor] of Object.entries(editors)) draft.progress[key] = editor.read();
       for (const key of ['qianyuanPills', 'potentialFruits', 'note']) draft.progress[key] = data[key];
-      const saved = await D.saveCharacter(draft, character && character.id);
+      const saved = await D.saveCharacter(draft, character && character.id, { date: data.changeDate, note: data.changeNote });
       savedId = saved.id;
       Views.charRefresh(savedId);
       UI.toast(character ? '角色档案已保存' : '角色已创建');
@@ -301,7 +311,7 @@ Views.charDelete = async function (character) {
   const count = ['transactions', 'sessions', 'goals', 'equipment'].reduce((total, key) =>
     total + D.state[key].filter((item) => item.characterId === character.id).length, 0);
   const ok = await UI.confirmModal({ title: '删除角色', danger: true, confirmText: '确认删除',
-    message: '确定删除角色「' + character.name + '」吗？技能养成档案及名下 ' + count +
+    message: '确定删除角色「' + character.name + '」吗？技能养成档案、养成变更记录及名下 ' + count +
       ' 条相关记录（收益/在线/账号账本/目标/装备）会一并删除，且无法恢复。' });
   if (!ok) return;
   const characters = D.orderedCharacters();

@@ -25,6 +25,7 @@ Object.assign(D, {
       characters: Array.isArray(data.characters) ? data.characters.map((c) => Object.assign({}, c, {
         pinned: c.pinned === true, sortOrder: this.characterNumber(c.sortOrder),
         progress: this.normalizeCharacterProgress(c.progress),
+        growthHistory: this.normalizeCharacterHistory(c.growthHistory),
       })) : [],
       transactions: Array.isArray(data.transactions) ? data.transactions.map((t) => Object.assign({}, t)) : [],
       goals: Array.isArray(data.goals) ? data.goals.map((g) => Object.assign({}, g)) : [],

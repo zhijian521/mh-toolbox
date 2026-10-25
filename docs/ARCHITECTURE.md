@@ -38,7 +38,7 @@ mh-tool/
 │        │  ├─ util.js           # U：日期/金额/转义等纯函数
 │        │  ├─ data.js           # D：根状态、常量与基础查询
 │        │  ├─ storage.js        # D：串行提交、失败回滚与持久化
-│        │  ├─ characters.js     # D：角色与养成
+│        │  ├─ characters.js     # D：角色、养成与变更快照
 │        │  ├─ schools.js        # D：官网门派技能静态模板
 │        │  ├─ statistics.js     # D：收益与账号统计
 │        │  ├─ ledger.js         # D：账本、库存与装备关联
@@ -91,7 +91,7 @@ mh-tool/
 
 | 集合 | 字段要点 |
 |---|---|
-| `characters` | id, name, level, school, server, pinned, sortOrder；progress（schoolSkills[]、auxiliarySkills[]：name/level；training、petTraining；qianyuanPills、potentialFruits、note）；equipmentSets[3]（name、slots：部位→装备 ID）、activeEquipmentSet、viewedEquipmentSet、pendingEquipmentSlots、soulJade（unlocked、attribute、level） |
+| `characters` | id, name, level, school, server, pinned, sortOrder；progress（schoolSkills[]、auxiliarySkills[]：name/level；training、petTraining；qianyuanPills、potentialFruits、note）；growthHistory[]（id/date/createdAt/source/sourceName/note/changes[]）；equipmentSets[3]（name、slots：部位→装备 ID）、activeEquipmentSet、viewedEquipmentSet、pendingEquipmentSlots、soulJade（unlocked、attribute、level） |
 | `transactions` | id, ledger(earnings/account), recordType(money/item), characterId, date, kind, currency(cash/reserve/rmb), amount, category, minutes, note, fee, channel；物品包含 itemName/quantity/unitPrice/status/saleId；结算包含 itemRecordId/saleQuantity；装备关联包含 equipmentId/gearAction |
 | `sessions` | id, characterId, mode(range/duration/legacy), source(timer/manual/legacy), date, startAt/endAt（本地时间对应的时间戳）, minutes, accounts, cardPrice, cost（万）, note, createdAt |
 | `activeSession` | 未结束的 id, characterId, startAt, accounts, cardPrice, createdAt；开始即落盘，普通重启等待用户恢复 |
@@ -101,13 +101,17 @@ mh-tool/
 | `itemPrices` | 物品 id → 单价（**单位: 梦幻币**，与网页版单价文件互通） |
 | `quickSettings` | accounts(在线角色数), cardPrice(梦幻币/点) |
 
+角色养成历史由 `applyCharacter` 在串行提交内比较最新档案生成，与档案一起持久化和失败回滚；普通编辑、养成保存、复制共用此入口。`changes[]` 保存分区、项目名称、前后值、单位及类型（提升/调低/补录/清空/新增/移除/调整），技能按名称比较，重排不产生记录。首次建档不生成变更，昵称、服务器和长期备注不参与比较。编辑表单的日期与本次说明通过独立参数传入，不写入当前养成值；复制只记录目标变化并快照来源名称。历史归角色所有，随备份深拷贝保留、随角色删除，装备/记账操作不写入养成历史。
+
+`views/character-history.js` 负责只读日期时间线，提供全部或单个角色、统一日期范围和每页 12 次变更的分页；筛选局限在弹窗，不修改全局角色筛选。
+
 > 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 5。
 
 共享账本列表和筛选位于 `views/records.js`，收益表单位于 `transactions.js`，账号快速记录、快捷表单预设和账号表单位于 `account.js`；金额、库存与装备关联在 `core/ledger.js`，统计在 `statistics.js`，CSV 编码在 `export.js`。
 
 角色养成的归一化、验证、保存、排序和关联删除位于 `core/characters.js`，卡片与统一档案编辑位于 `views/characters.js`。未记录值存为 `null`，明确填写的 0 原样保存；人物五项修炼与召唤兽四项修炼独立记录。师门和辅助技能使用可增删、调整顺序的名称/等级列表，技能区达到 580px 时每行两项，否则单列；顺序随档案及备份保存。`D.orderedCharacters` 按置顶组优先、组内 sortOrder 升序排列；新角色加入普通组首位，置顶切换加入目标组首位，组内调整使用 `D.saveCharacterOrder` 串行提交并支持失败回滚；编辑已有档案不计算新角色位置。
 
-卡片顶部操作依次为置顶、排序、复制养成、删除、编辑档案。统一编辑器用分区配置显式组织基础信息、师门技能、人物修炼、召唤兽修炼、辅助技能和其他养成，标题下固定导航定位并聚焦分区标题。切换门派后如已有师门技能，须明确选择保留或替换，再允许保存或补齐模板。统一表单只采集一次草稿，通过 `D.saveCharacter` 一次提交全部信息，共用领域校验；保存期间由 `UI.formModal` 锁定全部控件，失败整体回滚、恢复原禁用状态并保留草稿。`UI.openModal` 支持 `returnFocus` 回调，重建页面后按稳定角色 ID 恢复操作焦点；角色异步回调仅在当前仍为角色页时重建卡片，删除则刷新当前页面。
+卡片顶部操作依次为置顶、排序、养成记录、复制养成、删除、编辑档案。统一编辑器用分区配置显式组织基础信息、师门技能、人物修炼、召唤兽修炼、辅助技能和其他养成，标题下固定导航定位并聚焦分区标题。切换门派后如已有师门技能，须明确选择保留或替换，再允许保存或补齐模板。统一表单只采集一次草稿，通过 `D.saveCharacter` 一次提交全部信息，共用领域校验；保存期间由 `UI.formModal` 锁定全部控件，失败整体回滚、恢复原禁用状态并保留草稿。`UI.openModal` 支持 `returnFocus` 回调，重建页面后按稳定角色 ID 恢复操作焦点；角色异步回调仅在当前仍为角色页时重建卡片，删除则刷新当前页面。
 
 复制预览调用纯函数 `D.characterCopyChanges` 计算所选项目的变更，实际保存由 `D.copyCharacterProgress` 在提交队列内读取最新来源并重新计算。默认跳过未记录项：修炼逐项合并，技能按来源顺序排列，同名空等级保留目标等级，目标独有技能追加保留，明确的 0 正常复制；关闭跳过后完整覆盖所选项目。师门技能仅支持相同门派，无变更时不提交，写入失败整体回滚。
 

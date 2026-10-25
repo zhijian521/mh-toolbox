@@ -210,9 +210,9 @@ async function checks(phase) {
   const second = card('c2').getBoundingClientRect();
   check(first.right <= second.left && first.top === second.top, '角色卡片与装备页同样并排展示');
   const other = JSON.stringify(D.charById('c2'));
-  check(card('c1').querySelectorAll('.char-toolbar button').length === 5 &&
+  check(card('c1').querySelectorAll('.char-toolbar button').length === 6 &&
     !card('c1').querySelector('.char-section button, .char-actions'), '操作集中顶部，分区不再重复编辑');
-  check(['pin', 'sort', 'copy', 'del', 'edit'].every((action) => {
+  check(['pin', 'sort', 'history', 'copy', 'del', 'edit'].every((action) => {
     const button = card('c1').querySelector('[data-act="' + action + '"]');
     return button.querySelector('svg') && button.title && button.getAttribute('aria-label');
   }) && card('c1').querySelector('.char-toolbar button:last-child').dataset.act === 'edit', '图标操作带提示，编辑在最右侧');
