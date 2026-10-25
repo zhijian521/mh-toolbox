@@ -1,6 +1,6 @@
 'use strict';
 /* IPC 层：数据读写 / 备份导入导出 / 窗口控制（渲染进程经 preload 白名单调用） */
-const { app, ipcMain, dialog } = require('electron');
+const { app, ipcMain, dialog, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -22,6 +22,15 @@ function readJson(file) {
 
 function registerIpc(opts) {
   getWindow = opts.getWindow;
+  const { recognizeEquipmentImage, cancelEquipmentOcr } = require('./equipment-ocr');
+  ipcMain.handle('mh:recognizeEquipment', (event, image, id) => recognizeEquipmentImage(event.sender, image, id));
+  ipcMain.handle('mh:cancelEquipmentOcr', (event, id) => cancelEquipmentOcr(event.sender, id));
+  ipcMain.handle('mh:equipmentClipboard', () => {
+    const image = clipboard.readImage();
+    const { width, height } = image.getSize();
+    if (width * height > 16 * 1024 * 1024) throw new Error('图片尺寸过大，请截取单件装备属性');
+    return image.isEmpty() ? '' : image.toDataURL();
+  });
 
   /* ---- 窗口控制 ---- */
   ipcMain.handle('mh:winMin', () => { const w = getWindow && getWindow(); if (w) w.minimize(); });

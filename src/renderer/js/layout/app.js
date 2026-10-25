@@ -40,6 +40,9 @@ Views.renderHeader = function () {
   add.hidden = !page.onAdd;
   add.textContent = page.addLabel || '';
   add.disabled = page.id === 'equipment' && !D.state.characters.length;
+  const equipmentImport = document.getElementById('equipment-import');
+  equipmentImport.hidden = page.id !== 'equipment';
+  equipmentImport.disabled = !D.state.characters.length;
   const records = document.getElementById('ledger-records');
   records.hidden = !page.records && !page.parent;
   records.textContent = page.parent ? '返回快速记录' : '查看记录';
@@ -96,6 +99,7 @@ Views.rerender = function () {
     const page = Views._pages.find(function (p) { return p.id === Views._current; });
     Views.go(page.parent || page.records);
   });
+  document.getElementById('equipment-import').addEventListener('click', () => Views.eqImportModal());
   const hideEquipmentTip = function (event) {
     const pop = document.querySelector('.eq-tooltip-pop');
     if (!pop) return;

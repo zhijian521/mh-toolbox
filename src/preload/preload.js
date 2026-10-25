@@ -8,6 +8,14 @@ contextBridge.exposeInMainWorld('mh', {
   exportData: (data) => ipcRenderer.invoke('mh:exportData', data),
   exportJson: (data, defaultName) => ipcRenderer.invoke('mh:exportJson', data, defaultName),
   importData: () => ipcRenderer.invoke('mh:importData'),
+  recognizeEquipment: (image, id) => ipcRenderer.invoke('mh:recognizeEquipment', image, id),
+  cancelEquipmentOcr: (id) => ipcRenderer.invoke('mh:cancelEquipmentOcr', id),
+  equipmentClipboard: () => ipcRenderer.invoke('mh:equipmentClipboard'),
+  onEquipmentOcrProgress: (callback) => {
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on('mh:equipmentOcrProgress', listener);
+    return () => ipcRenderer.removeListener('mh:equipmentOcrProgress', listener);
+  },
   info: () => ipcRenderer.invoke('mh:info'),
   winMin: () => ipcRenderer.invoke('mh:winMin'),
   winMax: () => ipcRenderer.invoke('mh:winMax'),

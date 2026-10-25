@@ -30,7 +30,12 @@
     },
     "files": [
       "src/**/*",
-      "build/icon.ico"
+      "build/icon.ico",
+      "!node_modules/onnxruntime-node/bin/napi-*/{darwin,linux,android}/**/*",
+      "!node_modules/onnxruntime-node/bin/napi-*/win32/{arm64,ia32}/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/**/*"
     ],
     "win": {
       "icon": "build/icon.ico",
@@ -59,5 +64,14 @@
     "portable": {
       "artifactName": "梦幻养老助手-便携版-${version}.exe"
     }
+  },
+  "overrides": {
+    "@gutenye/ocr-node": { "sharp": "$sharp" },
+    "onnxruntime-node": { "adm-zip": "0.6.1" }
+  },
+  "dependencies": {
+    "@gutenye/ocr-node": "1.4.9",
+    "onnxruntime-node": "1.22.0-rev",
+    "sharp": "0.35.5"
   }
 }

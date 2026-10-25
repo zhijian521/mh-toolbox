@@ -16,10 +16,12 @@ Views.eqPickModal = function (characterId, index, slot) {
     footer: '<button class="btn" data-act="cancel">取消</button>' +
       (current || (index === 0 && character.pendingEquipmentSlots.includes(slot))
         ? '<button class="btn" data-act="unequip">' + (current ? '卸下本套装备' : '暂不配置') + '</button>' : '') +
+      '<button class="btn" data-act="screenshot">截图录入</button>' +
       '<button class="btn btn-gold" data-act="new">＋ 新增并装备</button>',
   });
   overlay.querySelector('[data-act="cancel"]').onclick = UI.requestCloseModal;
   overlay.querySelector('[data-act="new"]').onclick = () => Views.eqModal(null, { characterId, index, slot });
+  overlay.querySelector('[data-act="screenshot"]').onclick = () => Views.eqImportModal({ characterId, index, slot });
   overlay.querySelectorAll('[data-pick]').forEach((button) => {
     button.onclick = () => Views.eqCommit(() => D.assignEquipment(characterId, index, slot, button.dataset.pick), '已更新装备搭配');
   });
@@ -208,7 +210,8 @@ Views.eqDetailModal = function (eq, context) {
     title: eq.slot + ' · ' + eq.name, wide: true,
     body: '<div class="backup-grid eq-detail"><section>' + Views.eqPropertiesHtml(eq) +
       '<p class="eq-caption">' + U.esc(D.charName(eq.characterId)) + ' · ' + D.equipmentStatuses[D.equipmentStatus(eq)] + '</p>' +
-      '<p class="eq-muted">引用方案：' + U.esc(references.map((ref) => ref.name).join(' / ') || '未配置') + '</p></section>' +
+      '<p class="eq-muted">引用方案：' + U.esc(references.map((ref) => ref.name).join(' / ') || '未配置') + '</p>' +
+      (eq.ocrText ? '<details class="eq-ocr-text"><summary>识别原文</summary><pre>' + U.esc(eq.ocrText) + '</pre></details>' : '') + '</section>' +
       '<section><h3>装备时间线</h3>' + (logs.length ? '<div class="timeline">' + logs.map((log) => {
         const action = D.gearAction(log.action);
         return '<div class="tl-item"><div class="tl-head"><span class="badge ' + (action.dir > 0 ? 'in' : action.dir < 0 ? 'out' : '') + '">' +
