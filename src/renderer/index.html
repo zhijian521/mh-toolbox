@@ -18,15 +18,18 @@
 </header>
 <div id="app">
   <aside id="sidebar">
-    <div class="logo">
+    <div class="logo" title="梦幻养老助手">
       <span class="logo-badge">梦</span>
-      <div>
+      <div class="logo-text">
         <div class="logo-name">梦幻养老助手</div>
         <div class="logo-sub">养老手账</div>
       </div>
     </div>
-    <nav id="nav"></nav>
-    <div class="sidebar-foot">数据本地保存 · v<span id="ver">-</span></div>
+    <nav id="nav" aria-label="主菜单"></nav>
+    <div class="sidebar-foot">
+      <span class="sidebar-info">数据本地保存 · v<span id="ver">-</span></span>
+      <button id="sidebar-toggle" class="sidebar-toggle" type="button" title="收起菜单" aria-label="收起菜单" aria-controls="sidebar" aria-expanded="true"></button>
+    </div>
   </aside>
   <div id="main">
     <header id="topbar">

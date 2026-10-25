@@ -1,5 +1,5 @@
 'use strict';
-/* 备份与设置页 */
+/* 设置页：数据备份、导入与关于。 */
 Views.backup = async function () {
   const el = document.getElementById('view');
   const info = await window.mh.info();

@@ -11,23 +11,39 @@ Views._pages = [
     onAdd: () => Views.eqModal(null, Views._eq.warehouse ? { characterId: Views._eq.characterId } : {}) },
   { id: 'characters', t: '角色', icon: 'user', sub: '角色档案 · 技能修炼 · 养成记录',
     addLabel: '＋ 添加角色', onAdd: () => Views.charModal() },
-  { id: 'backup', t: '备份与设置', icon: 'archive', sub: '数据备份、导入与关于' },
+  { id: 'backup', t: '设置', icon: 'settings', sub: '数据备份、导入与关于' },
   { id: 'transactions', t: '收益记录', sub: '游戏币、物品获得与日常成本', parent: 'quick' },
   { id: 'onlineRecords', t: '在线记录', sub: '自动计时 · 手动补记 · 点卡成本', parent: 'quick' },
   { id: 'accountRecords', t: '账号记录', sub: '交易明细 · 币种与渠道筛选 · 装备关联', parent: 'account' }
 ];
 Views._current = 'dashboard';
+Views._sidebarStorageKey = 'mh.sidebarCollapsed';
+
+Views.setSidebarCollapsed = function (collapsed) {
+  UI.closePop();
+  document.getElementById('sidebar').classList.toggle('is-collapsed', collapsed);
+  const button = document.getElementById('sidebar-toggle');
+  const label = collapsed ? '展开菜单' : '收起菜单';
+  button.innerHTML = UI.icon(collapsed ? 'sidebar-expand' : 'sidebar-collapse', 20);
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.setAttribute('aria-expanded', String(!collapsed));
+};
 
 Views.renderNav = function () {
   const nav = document.getElementById('nav');
   const current = Views._pages.find(function (p) { return p.id === Views._current; });
   const selected = current.parent || current.id;
   nav.innerHTML = Views._pages.filter(function (p) { return !p.parent; }).map(function (p) {
-    return '<div class="nav-item' + (p.id === selected ? ' on' : '') + '" data-page="' + p.id + '">' +
-      '<span class="ic">' + UI.icon(p.icon, 17) + '</span><span>' + p.t + '</span></div>';
+    return '<button type="button" class="nav-item' + (p.id === selected ? ' on' : '') + '" data-page="' + p.id +
+      '" title="' + p.t + '" aria-label="' + p.t + '"' + (p.id === selected ? ' aria-current="page"' : '') + '>' +
+      '<span class="ic">' + UI.icon(p.icon, 17) + '</span><span class="nav-label">' + p.t + '</span></button>';
   }).join('');
   nav.querySelectorAll('[data-page]').forEach(function (item) {
-    item.addEventListener('click', function () { Views.go(item.dataset.page); });
+    item.addEventListener('click', function () {
+      Views.go(item.dataset.page);
+      nav.querySelector('[data-page="' + item.dataset.page + '"]').focus({ preventScroll: true });
+    });
   });
 };
 
@@ -76,6 +92,12 @@ Views.rerender = function () {
 };
 
 (async function boot() {
+  Views.setSidebarCollapsed(localStorage.getItem(Views._sidebarStorageKey) === 'true');
+  document.getElementById('sidebar-toggle').addEventListener('click', () => {
+    const collapsed = !document.getElementById('sidebar').classList.contains('is-collapsed');
+    Views.setSidebarCollapsed(collapsed);
+    localStorage.setItem(Views._sidebarStorageKey, String(collapsed));
+  });
   await D.init();
   Views._quick.recovering = !!D.state.activeSession;
   try {

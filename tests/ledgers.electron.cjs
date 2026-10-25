@@ -52,7 +52,34 @@ async function rendererChecks() {
   };
   const result = [];
   check(D.accounts().length === 1 && D.earnings().length === 1, '旧记录账本分配');
-  check(Array.from(document.querySelectorAll('.nav-item')).map(n => n.textContent.trim()).join('/') === '总览/收益/账号/目标/装备/角色/备份与设置', '侧栏仅保留模块入口');
+  check(Array.from(document.querySelectorAll('.nav-item')).map(n => n.textContent.trim()).join('/') === '总览/收益/账号/目标/装备/角色/设置', '侧栏仅保留模块入口');
+  const sidebar = document.getElementById('sidebar'), toggle = document.getElementById('sidebar-toggle');
+  const expandedWidth = sidebar.getBoundingClientRect().width;
+  const content = document.getElementById('view').firstElementChild;
+  const stateBeforeCollapse = JSON.stringify(D.state);
+  check(!sidebar.classList.contains('is-collapsed') && toggle.getAttribute('aria-expanded') === 'true', '菜单默认展开');
+  toggle.click();
+  check(sidebar.getBoundingClientRect().width < expandedWidth && toggle.getAttribute('aria-expanded') === 'false' &&
+    toggle.getAttribute('aria-label') === '展开菜单', '收起释放内容空间且提供展开入口');
+  check([...document.querySelectorAll('.nav-label, .logo-text, .sidebar-info')].every((element) => !element.getClientRects().length),
+    '收起后隐藏菜单、品牌和版本文字');
+  check([...document.querySelectorAll('.nav-item')].every((item) => item.tagName === 'BUTTON' && item.title && item.getAttribute('aria-label') && item.querySelector('svg')),
+    '图标菜单保留悬停名称与键盘按钮语义');
+  check(document.getElementById('view').firstElementChild === content && JSON.stringify(D.state) === stateBeforeCollapse, '收起不重建页面或改业务数据');
+  document.querySelector('#nav [data-page="backup"]').click();
+  await until(() => document.querySelector('.backup-grid'), '设置页面');
+  check(document.getElementById('page-title').textContent === '设置' &&
+    document.querySelector('.nav-item[aria-current="page"]').dataset.page === 'backup' &&
+    document.activeElement.matches('#nav [data-page="backup"]'), '收起时可进入设置且保留导航焦点');
+  check(document.querySelector('#nav [data-page="backup"] svg').innerHTML !==
+    document.querySelector('#nav [data-page="account"] svg').innerHTML, '设置与账号使用不同图标');
+  Views.go('transactions');
+  check(document.querySelector('.nav-item[aria-current="page"]').dataset.page === 'quick', '收起时子页面仍选中所属模块');
+  toggle.click();
+  check(sidebar.getBoundingClientRect().width === expandedWidth && toggle.getAttribute('aria-label') === '收起菜单' &&
+    document.querySelector('.nav-label').getClientRects().length && !sidebar.classList.contains('is-collapsed'), '展开恢复名称及原宽度');
+  check(JSON.stringify(D.state) === stateBeforeCollapse, '菜单切换不更改业务数据');
+  result.push('侧栏收起/展开、图标名称与设置入口、键盘焦点、模块选中及页面/数据保留');
   Views.go('dashboard');
   check(document.getElementById('quick-add').hidden && document.getElementById('ledger-records').hidden, '总览没有记账按钮');
   document.querySelector('#view [data-page="quick"]').click();
@@ -247,7 +274,7 @@ async function rendererChecks() {
 }
 app.whenReady().then(async () => {
   try {
-    win = new BrowserWindow({ show: false, width: 1280, height: 840, webPreferences: { preload: path.join(root, 'src/preload/preload.js'), contextIsolation: true, nodeIntegration: false } });
+    win = new BrowserWindow({ show: false, width: 1280, height: 840, webPreferences: { preload: path.join(root, 'src/preload/preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
     require('../src/main/ipc').registerIpc({ getWindow: () => win });
     win.webContents.on('console-message', (_event, level, message) => { if (level === 3) errors.push(message); });
     await win.loadFile(path.join(root, 'src/renderer/index.html'));
@@ -258,9 +285,60 @@ app.whenReady().then(async () => {
     const backups = fs.readdirSync(dir).filter(n => n.includes('.before-ledgers-'));
     assert.equal(backups.length, 1);
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, backups[0]), 'utf8')), legacy);
+    const expectedReload = await win.webContents.executeJavaScript('JSON.stringify(D.normalize(D.state))', true);
+    await win.webContents.executeJavaScript("Views.go('characters'); document.getElementById('sidebar-toggle').click()", true);
+    await win.webContents.executeJavaScript('document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))', true);
+    fs.writeFileSync(path.join(dir, 'sidebar-collapsed.png'), (await win.webContents.capturePage()).toPNG());
+    const loaded = new Promise((resolve) => win.webContents.once('did-finish-load', resolve));
+    win.webContents.reload(); await loaded;
+    const restored = await win.webContents.executeJavaScript(`new Promise((resolve, reject) => {
+      let retries = 0;
+      const check = () => {
+        if (!document.querySelectorAll('.nav-item').length) {
+          if (++retries > 150) { reject(new Error('重载启动超时')); return; }
+          setTimeout(check, 20); return;
+        }
+        if (!document.getElementById('sidebar').classList.contains('is-collapsed') ||
+          document.getElementById('sidebar-toggle').getAttribute('aria-expanded') !== 'false') {
+          reject(new Error('重载丢失侧栏收起状态')); return;
+        }
+        document.getElementById('sidebar-toggle').click();
+        if (document.getElementById('sidebar').classList.contains('is-collapsed')) { reject(new Error('重载后无法展开')); return; }
+        resolve(JSON.stringify(D.state));
+      }; check();
+    })`, true);
+    assert.deepEqual(JSON.parse(restored), JSON.parse(expectedReload));
+    await win.webContents.executeJavaScript("Views.go('characters'); document.getElementById('toast-root').replaceChildren(); document.fonts.ready", true);
+    await win.webContents.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))', true);
+    fs.writeFileSync(path.join(dir, 'sidebar-expanded.png'), (await win.webContents.capturePage()).toPNG());
+    win.setSize(1024, 680);
+    await win.webContents.executeJavaScript(`(() => {
+      const toggle = document.getElementById('sidebar-toggle');
+      if (!toggle.closest('.sidebar-foot') || document.querySelector('#topbar #sidebar-toggle')) throw new Error('侧栏开关位置不正确');
+      for (const collapsed of [false, true]) {
+        Views.setSidebarCollapsed(collapsed);
+        for (const page of ['dashboard', 'quick', 'account', 'goals', 'equipment', 'characters']) {
+          Views.go(page);
+          const heading = document.querySelector('.topbar-title').getBoundingClientRect();
+          const actions = document.querySelector('.topbar-actions').getBoundingClientRect();
+          const button = toggle.getBoundingClientRect();
+          const sidebar = document.getElementById('sidebar').getBoundingClientRect();
+          if (button.left < sidebar.left || button.right > sidebar.right || button.bottom > sidebar.bottom ||
+            sidebar.bottom - button.bottom > 32 || button.top < document.getElementById('nav').getBoundingClientRect().bottom) {
+            throw new Error('窄窗口底部侧栏开关超出边界：' + collapsed);
+          }
+          if (heading.right > actions.left || actions.right > innerWidth || button.width < 32 || button.height < 32) {
+            throw new Error('窄窗口标题与操作重叠：' + page + ' / ' + collapsed);
+          }
+        }
+      }
+    })()`, true);
+    await win.webContents.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))', true);
+    fs.writeFileSync(path.join(dir, 'sidebar-narrow.png'), (await win.webContents.capturePage()).toPNG());
     assert.deepEqual(errors, []);
     console.log('[electron] PASS:', result.checks.join('；'));
     console.log('[electron] PASS: 自动备份完整、IPC 落盘与内存一致、无页面错误');
+    console.log('[electron] PASS: 侧栏状态真实重载恢复，展开后业务数据一致；screenshots:', dir);
     win.close(); app.exit(0);
   } catch (e) {
     console.error('[electron] FAIL:', e); console.error('测试数据保留于', dir);

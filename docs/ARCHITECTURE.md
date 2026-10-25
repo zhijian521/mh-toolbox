@@ -65,6 +65,9 @@ mh-tool/
 
 ### 记账模块导航
 
+- 菜单栏底部的侧栏面板图标控制 200px / 64px 两种宽度，通过 `Views.setSidebarCollapsed` 更新布局，不重建正文或变更业务状态；`mh.sidebarCollapsed` 在本机 localStorage 保存偏好，启动时立即恢复。菜单选中使用淡朱砂底色与深红图文，收起时保持为居中方形。
+- 主菜单使用原生按钮，提供菜单名称、悬停提示和当前模块标记；重建菜单后按相同路由恢复焦点。设置页面的内部路由为 `backup`，显示名称统一为「设置」，使用独立调节图标。
+
 - 侧栏「收益」对应 `Views.quick`，「账号」对应 `Views.account`，均默认进入快速记录。
 - `transactions` 和 `accountRecords` 是模块内的完整列表，分别声明 `parent: 'quick'` 与 `parent: 'account'`；侧栏不单独渲染这些页面，选中状态跟随父模块。
 - 快速页在 `Views._pages` 中通过 `records` 指定列表路由；顶栏据此显示「查看记录」与本模块记账按钮，列表显示「返回快速记录」。
