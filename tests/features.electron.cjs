@@ -76,7 +76,7 @@ async function checks() {
   check(D.charById('c1').progress.training.attack === 12 && D.charById('c1').progress.qianyuanPills === 3 &&
     D.charById('c1').progress.schoolSkills.length === 8, '复制选中项目保留其余');
 
-  Views.charModal(D.charById('c1')); field('school', '普陀山'); click('[data-act="template"]');
+  Views.charModal(D.charById('c1')); field('school', '普陀山'); click('[data-act="keep-skills"]'); click('[data-act="template"]');
   check([...document.querySelectorAll('[data-skills="schoolSkills"] [name="skillName"]')].some((input) => input.value === '灵性'),
     '统一档案模板使用当前选择的门派');
   UI.closeModal();

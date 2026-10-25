@@ -36,7 +36,8 @@ async function checks(phase) {
     const form = document.getElementById('mform');
     if (form._xcomps[key]) form._xcomps[key].set(value);
     const input = form.querySelector('[name="' + key + '"]');
-    input.value = value; input.dispatchEvent(new Event('change', { bubbles: true }));
+    if (input.type === 'checkbox') input.checked = !!value; else input.value = value;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
   };
   const skill = (index, name, level, key = 'schoolSkills') => {
     const row = document.querySelectorAll('[data-skills="' + key + '"] .char-skill-row')[index];
@@ -50,6 +51,127 @@ async function checks(phase) {
   await until(() => document.querySelectorAll('.nav-item').length === 7, '应用启动');
   Views.go('characters');
   await document.fonts.ready;
+  if (phase === 'enhancements') {
+    const persist = D.persist;
+    let release;
+    const delay = (fail = false) => {
+      release = null;
+      D.persist = async (...args) => {
+        await new Promise((resolve) => { release = resolve; });
+        if (fail) throw new Error('保存锁定失败');
+        return persist.apply(D, args);
+      };
+    };
+    const pinned = card('c1').querySelector('[data-act="pin"]');
+    delay(); pinned.click(); await until(() => release, '置顶写入等待');
+    Views.go('account'); release();
+    await until(() => !pinned.disabled, '置顶写入完成');
+    D.persist = persist;
+    check(Views._current === 'account' && document.getElementById('page-title').textContent === '账号' && !card('c1'), '置顶异步回调不覆盖切换后的页面');
+    const added = await D.saveCharacter({ name: '删除切页验证', school: '大唐官府' });
+    Views.go('characters'); delay();
+    edit(added.id, 'del'); click('[data-act="yes"]'); await until(() => release, '删除写入等待');
+    Views.go('account'); release(); await D._commitQueue; await frame();
+    D.persist = persist;
+    check(!D.charById(added.id) && Views._current === 'account' && !document.querySelector('.char-card'), '删除异步回调刷新当前页面且不渲染错页');
+
+    Views.go('characters'); edit('c1', 'edit');
+    const sections = [...document.querySelectorAll('.char-edit-section')].map((group) => group.dataset.section);
+    check(sections.join(',') === 'basic,schoolSkills,training,petTraining,auxiliarySkills,growth', '分区顺序明确');
+    const widths = [...document.querySelectorAll('.char-edit-section')].map((group) => group.getBoundingClientRect().width);
+    check(widths.every((width) => Math.abs(width - widths[0]) < 1), '所有编辑分区占满正文宽度');
+    click('[data-section-target="growth"]'); await frame();
+    check(document.querySelector('[data-section-target="growth"]').getAttribute('aria-current') === 'location', '底部滚动受限时仍高亮所选分区');
+    click('[data-section-target="auxiliarySkills"]');
+    await frame();
+    check(document.activeElement.id === 'char-section-auxiliarySkills' && document.querySelector('.modal-body').scrollTop > 0, '分区定位滚动并聚焦对应标题');
+    check(document.querySelector('[data-section-target="auxiliarySkills"]').getAttribute('aria-current') === 'location', '切换分区后保持正确高亮');
+    const before = JSON.stringify(D.state);
+    field('note', '锁定保存验证'); delay(true); click('.modal [data-act="ok"]');
+    await until(() => release, '统一保存写入等待');
+    check([...document.querySelectorAll('.modal button, .modal input, .modal textarea')].every((element) => element.disabled), '保存期间锁定所有表单和导航操作');
+    check(document.querySelector('.modal[aria-busy="true"]') && document.querySelector('[data-act="ok"]').textContent === '保存中…', '保存状态可见');
+    const rowCount = document.querySelectorAll('.char-skill-row').length;
+    click('[data-skills="schoolSkills"] [data-act="add-row"]');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    check(document.querySelectorAll('.char-skill-row').length === rowCount && document.querySelector('.modal'), '保存期间不能新增技能或关闭表单');
+    release(); await until(() => !document.querySelector('[data-act="ok"]').disabled, '失败恢复编辑');
+    check(JSON.stringify(D.state) === before && document.querySelector('[name="note"]').value === '锁定保存验证' &&
+      !document.querySelector('[name="note"]').disabled && document.querySelector('[data-skills="schoolSkills"] [data-act="previous"]').disabled,
+    '失败保留草稿并恢复各控件原有可用状态');
+    D.persist = persist; await save();
+    check(document.activeElement.dataset.act === 'edit' && document.activeElement.closest('.char-card').dataset.id === 'c1', '保存后恢复目标角色编辑按钮焦点');
+
+    edit('c1', 'edit');
+    const oldSkills = JSON.stringify(D.charById('c1').progress.schoolSkills);
+    field('school', '普陀山');
+    check(!document.querySelector('.char-school-choice').hidden && document.querySelector('[data-act="template"]').disabled, '转门派时就地选择技能处理方式');
+    click('.modal [data-act="ok"]'); await frame();
+    check(document.querySelector('.modal') && D.charById('c1').school === '大唐官府', '未选择技能处理方式不能保存');
+    click('[data-act="keep-skills"]'); await save();
+    check(D.charById('c1').school === '普陀山' && JSON.stringify(D.charById('c1').progress.schoolSkills) === oldSkills, '明确保留时师门技能不变');
+    edit('c1', 'edit'); field('school', '大唐官府'); click('[data-act="replace-skills"]'); await save();
+    check(D.charById('c1').progress.schoolSkills.map((skill) => skill.name).join(',') === D.schoolSkillNames['大唐官府'].join(',') &&
+      D.charById('c1').progress.training.attack === 17, '替换师门模板不影响修炼');
+    edit('c1', 'edit'); field('school', '普陀山'); field('school', '大唐官府');
+    check(document.querySelector('.char-school-choice').hidden && !document.querySelector('[data-act="template"]').disabled, '切回原门派取消待选提示');
+    field('school', '普陀山'); click('[data-act="replace-skills"]'); click('.modal [data-act="cancel"]'); click('[data-act="discard"]');
+    check(D.charById('c1').school === '大唐官府', '取消转门派保留已保存档案');
+
+    await D.saveCharacterProgress('c2', { qianyuanPills: null, potentialFruits: 0 });
+    const quantities = () => {
+      for (const key of ['schoolSkills', 'auxiliarySkills', 'training', 'petTraining', 'note']) field(key, false);
+      field('qianyuanPills', true); field('potentialFruits', true);
+    };
+    edit('c1', 'copy'); quantities();
+    check(document.querySelector('[name="skipEmpty"]').checked && document.querySelector('.char-copy-preview').textContent.includes('保持原值') &&
+      document.querySelectorAll('.char-copy-table tbody tr').length === 2, '复制预览跟随选择，默认跳过未记录项');
+    await save();
+    check(D.charById('c1').progress.qianyuanPills === 3 && D.charById('c1').progress.potentialFruits === 0 &&
+      document.activeElement.dataset.act === 'copy', '跳过空数量，正常复制零值并恢复复制按钮焦点');
+    edit('c1', 'copy'); quantities(); field('skipEmpty', false); await save();
+    check(D.charById('c1').progress.qianyuanPills === null, '关闭跳过后允许完整覆盖清空');
+    edit('c1', 'copy'); field('schoolSkills', true);
+    check(document.querySelector('.char-copy-error').textContent.includes('相同门派'), '复制预览提示门派不匹配');
+    UI.closeModal();
+    return JSON.stringify(D.state);
+  }
+  if (phase === 'skillOrder') {
+    const before = JSON.stringify(D.state);
+    const progress = D.charById('c1').progress;
+    const school = progress.schoolSkills;
+    const auxiliary = progress.auxiliarySkills;
+    const row = (key, index) => document.querySelectorAll('[data-skills="' + key + '"] .char-skill-row')[index];
+    const move = (key, index, action) => row(key, index).querySelector('[data-act="' + action + '"]').click();
+    edit('c1', 'edit');
+    check(row('schoolSkills', 0).querySelector('[data-act="previous"]').disabled &&
+      row('auxiliarySkills', 3).querySelector('[data-act="next"]').disabled, '技能顺序首尾禁止越界');
+    move('schoolSkills', 0, 'next');
+    click('.modal [data-act="cancel"]');
+    check(document.querySelector('.modal-discard'), '仅排序也有未保存提醒');
+    click('[data-act="discard"]');
+    check(JSON.stringify(D.state) === before, '放弃排序保留原档案');
+    edit('c1', 'edit');
+    move('schoolSkills', 0, 'next'); move('schoolSkills', 6, 'previous');
+    move('auxiliarySkills', 3, 'previous'); move('auxiliarySkills', 0, 'next');
+    check(row('auxiliarySkills', 2).querySelector('[name="skillName"]').value === '自定义辅助' &&
+      row('auxiliarySkills', 2).querySelector('[name="skillLevel"]').value === '0' &&
+      row('auxiliarySkills', 2).querySelector('.xsel-t').textContent === '自定义技能', '移动保留自定义名称、等级零值与下拉');
+    const persist = D.persist;
+    D.persist = async () => { throw new Error('模拟技能排序失败'); };
+    click('.modal [data-act="ok"]');
+    await until(() => document.getElementById('toast-root').textContent.includes('模拟技能排序失败'), '技能排序失败提示');
+    check(document.querySelector('.modal') && JSON.stringify(D.state) === before &&
+      row('schoolSkills', 0).querySelector('[name="skillName"]').value === school[1].name, '失败保留新顺序草稿并回滚档案');
+    D.persist = persist; await save();
+    const expectedSchool = [school[1], school[0], ...school.slice(2, 5), school[6], school[5]];
+    const expectedAuxiliary = [auxiliary[1], auxiliary[0], auxiliary[3], auxiliary[2]];
+    check(JSON.stringify(D.charById('c1').progress.schoolSkills) === JSON.stringify(expectedSchool) &&
+      JSON.stringify(D.charById('c1').progress.auxiliarySkills) === JSON.stringify(expectedAuxiliary), '两个技能分区独立保存调整后的顺序和等级');
+    const displayed = [...card('c1').querySelectorAll('.char-skills dt')].map((item) => item.textContent);
+    check(displayed.join('|') === [...expectedSchool, ...expectedAuxiliary].map((item) => item.name).join('|'), '角色卡片展示保存后的技能顺序');
+    return JSON.stringify(D.state);
+  }
   if (phase === 'reload') {
     check(document.querySelectorAll('.char-card').length === 2 && !document.querySelector('.char-stats'), '重启显示全部角色养成卡片');
     const progress = D.charById('c1').progress;
@@ -229,9 +351,35 @@ app.whenReady().then(async () => {
       await new Promise((resolve) => setTimeout(resolve, 150));
       fs.writeFileSync(path.join(dir, 'characters-narrow.png'), (await win.webContents.capturePage()).toPNG());
     }
+    const sorted = await run('skillOrder');
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'data.json'))), JSON.parse(sorted));
+    const reloaded = new Promise((resolve) => win.webContents.once('did-finish-load', resolve));
+    win.webContents.reload(); await reloaded;
+    const restored = await win.webContents.executeJavaScript("new Promise(resolve => { const check = () => document.querySelectorAll('.nav-item').length ? resolve(JSON.stringify(D.state)) : setTimeout(check, 20); check(); })", true);
+    assert.deepEqual(JSON.parse(restored), JSON.parse(sorted));
+    const enhanced = await run('enhancements');
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'data.json'))), JSON.parse(enhanced));
+    if (process.argv.includes('--screenshots')) {
+      win.setSize(1280, 840);
+      await win.webContents.executeJavaScript("Views.go('characters'); Views.charModal(D.charById('c1')); document.getElementById('mform')._xcomps.school.set('普陀山'); document.querySelector('[name=school]').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('toast-root').replaceChildren()", true);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      fs.writeFileSync(path.join(dir, 'characters-school-choice.png'), (await win.webContents.capturePage()).toPNG());
+      await win.webContents.executeJavaScript("UI.closeModal(); Views.charCopyProgressModal(D.charById('c1'))", true);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      fs.writeFileSync(path.join(dir, 'characters-copy-preview.png'), (await win.webContents.capturePage()).toPNG());
+      win.setSize(620, 760);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      fs.writeFileSync(path.join(dir, 'characters-copy-narrow.png'), (await win.webContents.capturePage()).toPNG());
+      await win.webContents.executeJavaScript("UI.closeModal(); Views.charModal(D.charById('c1')); document.querySelector('[data-section-target=auxiliarySkills]').click()", true);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      fs.writeFileSync(path.join(dir, 'characters-form-narrow.png'), (await win.webContents.capturePage()).toPNG());
+      await win.webContents.executeJavaScript('UI.closeModal()', true);
+    }
     assert.deepEqual(errors, []);
     console.log('[characters] PASS: 顶部图标与编辑顺序、统一档案一次保存、技能增删/自定义/空值、修炼与装备保留');
     console.log('[characters] PASS: 置顶/分组排序、失败回滚重试、删除恢复、备份往返、真实重启、窄窗口与滚动位置');
+    console.log('[characters] PASS: 师门/辅助技能前后移、首尾边界、自定义技能零值、取消与失败重试、落盘与重启顺序');
+    console.log('[characters] PASS: 异步切页、保存锁定与恢复、焦点、分区定位、门派保留/替换/取消、复制预览与跳过空值');
     if (process.argv.includes('--screenshots')) console.log('[characters] screenshots:', dir);
     clearTimeout(deadline); win.close(); app.exit(0);
   } catch (error) {

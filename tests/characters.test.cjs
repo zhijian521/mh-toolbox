@@ -182,3 +182,60 @@ test('置顶排序校验及写入失败均恢复原顺序、档案和装备', as
   assert.equal(D.orderedCharacters()[0].id, 'c1');
   assert.equal(D.state.equipment[0].id, 'sword');
 });
+
+test('编辑与养成保存不执行新建角色的排序计算', async () => {
+  const D = domain();
+  D.orderedCharacters = () => { throw new Error('不应重排角色'); };
+  await D.saveCharacter({ name: '更新昵称' }, 'c1');
+  await D.saveCharacterProgress('c1', { qianyuanPills: 3 });
+  assert.equal(D.charById('c1').progress.qianyuanPills, 3);
+});
+
+test('复制预览跳过未记录项，保留同名等级和目标独有技能，明确的零值正常复制', async () => {
+  const D = domain();
+  await D.saveCharacter({ school: '大唐官府', progress: { qianyuanPills: 3, potentialFruits: 100, note: '保留备注',
+    training: { attack: 17, defense: 12 }, petTraining: { attack: 15 },
+    schoolSkills: [{ name: '为官之道', level: 119 }, { name: '自定义', level: 0 }],
+    auxiliarySkills: [{ name: '强身术', level: 120 }] } }, 'c1');
+  await D.saveCharacter({ school: '大唐官府', progress: { potentialFruits: 0, training: { attack: 0 },
+    schoolSkills: [{ name: '无双一击', level: 119 }, { name: '为官之道', level: '' }] } }, 'c2');
+  const snapshot = JSON.stringify(D.state);
+  const keys = ['qianyuanPills', 'potentialFruits', 'training', 'petTraining', 'schoolSkills', 'auxiliarySkills', 'note'];
+  const changes = D.characterCopyChanges('c1', 'c2', keys, true);
+  assert.equal(JSON.stringify(D.state), snapshot, '预览不修改数据');
+  assert.equal(Object.hasOwn(changes, 'qianyuanPills'), false);
+  assert.equal(Object.hasOwn(changes, 'note'), false);
+  assert.equal(changes.potentialFruits, 0);
+  assert.equal(changes.training.attack, 0); assert.equal(changes.training.defense, 12);
+  assert.deepEqual(plain(changes.schoolSkills), [{ name: '无双一击', level: 119 }, { name: '为官之道', level: 119 }, { name: '自定义', level: 0 }]);
+  await D.copyCharacterProgress('c1', 'c2', keys);
+  assert.equal(D.charById('c1').progress.qianyuanPills, 3);
+  assert.equal(D.charById('c1').progress.potentialFruits, 0);
+  assert.equal(D.charById('c1').progress.petTraining.attack, 15);
+  assert.equal(D.charById('c1').progress.auxiliarySkills[0].level, 120);
+  assert.equal(D.charById('c1').progress.note, '保留备注');
+});
+
+test('完整覆盖支持清空，复制失败回滚，限制同门派且在提交时读取最新来源', async () => {
+  const D = domain();
+  await D.saveCharacter({ school: '大唐官府', progress: { qianyuanPills: 3, training: { attack: 17 } } }, 'c1');
+  await D.saveCharacter({ school: '普陀山' }, 'c2');
+  assert.throws(() => D.characterCopyChanges('c1', 'c2', ['schoolSkills'], true), /相同门派/);
+  assert.throws(() => D.characterCopyChanges('c1', 'missing', ['training'], true), /不存在/);
+  assert.throws(() => D.characterCopyChanges('c1', 'c1', ['training'], true), /其他来源/);
+  assert.throws(() => D.characterCopyChanges('c1', 'c2', [], true), /选择/);
+  await assert.rejects(D.copyCharacterProgress('c1', 'c2', ['qianyuanPills']), /没有可复制/);
+  const before = JSON.stringify(D.state);
+  D.persist = async () => { throw new Error('复制写入失败'); };
+  await assert.rejects(D.copyCharacterProgress('c1', 'c2', ['qianyuanPills', 'training'], false), /复制写入失败/);
+  assert.equal(JSON.stringify(D.state), before);
+  D.persist = async () => {};
+  await D.copyCharacterProgress('c1', 'c2', ['qianyuanPills', 'training'], false);
+  assert.equal(D.charById('c1').progress.qianyuanPills, null);
+  assert.equal(D.charById('c1').progress.training.attack, null);
+  await D.saveCharacterProgress('c2', { qianyuanPills: 1 });
+  const sourceUpdate = D.saveCharacterProgress('c2', { qianyuanPills: 2 });
+  const copy = D.copyCharacterProgress('c1', 'c2', ['qianyuanPills']);
+  await Promise.all([sourceUpdate, copy]);
+  assert.equal(D.charById('c1').progress.qianyuanPills, 2);
+});

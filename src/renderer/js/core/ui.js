@@ -22,7 +22,8 @@ UI.closeModal = function () {
   if (!overlay) return;
   root.replaceChildren();
   if (overlay._onClose) overlay._onClose();
-  if (overlay._returnFocus && overlay._returnFocus.isConnected) overlay._returnFocus.focus();
+  const returnFocus = overlay._resolveReturnFocus ? overlay._resolveReturnFocus() : overlay._returnFocus;
+  if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
 };
 
 UI.watchForm = function (overlay) {
@@ -55,6 +56,7 @@ UI.requestCloseModal = function () {
 UI.openModal = function (opts) {
   const previous = document.querySelector('.modal-overlay');
   const returnFocus = previous && previous.contains(document.activeElement) ? previous._returnFocus : document.activeElement;
+  const resolveReturnFocus = opts.returnFocus || (previous && previous.contains(document.activeElement) ? previous._resolveReturnFocus : null);
   UI.closeModal();
   UI.closePop();
   const root = document.getElementById('modal-root');
@@ -69,6 +71,7 @@ UI.openModal = function (opts) {
     '</div>';
   const overlay = root.querySelector('.modal-overlay');
   overlay._returnFocus = returnFocus;
+  overlay._resolveReturnFocus = resolveReturnFocus;
   overlay._onClose = opts.onClose;
   overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) UI.requestCloseModal(); });
   root.querySelector('.modal-x').addEventListener('click', UI.requestCloseModal);
@@ -142,6 +145,7 @@ UI.formModal = function (opts) {
   const ov = UI.openModal({
     title: opts.title,
     wide: opts.wide,
+    returnFocus: opts.returnFocus,
     body: body,
     footer:
       '<button class="btn" data-act="cancel">取消</button>' +
@@ -256,13 +260,22 @@ UI.formModal = function (opts) {
     if (button.disabled) return;
     const discard = ov.querySelector('.modal-discard');
     if (discard) discard.remove();
-    button.disabled = true; ov._saving = true;
+    const controls = [...ov.querySelectorAll('button, input, textarea, select')].map((element) => [element, element.disabled]);
+    const label = button.textContent;
+    UI.closePop();
+    controls.forEach(([element]) => { element.disabled = true; });
+    button.textContent = '保存中…'; ov._saving = true;
+    ov.querySelector('.modal').setAttribute('aria-busy', 'true');
     try {
       await opts.onSubmit(data);
       if (ov.isConnected) UI.closeModal();
     } catch (err) {
       UI.toast(err.message || '保存失败，请重试', 'err');
-    } finally { button.disabled = false; ov._saving = false; }
+    } finally {
+      controls.forEach(([element, disabled]) => { element.disabled = disabled; });
+      button.textContent = label; ov._saving = false;
+      ov.querySelector('.modal').removeAttribute('aria-busy');
+    }
   }
 
   ov.querySelector('[data-act="ok"]').addEventListener('click', submit);

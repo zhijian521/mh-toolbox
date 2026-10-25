@@ -1,7 +1,7 @@
 'use strict';
 /* 角色档案与技能养成。 */
 Object.assign(D, {
-  /* 养成是版本 4 的可选字段，旧档案中的空值与已录入的 0 分开保存。 */
+  /* 未记录值与明确填写的 0 分开保存。 */
   characterNumber(value) {
     if (value == null || (typeof value === 'string' && !value.trim())) return null;
     if (!['number', 'string'].includes(typeof value)) return null;
@@ -64,10 +64,13 @@ Object.assign(D, {
       server: data.server === undefined && previous ? previous.server : String(data.server || '').trim(),
       progress: this.normalizeCharacterProgress(data.progress === undefined && previous ? previous.progress : data.progress),
     });
-    const positions = new Map(this.orderedCharacters().filter((item) => !item.pinned).map((item, index) => [item.id, index + 1]));
-    const snapshot = previous ? this.state.characters : this.state.characters.map((item) => positions.has(item.id) ?
-      Object.assign({}, item, { sortOrder: positions.get(item.id) }) : item);
-    this.state.characters = previous ? snapshot.map((character) => character.id === id ? saved : character) : [...snapshot, saved];
+    if (previous) {
+      this.state.characters = this.state.characters.map((character) => character.id === id ? saved : character);
+    } else {
+      const positions = new Map(this.orderedCharacters().filter((item) => !item.pinned).map((item, index) => [item.id, index + 1]));
+      this.state.characters = [...this.state.characters.map((item) => positions.has(item.id) ?
+        Object.assign({}, item, { sortOrder: positions.get(item.id) }) : item), saved];
+    }
     this.equipmentProfile(saved.id);
     return saved;
   },
@@ -77,6 +80,42 @@ Object.assign(D, {
       const character = this.charById(id);
       if (!character) throw new Error('角色不存在');
       return this.applyCharacter({ progress: Object.assign({}, this.normalizeCharacterProgress(character.progress), changes) }, id);
+    });
+  },
+
+  characterCopyChanges(id, sourceId, keys, skipEmpty) {
+    const character = this.charById(id), source = this.charById(sourceId);
+    if (!character || !source) throw new Error('来源或目标角色不存在');
+    if (id === sourceId) throw new Error('请选择其他来源角色');
+    if (!keys.length) throw new Error('请选择要复制的项目');
+    if (keys.includes('schoolSkills') && (!character.school || source.school !== character.school)) throw new Error('师门技能需选择相同门派的角色');
+    const target = this.normalizeCharacterProgress(character.progress);
+    const progress = this.normalizeCharacterProgress(source.progress);
+    const changes = {};
+    for (const key of keys) {
+      if (!Object.hasOwn(progress, key)) throw new Error('未知的角色养成项目');
+      let value = progress[key];
+      if (skipEmpty) {
+        if (Array.isArray(value)) {
+          if (!value.length) continue;
+          const existing = new Map(target[key].map((skill) => [skill.name, skill]));
+          const names = new Set(value.map((skill) => skill.name));
+          value = [...value.map((skill) => ({ name: skill.name, level: skill.level ?? (existing.get(skill.name)?.level ?? null) })),
+            ...target[key].filter((skill) => !names.has(skill.name))];
+        } else if (value && typeof value === 'object') {
+          value = Object.assign({}, target[key], Object.fromEntries(Object.entries(value).filter(([, number]) => number !== null)));
+        } else if (value == null || (typeof value === 'string' && !value.trim())) continue;
+      }
+      if (JSON.stringify(value) !== JSON.stringify(target[key])) changes[key] = value;
+    }
+    return changes;
+  },
+
+  copyCharacterProgress(id, sourceId, keys, skipEmpty = true) {
+    return this.commit(() => {
+      const changes = this.characterCopyChanges(id, sourceId, keys, skipEmpty);
+      if (!Object.keys(changes).length) throw new Error('所选项目没有可复制的变更');
+      return this.applyCharacter({ progress: Object.assign({}, this.normalizeCharacterProgress(this.charById(id).progress), changes) }, id);
     });
   },
 
