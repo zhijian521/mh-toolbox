@@ -1,9 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
-const fs = require('node:fs');
-const path = require('node:path');
+const createDomain = require('./helpers/domain.cjs');
 
 function fixture() {
   return {
@@ -22,11 +20,7 @@ function fixture() {
 }
 
 function domain(data = fixture()) {
-  const context = vm.createContext({ window: {}, localStorage: { getItem() { return null; }, setItem() {} } });
-  for (const file of ['util', 'data', 'equipment', 'online']) {
-    vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer/js/core/' + file + '.js'), 'utf8'), context);
-  }
-  const D = context.window.D;
+  const D = createDomain();
   D.state = D.normalize(data);
   D.persist = async () => {};
   return D;

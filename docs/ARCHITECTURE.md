@@ -34,7 +34,15 @@ mh-tool/
 │     └─ js/
 │        ├─ core/                # 无 UI 依赖的基础层
 │        │  ├─ util.js           # U：日期/金额/转义等纯函数
-│        │  ├─ data.js           # D：状态、常量、领域逻辑、持久化
+│        │  ├─ data.js           # D：根状态、常量与基础查询
+│        │  ├─ storage.js        # D：串行提交、失败回滚与持久化
+│        │  ├─ characters.js     # D：角色与养成
+│        │  ├─ schools.js        # D：官网门派技能静态模板
+│        │  ├─ statistics.js     # D：收益与账号统计
+│        │  ├─ ledger.js         # D：账本、库存与装备关联
+│        │  ├─ export.js         # D：CSV 编码与转义
+│        │  ├─ goals.js          # D：目标与进度历史
+│        │  ├─ migration.js      # D：备份校验与版本迁移
 │        │  ├─ equipment.js      # D：三套装备方案、玉魄、引用与迁移
 │        │  ├─ online.js         # D：在线记录、参数快照、跨日点卡结算
 │        │  └─ ui.js             # UI：Toast/弹窗/表单生成器/SVG 图标库/下拉与日历组件
@@ -64,9 +72,10 @@ mh-tool/
 
 | 方法 | 说明 |
 |---|---|
-| `loadData()` / `saveData(data)` | 读写本地数据文件 |
+| `loadData()` / `saveData(data, options)` | 读写本地数据文件 |
 | `exportData(data)` / `importData()` | 备份导出 / 导入（覆盖式） |
 | `exportJson(data, defaultName)` | 通用 JSON 导出（物品单价等） |
+| `exportCsv(text, defaultName)` | 导出 UTF-8 BOM CSV，调用系统保存对话框 |
 | `info()` | 版本、数据文件路径、平台 |
 | `winMin()` / `winMax()` / `winClose()` / `isMaximized()` | 自绘标题栏窗口控制 |
 | `onWinState(cb)` | 订阅最大化状态变化 |
@@ -77,24 +86,33 @@ mh-tool/
 | 集合 | 字段要点 |
 |---|---|
 | `characters` | id, name, level, school, server；progress（schoolSkills[]、auxiliarySkills[]：name/level；training、petTraining；qianyuanPills、potentialFruits、note）；equipmentSets[3]（name、slots：部位→装备 ID）、activeEquipmentSet、viewedEquipmentSet、pendingEquipmentSlots、soulJade（unlocked、attribute、level） |
-| `transactions` | id, ledger(earnings/account), recordType(money/item), characterId, date, kind, currency(cash/reserve/rmb), amount, category, minutes, note, fee, channel；物品包含 itemName/quantity/unitPrice/status/saleId；结算包含 itemRecordId；装备关联包含 equipmentId/gearAction |
+| `transactions` | id, ledger(earnings/account), recordType(money/item), characterId, date, kind, currency(cash/reserve/rmb), amount, category, minutes, note, fee, channel；物品包含 itemName/quantity/unitPrice/status/saleId；结算包含 itemRecordId/saleQuantity；装备关联包含 equipmentId/gearAction |
 | `sessions` | id, characterId, mode(range/duration/legacy), source(timer/manual/legacy), date, startAt/endAt（本地时间对应的时间戳）, minutes, accounts, cardPrice, cost（万）, note, createdAt |
 | `activeSession` | 未结束的 id, characterId, startAt, accounts, cardPrice, createdAt；开始即落盘，普通重启等待用户恢复 |
-| `goals` | id, characterId, type(money/gear/progress), title, target, current, unit, status, deadline, logs[] |
+| `goals` | id, characterId, type(money/gear/progress), title, target, current, unit, status, deadline, doneAt, baseProgress, logs[]（id/date/delta/note） |
 | `equipment` | id, characterId, slot, name, level, attributes, special, gems, status；玉魄含 jade（base、extra1、extra2、dustLevel、holes、enchantments[]、durability） |
 | `gearLogs` | id, equipmentId, characterId, date, action, amount, note |
 | `itemPrices` | 物品 id → 单价（**单位: 梦幻币**，与网页版单价文件互通） |
 | `quickSettings` | accounts(在线角色数), cardPrice(梦幻币/点) |
 
-> 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 4。
+> 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 5。
 
-共享账本列表和筛选位于 `views/records.js`，收益表单位于 `transactions.js`，账号快速记录、快捷表单预设和账号表单位于 `account.js`；金额、结算和装备关联逻辑集中在 `core/data.js`。
+共享账本列表和筛选位于 `views/records.js`，收益表单位于 `transactions.js`，账号快速记录、快捷表单预设和账号表单位于 `account.js`；金额、库存与装备关联在 `core/ledger.js`，统计在 `statistics.js`，CSV 编码在 `export.js`。
 
-角色养成的归一化、验证、保存和关联删除位于 `core/data.js`，卡片与分区编辑位于 `views/characters.js`。`progress` 是版本 4 的可选字段，旧档案默认未记录；空值存为 `null`，明确填写的 0 原样保存。人物五项修炼与召唤兽四项修炼独立记录，师门和辅助技能使用可增删的名称/等级列表。新建、编辑和删除写入失败时回滚内存；基础档案编辑保留养成与装备信息，JSON 备份直接携带养成字段。
+角色养成的归一化、验证、保存和关联删除位于 `core/characters.js`，卡片与分区编辑位于 `views/characters.js`。`progress` 是版本 4 的可选字段，旧档案默认未记录；空值存为 `null`，明确填写的 0 原样保存。人物五项修炼与召唤兽四项修炼独立记录，师门和辅助技能使用可增删的名称/等级列表。新建、编辑和删除写入失败时回滚内存；基础档案编辑保留养成与装备信息，JSON 备份直接携带养成字段。
 
-在线数据逻辑位于 `core/online.js`，表单、恢复提示和列表位于 `views/online.js`；`quick.js` 负责首页和计时显示。`onlineRecords` 与 `transactions` 都归属收益模块，通过内部页签切换。`D.saveSession` 同步生成每日点卡流水，`D.earningsStats` 按独立在线时长计算净时薪，活动用时不重复累计。
+在线数据逻辑位于 `core/online.js`，表单、恢复提示和列表位于 `views/online.js`；`quick.js` 负责首页，`quick-timer.js` 负责计时，`quick-items.js` 负责物品目录、速记、单价与设置。每秒 tick 仅计算当前时段，历史统计在页面渲染及筛选变化时刷新，非收益首页不扫描历史。`onlineRecords` 与 `transactions` 都归属收益模块，通过内部页签切换。`D.saveSession` 同步生成每日点卡流水，`D.earningsStats` 按独立在线时长计算净时薪，活动用时不重复累计。
 
-装备领域逻辑位于 `core/equipment.js`，在 `data.js` 之后加载。`views/equipment.js` 负责全部角色的独立装备卡片、角色仓库与属性卡；装备页不使用全局角色筛选，方案和格子事件限定在各自卡片内，进出仓库保留列表滚动位置。三套方案只引用装备 ID，当前使用和正在查看分别保存；资产 `status` 保留旧在用值兼容历史买卖，界面穿戴状态由方案引用推导。售出、删档和部位/角色变更清理引用，撤销出售只恢复持有。命魂之玉修炼存于角色，阴阳玉魄分别为独立装备资产。装备相关保存使用 `D.commitEquipment`，写入失败整体回滚内存。
+装备领域逻辑位于 `core/equipment.js`，在 `data.js` 之后加载。`views/equipment.js` 负责角色装备卡片与浮卡，`equipment-warehouse.js` 负责仓库，`equipment-modals.js` 负责选择、编辑和方案弹窗。装备按 ID 建索引，仓库一次构建当前角色的方案引用索引；装备页不使用全局角色筛选，方案和格子事件限定在各自卡片内，进出仓库保留列表滚动位置。三套方案只引用装备 ID，当前使用和正在查看分别保存；资产 `status` 保留旧在用值兼容历史买卖，界面穿戴状态由方案引用推导。售出、删档和部位/角色变更清理引用，撤销出售只恢复持有。命魂之玉修炼存于角色，阴阳玉魄分别为独立装备资产。装备相关保存使用 `D.commitEquipment`，写入失败整体回滚内存。
+
+## 写入、导入与交互边界
+
+- 新 UI 写入调用领域方法或 `D.commit(change, options)`，同步变更函数在队列中读取最新状态。所有提交共用串行队列，写入失败整体恢复快照，后续操作继续执行。不要在队列外修改状态再调用 persist。
+- `D.replaceState` 先校验并归一化，再事务替换；拒绝单价文件、重复 ID 和未来版本。导入、清空和示例覆盖前保存本地副本，写入失败不改变计时状态。
+- 版本 5 新增成交数量和目标历史基础进度。从版本 4 升级前复制 `data.json.before-inventory-时间戳.bak`；保存仍使用完整 JSON 和原子替换。
+- 下拉与日期保留触发按钮和无障碍名称；Esc 优先关闭浮层。弹窗统一关闭回调、焦点限制和返回。自定义表单调用 `UI.watchForm`，未保存提醒留在原弹窗内，保存中阻止关闭。
+- CSV 复用 `Views.filteredRecords`，导出全部匹配记录，不受 50 条分页限制，带 BOM、单位与公式防护。
+- `scripts/test.cjs` 自动发现 `.test.cjs` 和 `.electron.cjs`，共享加载器/隔离窗口在 `tests/helpers`；CI 使用 Windows / Node 22 执行语法、领域和真实窗口测试。
 
 ## 如何新增一个页面
 
@@ -103,11 +121,11 @@ mh-tool/
 3. `layout/app.js` 的 `Views._pages` 注册 `{ id, t, icon, sub }`（图标用 `UI.icon` 已有条目或先在 `core/ui.js` 补）；
    模块内二级页面增加 `parent`，父模块通过 `records` 指向记录列表，无需新增侧栏菜单。
 4. 样式：按 `STYLE_GUIDE.md` 写入 `styles.css` 对应分区（新页面在文件尾部新增一节）；
-5. 验证：`npm run smoke` + `npm run shots`，截图确认。
+5. 验证：`npm run check`、`npm test`、`npm run test:electron`。UI 截图使用隔离测试窗口，避免覆盖日常数据。
 
 ## 如何新增快速记录物品
 
-在 `views/quick.js` 的 `QUICK_ITEMS` / `QUICK_UNSET` 数组加一行（图标放 `assets/images/online-record/`），无需其他改动。
+在 `views/quick-items.js` 的 `QUICK_ITEMS` / `QUICK_UNSET` 数组加一行（图标放 `assets/images/online-record/`），无需其他改动。
 
 ## 开发与打包
 

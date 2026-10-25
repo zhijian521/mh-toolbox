@@ -152,18 +152,12 @@ Views.accountModal = function (tx, moving, preset) {
       return '';
     },
     onSubmit: async function (data) {
-      const previousEquipment = tx && tx.equipmentId;
       const record = Object.assign({}, tx || { id: U.uid(), createdAt: Date.now() }, data, {
         ledger: 'account', recordType: 'money', minutes: 0, fee: data.fee || 0,
         equipmentId: ['装备交易', '养成投入'].includes(data.category) ? data.equipmentId : '',
         gearAction: ['装备交易', '养成投入'].includes(data.category) ? data.gearAction : ''
       });
-      await D.commitEquipment(() => {
-        if (isNew) D.state.transactions.push(record);
-        else Object.assign(D.state.transactions.find((item) => item.id === tx.id), record);
-        D.syncAccountEquipment(record);
-        if (previousEquipment && previousEquipment !== record.equipmentId) D.syncEquipmentStatus(previousEquipment);
-      });
+      await D.saveTransaction(record, tx && tx.id);
       UI.toast(moving ? '已转入账号账本' : '已保存'); Views.rerender();
     }
   });

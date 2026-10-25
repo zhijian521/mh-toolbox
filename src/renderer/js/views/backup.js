@@ -47,13 +47,18 @@ Views.backup = async function () {
   el.querySelector('[data-act="import"]').addEventListener('click', async function () {
     const r = await window.mh.importData();
     if (!r.ok) { if (!r.canceled) UI.toast('导入失败：' + (r.error || '文件格式错误'), 'err'); return; }
-    const ok = await UI.confirmModal({ title: '导入备份', message: '导入将覆盖当前全部数据，确定继续吗？', danger: true, confirmText: '覆盖导入' });
+    let preview;
+    try { D.validateBackup(r.data); preview = D.normalize(r.data); }
+    catch (error) { UI.toast(error.message, 'err'); return; }
+    const ok = await UI.confirmModal({ title: '导入备份', message: '备份含 ' + preview.characters.length + ' 个角色、' +
+      preview.transactions.length + ' 条收支、' + preview.goals.length + ' 个目标。将覆盖当前全部数据，覆盖前会保存本地副本，确定继续吗？', danger: true, confirmText: '覆盖导入' });
     if (!ok) return;
-    D.state = D.normalize(r.data);
+    try { await D.replaceState(r.data); }
+    catch (error) { UI.toast(error.message, 'err'); return; }
     Views.clearQuickTimer();
     Views._quick.recovering = !!D.state.activeSession;
     D.setCharFilter('all');
-    await D.persist();
+
     Views.refreshHeader();
     UI.toast('导入成功 ✓');
     Views.backup();
@@ -64,10 +69,11 @@ Views.backup = async function () {
     if (!ok1) return;
     const ok2 = await UI.confirmModal({ title: '再次确认', message: '真的确定吗？建议先导出备份！', danger: true, confirmText: '确认清空' });
     if (!ok2) return;
-    D.state = D.normalize({});
+    try { await D.replaceState({ characters: [], transactions: [] }, 'wipe'); }
+    catch (error) { UI.toast(error.message, 'err'); return; }
     Views.clearQuickTimer();
     D.setCharFilter('all');
-    await D.persist();
+
     Views.refreshHeader();
     UI.toast('已清空');
     Views.backup();

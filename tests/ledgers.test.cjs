@@ -1,14 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
-const fs = require('node:fs');
-const path = require('node:path');
-function domain() {
-  const context = vm.createContext({ window: {}, localStorage: { getItem() { return null; }, setItem() {} } });
-  for (const file of ['util', 'data', 'equipment', 'online']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer/js/core/' + file + '.js'), 'utf8'), context);
-  return context.window.D;
-}
+const domain = require('./helpers/domain.cjs');
 function fixture() {
   return { characters: [{ id: 'c1' }, { id: 'c2' }], transactions: [
     { id: 'e1', characterId: 'c1', date: '2026-10-01', kind: 'income', amount: 100, currency: 'cash', category: '捉鬼' },
@@ -25,7 +18,7 @@ test('旧数据按账本迁移，金额和原始备份对象不变，重复迁�
   const D = domain(), original = fixture(), before = JSON.stringify(original);
   const first = D.normalize(original);
   assert.equal(JSON.stringify(original), before);
-  assert.equal(first.schemaVersion, 4);
+  assert.equal(first.schemaVersion, D.schemaVersion);
   assert.equal(first.transactions.find(t => t.id === 'g1').ledger, 'account');
   assert.equal(first.transactions.find(t => t.id === 'g1').amount, 620);
   assert.equal(first.transactions.find(t => t.id === 'q1').recordType, 'item');

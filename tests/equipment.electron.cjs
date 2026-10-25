@@ -3,12 +3,10 @@
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('node:os');
+const { isolate } = require('./helpers/electron.cjs');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-equipment-test-'));
-app.setPath('userData', dir);
-app.disableHardwareAcceleration();
+const dir = isolate('equipment');
 const legacy = {
   schemaVersion: 3,
   characters: [{ id: 'c1', name: '轻舟听雨', level: 109, school: '大唐官府', server: '紫禁城' },

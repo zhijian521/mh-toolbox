@@ -1,16 +1,10 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
-const fs = require('node:fs');
-const path = require('node:path');
 
+const createDomain = require('./helpers/domain.cjs');
 function domain() {
-  const context = vm.createContext({ window: {}, localStorage: { getItem() { return null; }, setItem() {} } });
-  for (const file of ['util', 'data', 'equipment', 'online']) {
-    vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer/js/core/' + file + '.js'), 'utf8'), context);
-  }
-  const D = context.window.D;
+  const D = createDomain();
   D.state = D.normalize({ schemaVersion: 4, characters: [{ id: 'c1', name: '轻舟', level: 109 }, { id: 'c2', name: '山月' }],
     equipment: [{ id: 'sword', characterId: 'c1', slot: '武器', name: '测试刀', status: 'stored' }] });
   D.persist = async () => {};

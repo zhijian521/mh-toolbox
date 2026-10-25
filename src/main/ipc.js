@@ -45,12 +45,13 @@ function registerIpc(opts) {
     }
   });
 
-  ipcMain.handle('mh:saveData', (_e, data) => {
+  ipcMain.handle('mh:saveData', (_e, data, options = {}) => {
     try {
       const file = dataFilePath();
       const oldVersion = fs.existsSync(file) ? readJson(file).schemaVersion : data.schemaVersion;
-      if (data.schemaVersion >= 3 && (!oldVersion || oldVersion < data.schemaVersion)) {
-        const suffix = oldVersion === 3 ? 'equipment' : oldVersion === 2 ? 'online' : 'ledgers';
+      if (fs.existsSync(file) && (options.backupReason || data.schemaVersion >= 3 && (!oldVersion || oldVersion < data.schemaVersion))) {
+        const suffix = ['import', 'wipe', 'demo'].includes(options.backupReason) ? options.backupReason :
+          oldVersion === 4 ? 'inventory' : oldVersion === 3 ? 'equipment' : oldVersion === 2 ? 'online' : 'ledgers';
         fs.copyFileSync(file, file + '.before-' + suffix + '-' + Date.now() + '.bak');
       }
       atomicWriteJson(file, data);
@@ -67,6 +68,19 @@ function registerIpc(opts) {
   }));
 
   /* ---- 备份与导出 ---- */
+  ipcMain.handle('mh:exportCsv', async (_e, text, defaultName) => {
+    if (typeof text !== 'string') return { ok: false, error: 'CSV 内容格式不正确' };
+    const r = await dialog.showSaveDialog(getWindow && getWindow(), {
+      title: '导出当前筛选记录', defaultPath: path.basename(defaultName || '记录.csv'),
+      filters: [{ name: 'CSV 表格', extensions: ['csv'] }]
+    });
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+    try {
+      fs.writeFileSync(r.filePath, text, 'utf8');
+      return { ok: true, path: r.filePath };
+    } catch (error) { return { ok: false, error: error.message }; }
+  });
+
   ipcMain.handle('mh:exportData', async (_e, data) => {
     const w = getWindow && getWindow();
     const stamp = new Date().toISOString().slice(0, 10);

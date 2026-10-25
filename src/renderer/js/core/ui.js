@@ -16,40 +16,82 @@ UI.toast = function (msg, type) {
 };
 
 UI.closeModal = function () {
-  if (UI.closePop) UI.closePop();
+  UI.closePop();
   const root = document.getElementById('modal-root');
-  root.innerHTML = '';
+  const overlay = root.querySelector('.modal-overlay');
+  if (!overlay) return;
+  root.replaceChildren();
+  if (overlay._onClose) overlay._onClose();
+  if (overlay._returnFocus && overlay._returnFocus.isConnected) overlay._returnFocus.focus();
+};
+
+UI.watchForm = function (overlay) {
+  const snapshot = () => JSON.stringify([
+    ...[...overlay.querySelectorAll('input, textarea, select')].map((el) => [el.name, el.type === 'checkbox' ? el.checked : el.value]),
+    ...[...overlay.querySelectorAll('.seg[data-key]')].map((el) => [el.dataset.key, el.dataset.val]),
+  ]);
+  const initial = snapshot();
+  overlay._isDirty = () => snapshot() !== initial;
+};
+
+UI.requestCloseModal = function () {
+  const overlay = document.querySelector('.modal-overlay');
+  if (!overlay || overlay._saving) return;
+  if (!overlay._isDirty || !overlay._isDirty()) { UI.closeModal(); return; }
+  if (overlay.querySelector('.modal-discard')) return;
+  const previous = document.activeElement;
+  const notice = document.createElement('div');
+  notice.className = 'modal-discard';
+  notice.setAttribute('role', 'group');
+  notice.setAttribute('aria-label', '未保存的修改');
+  notice.innerHTML = '<span>修改尚未保存</span><button class="btn btn-sm" data-act="continue">继续编辑</button>' +
+    '<button class="btn btn-sm btn-danger" data-act="discard">放弃修改</button>';
+  overlay.querySelector('.modal').appendChild(notice);
+  notice.querySelector('[data-act="continue"]').onclick = () => { notice.remove(); if (previous.isConnected) previous.focus(); };
+  notice.querySelector('[data-act="discard"]').onclick = () => { if (!overlay._saving) UI.closeModal(); };
+  notice.querySelector('button').focus();
 };
 
 UI.openModal = function (opts) {
+  const previous = document.querySelector('.modal-overlay');
+  const returnFocus = previous && previous.contains(document.activeElement) ? previous._returnFocus : document.activeElement;
+  UI.closeModal();
   UI.closePop();
   const root = document.getElementById('modal-root');
   root.innerHTML =
     '<div class="modal-overlay">' +
-      '<div class="modal' + (opts.wide ? ' wide' : '') + '">' +
-        '<div class="modal-head"><h3>' + U.esc(opts.title) + '</h3>' +
-        '<button class="modal-x" title="关闭">✕</button></div>' +
+      '<div class="modal' + (opts.wide ? ' wide' : '') + '" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">' +
+        '<div class="modal-head"><h3 id="modal-title">' + U.esc(opts.title) + '</h3>' +
+        '<button class="modal-x" title="关闭" aria-label="关闭">✕</button></div>' +
         '<div class="modal-body">' + (opts.body || '') + '</div>' +
         (opts.footer ? '<div class="modal-foot">' + opts.footer + '</div>' : '') +
       '</div>' +
     '</div>';
   const overlay = root.querySelector('.modal-overlay');
-  overlay.addEventListener('mousedown', function (e) { if (e.target === overlay) UI.closeModal(); });
-  root.querySelector('.modal-x').addEventListener('click', UI.closeModal);
+  overlay._returnFocus = returnFocus;
+  overlay._onClose = opts.onClose;
+  overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) UI.requestCloseModal(); });
+  root.querySelector('.modal-x').addEventListener('click', UI.requestCloseModal);
+  requestAnimationFrame(() => {
+    if (!overlay.isConnected || document.querySelector('.xpop') || overlay.contains(document.activeElement)) return;
+    const field = [...overlay.querySelectorAll('.modal-body input:not([type="hidden"]), .modal-body textarea, .modal-body .xsel')]
+      .find((el) => el.getClientRects().length && !el.closest('[hidden]'));
+    (field || overlay.querySelector('[data-act="no"], .modal-x')).focus();
+  });
   return overlay;
 };
 
 UI.confirmModal = function (opts) {
-  return new Promise(function (resolve) {
+  return new Promise((resolve) => {
     const ov = UI.openModal({
       title: opts.title || '确认操作',
       body: '<p style="line-height:1.7">' + U.esc(opts.message || '确定要执行该操作吗？') + '</p>',
-      footer:
-        '<button class="btn" data-act="no">取消</button>' +
-        '<button class="btn ' + (opts.danger ? 'btn-danger' : 'btn-gold') + '" data-act="yes">' + U.esc(opts.confirmText || '确定') + '</button>'
+      footer: '<button class="btn" data-act="no">取消</button>' +
+        '<button class="btn ' + (opts.danger ? 'btn-danger' : 'btn-gold') + '" data-act="yes">' + U.esc(opts.confirmText || '确定') + '</button>',
+      onClose: () => resolve(false),
     });
-    ov.querySelector('[data-act="no"]').addEventListener('click', function () { UI.closeModal(); resolve(false); });
-    ov.querySelector('[data-act="yes"]').addEventListener('click', function () { UI.closeModal(); resolve(true); });
+    ov.querySelector('[data-act="no"]').onclick = UI.requestCloseModal;
+    ov.querySelector('[data-act="yes"]').onclick = () => { resolve(true); UI.closeModal(); };
   });
 };
 
@@ -105,7 +147,7 @@ UI.formModal = function (opts) {
       '<button class="btn btn-gold" data-act="ok">' + U.esc(opts.submitText || '保存') + '</button>'
   });
   const form = ov.querySelector('#mform');
-  ov.querySelector('[data-act="cancel"]').addEventListener('click', UI.closeModal);
+  ov.querySelector('[data-act="cancel"]').addEventListener('click', UI.requestCloseModal);
 
   /* 分段选择器交互 */
   ov.querySelectorAll('.seg').forEach(function (seg) {
@@ -127,8 +169,8 @@ UI.formModal = function (opts) {
     const h = m.querySelector('input[type="hidden"]');
     const initVal = h ? h.value : '';
     form._xcomps[f.key] = f.type === 'select'
-      ? UI.select(m, { name: f.key, options: f.options, value: initVal, placeholder: f.placeholder })
-      : UI.date(m, { name: f.key, value: initVal, placeholder: f.placeholder || '选择日期' });
+      ? UI.select(m, { name: f.key, options: f.options, value: initVal, placeholder: f.placeholder, label: f.label })
+      : UI.date(m, { name: f.key, value: initVal, placeholder: f.placeholder || '选择日期', label: f.label });
     m.querySelector('button').setAttribute('aria-label', f.label);
   });
 
@@ -171,7 +213,10 @@ UI.formModal = function (opts) {
         return;
       }
       const el = form.querySelector('[name="' + key + '"]');
-      if (el) el.value = v;
+      if (el) {
+        if (f.type === 'check') el.checked = !!v;
+        else el.value = v;
+      }
     },
     setOptions(key, options) {
       if (form._xcomps && form._xcomps[key] && form._xcomps[key].setOptions) {
@@ -208,18 +253,21 @@ UI.formModal = function (opts) {
     if (error) { UI.toast(error, 'err'); return; }
     const button = ov.querySelector('[data-act="ok"]');
     if (button.disabled) return;
-    button.disabled = true;
+    const discard = ov.querySelector('.modal-discard');
+    if (discard) discard.remove();
+    button.disabled = true; ov._saving = true;
     try {
       await opts.onSubmit(data);
       if (ov.isConnected) UI.closeModal();
     } catch (err) {
       UI.toast(err.message || '保存失败，请重试', 'err');
-    } finally { button.disabled = false; }
+    } finally { button.disabled = false; ov._saving = false; }
   }
 
   ov.querySelector('[data-act="ok"]').addEventListener('click', submit);
   form.addEventListener('submit', function (e) { e.preventDefault(); submit(); });
   if (opts.onRender) opts.onRender(form, api, ov);
+  UI.watchForm(ov);
   return api;
 };
 
@@ -275,11 +323,13 @@ Object.assign(UI.icons, {
 
 
 /* ---------- 弹层基座（下拉菜单 / 日历共用） ---------- */
-UI.closePop = function () {
+UI.closePop = function (restoreFocus) {
   const old = document.querySelector('.xpop');
   if (old) {
     if (old._anchor && old.id && old._anchor.getAttribute('aria-describedby') === old.id) old._anchor.removeAttribute('aria-describedby');
+    if (old._anchor) { old._anchor.setAttribute('aria-expanded', 'false'); old._anchor.removeAttribute('aria-controls'); }
     old.remove();
+    if (restoreFocus && old._anchor && old._anchor.isConnected) old._anchor.focus();
   }
   document.removeEventListener('mousedown', UI._popOut, true);
 };
@@ -299,11 +349,14 @@ UI.openPop = function (anchor, contentHtml, opts) {
   const pop = document.createElement('div');
   pop.className = 'xpop';
   pop._anchor = anchor;
+  pop.id = 'xpop-' + U.uid();
+  anchor.setAttribute('aria-expanded', 'true');
+  anchor.setAttribute('aria-controls', pop.id);
   pop.innerHTML = contentHtml;
   document.body.appendChild(pop);
   const r = anchor.getBoundingClientRect();
   pop.style.visibility = 'hidden';
-  requestAnimationFrame(function () {
+  {
     const pw = pop.offsetWidth, ph = pop.offsetHeight;
     let left = opts.align === 'right' ? r.right - pw : r.left;
     left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
@@ -312,75 +365,91 @@ UI.openPop = function (anchor, contentHtml, opts) {
     pop.style.left = left + 'px';
     pop.style.top = top + 'px';
     pop.style.visibility = '';
-  });
+  }
   document.addEventListener('mousedown', UI._popOut, true);
   return pop;
 };
 
-document.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape') UI.closePop();
+document.addEventListener('keydown', function (event) {
+  if (event.defaultPrevented) return;
+  if (event.key === 'Escape') {
+    if (document.querySelector('.xpop')) UI.closePop(true);
+    else UI.requestCloseModal();
+    event.preventDefault();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const overlay = document.querySelector('.modal-overlay');
+  if (!overlay) return;
+  const focusable = [...overlay.querySelectorAll('button:not([disabled]), input:not([type="hidden"]):not([disabled]), textarea, [tabindex="0"]')]
+    .filter((el) => el.getClientRects().length && !el.closest('[hidden]'));
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if (!first) { event.preventDefault(); return; }
+  if (event.shiftKey && (document.activeElement === first || !overlay.contains(document.activeElement))) {
+    event.preventDefault(); last.focus();
+  } else if (!event.shiftKey && (document.activeElement === last || !overlay.contains(document.activeElement))) {
+    event.preventDefault(); first.focus();
+  }
 });
 
 /* ---------- 自定义下拉选择 ---------- */
-UI.select = function (mount, opts) {
-  opts = opts || {};
+UI.select = function (mount, opts = {}) {
   if (typeof mount === 'string') mount = document.querySelector(mount);
   if (!mount) return null;
-  const norm = function (o) { return typeof o === 'string' ? { v: o, t: o } : o; };
+  const norm = (option) => typeof option === 'string' ? { v: option, t: option } : option;
   let options = (opts.options || []).map(norm);
-  let value = (opts.value != null && opts.value !== '') ? String(opts.value) : (options.length ? String(options[0].v) : '');
-  let trigger = null;
-
-  function curLabel() {
-    const cur = options.find(function (o) { return String(o.v) === value; });
-    return cur ? cur.t : (opts.placeholder || '请选择');
-  }
-  function syncHidden(v) {
-    const h = mount.querySelector('input[type="hidden"]');
-    if (h) h.value = v;
-  }
-  function renderTrigger() {
-    mount.innerHTML = '<input type="hidden"' + (opts.name ? ' name="' + U.esc(opts.name) + '"' : '') + ' value="' + U.esc(value) + '">' +
-      '<button type="button" class="xsel"><span class="xsel-t">' + U.esc(curLabel()) + '</span>' + UI.icon('chev-down', 13) + '</button>';
-    trigger = mount.querySelector('button');
-    trigger.addEventListener('click', function (e) {
-      e.stopPropagation();
-      openMenu();
+  let value = opts.value != null ? String(opts.value) : (options.length ? String(options[0].v) : '');
+  mount.innerHTML = '<input type="hidden"' + (opts.name ? ' name="' + U.esc(opts.name) + '"' : '') + '>' +
+    '<button type="button" class="xsel" aria-haspopup="listbox" aria-expanded="false" aria-label="' +
+    U.esc(opts.label || opts.placeholder || '选择选项') + '"><span class="xsel-t"></span>' + UI.icon('chev-down', 13) + '</button>';
+  const trigger = mount.querySelector('button');
+  const render = () => {
+    mount.querySelector('input').value = value;
+    const current = options.find((option) => String(option.v) === value);
+    trigger.querySelector('.xsel-t').textContent = current ? current.t : opts.placeholder || '请选择';
+  };
+  function openMenu(direction) {
+    const pop = UI.openPop(trigger, '<div class="xmenu" role="listbox" aria-label="' +
+      U.esc(trigger.getAttribute('aria-label')) + '">' + options.map((option) => {
+      const on = String(option.v) === value;
+      return '<div class="xitem' + (on ? ' on' : '') + '" role="option" aria-selected="' + on + '" tabindex="-1" data-v="' + U.esc(option.v) + '">' +
+        '<span class="xitem-t">' + U.esc(option.t) + '</span>' + (on ? UI.icon('check', 13) : '') + '</div>';
+    }).join('') + '</div>', { align: opts.align });
+    const items = [...pop.querySelectorAll('.xitem')];
+    let index = options.findIndex((option) => String(option.v) === value);
+    if (index < 0) index = direction === -1 ? items.length - 1 : 0;
+    const focus = (next) => {
+      if (!items.length) return;
+      index = (next + items.length) % items.length;
+      items[index].focus(); items[index].scrollIntoView({ block: 'nearest' });
+    };
+    items.forEach((item) => item.onclick = () => {
+      value = item.dataset.v; render(); UI.closePop(true);
+      mount.dispatchEvent(new Event('change', { bubbles: true }));
+      if (opts.onChange) opts.onChange(value);
     });
+    pop.onkeydown = (event) => {
+      if (event.key === 'Tab') { UI.closePop(true); return; }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); focus(index + (event.key === 'ArrowDown' ? 1 : -1)); }
+      if (event.key === 'Home' || event.key === 'End') { event.preventDefault(); focus(event.key === 'Home' ? 0 : items.length - 1); }
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (items[index]) items[index].click(); }
+    };
+    focus(index);
   }
-  function openMenu() {
-    const pop = UI.openPop(trigger,
-      '<div class="xmenu">' + options.map(function (o) {
-        const on = String(o.v) === value;
-        return '<div class="xitem' + (on ? ' on' : '') + '" data-v="' + U.esc(o.v) + '">' +
-          '<span class="xitem-t">' + U.esc(o.t) + '</span>' + (on ? UI.icon('check', 13) : '') + '</div>';
-      }).join('') + '</div>',
-      { align: opts.align });
-    pop.querySelectorAll('.xitem').forEach(function (item) {
-      item.addEventListener('click', function () {
-        value = item.dataset.v;
-        renderTrigger();
-        syncHidden(value);
-        UI.closePop();
-        mount.dispatchEvent(new Event('change', { bubbles: true }));
-        if (opts.onChange) opts.onChange(value);
-      });
-    });
-    trigger.focus();
-  }
-  renderTrigger();
+  trigger.onclick = (event) => { event.stopPropagation(); if (trigger.getAttribute('aria-expanded') === 'true') UI.closePop(true); else openMenu(); };
+  trigger.onkeydown = (event) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); openMenu(event.key === 'ArrowUp' ? -1 : 1); }
+  };
+  render();
   return {
-    get: function () { return value; },
-    set: function (v) { value = (v == null ? '' : String(v)); renderTrigger(); syncHidden(value); },
-    setOptions: function (newOptions) {
-      options = (newOptions || []).map(norm);
-      if (!options.some(function (o) { return String(o.v) === value; })) {
-        value = options.length ? String(options[0].v) : '';
-      }
-      renderTrigger();
-      syncHidden(value);
+    get: () => value,
+    set: (next) => { value = next == null ? '' : String(next); render(); },
+    setOptions: (next) => {
+      options = (next || []).map(norm);
+      if (!options.some((option) => String(option.v) === value)) value = options.length ? String(options[0].v) : '';
+      render();
     },
-    el: mount
+    el: mount,
   };
 };
 
@@ -399,14 +468,21 @@ UI.date = function (mount, opts) {
     if (h) h.value = v;
   }
   function renderTrigger() {
-    mount.innerHTML = '<input type="hidden"' + (opts.name ? ' name="' + U.esc(opts.name) + '"' : '') + ' value="' + U.esc(value) + '">' +
-      '<button type="button" class="xsel"' + (opts.label ? ' aria-label="' + U.esc(opts.label) + '"' : '') + '><span class="xsel-t' + (value ? '' : ' ph') + '">' + U.esc(value || opts.placeholder || '选择日期') + '</span>' + UI.icon('calendar', 13) + '</button>';
-    trigger = mount.querySelector('button');
-    trigger.addEventListener('click', function (e) {
-      e.stopPropagation();
-      if (value) { const d = U.parseDate(value); vy = d.getFullYear(); vm = d.getMonth(); }
-      openCal();
-    });
+    if (!trigger) {
+      mount.innerHTML = '<input type="hidden"' + (opts.name ? ' name="' + U.esc(opts.name) + '"' : '') + '>' +
+        '<button type="button" class="xsel" aria-haspopup="dialog" aria-expanded="false" aria-label="' + U.esc(opts.label || opts.placeholder || '选择日期') +
+        '"><span class="xsel-t"></span>' + UI.icon('calendar', 13) + '</button>';
+      trigger = mount.querySelector('button');
+      trigger.onclick = (event) => {
+        event.stopPropagation();
+        if (trigger.getAttribute('aria-expanded') === 'true') { UI.closePop(true); return; }
+        if (value) { const date = U.parseDate(value); vy = date.getFullYear(); vm = date.getMonth(); }
+        openCal();
+      };
+    }
+    mount.querySelector('input').value = value;
+    trigger.querySelector('.xsel-t').textContent = value || opts.placeholder || '选择日期';
+    trigger.querySelector('.xsel-t').classList.toggle('ph', !value);
   }
   function dayHtml() {
     const base = new Date(vy, vm, 1);
@@ -426,7 +502,7 @@ UI.date = function (mount, opts) {
   function openCal() {
     const title = vy + ' 年 ' + (vm + 1) + ' 月';
     const pop = UI.openPop(trigger,
-      '<div class="xcal">' +
+      '<div class="xcal" role="dialog" aria-label="选择日期">' +
         '<div class="xcal-head">' +
           '<button type="button" class="xcal-nav" data-nav="-1" title="上个月">' + UI.icon('chev-left', 14) + '</button>' +
           '<div class="xcal-title">' + U.esc(title) + '</div>' +

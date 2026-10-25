@@ -456,7 +456,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .char-training-values { display: flex; flex-direction: column; gap: 6px; }
 .char-training-values dd:not(.is-empty) { color: var(--blue); }
 .char-note { margin-top: 10px; color: var(--ink-2); font-size: 11px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
-.char-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+.char-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 14px; }
 .char-form-hint { margin-bottom: 14px; color: var(--ink-3); font-size: 11px; line-height: 1.8; }
 .char-skill-labels, .char-skill-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px 44px; gap: 8px; align-items: center; }
 .char-skill-labels { margin-bottom: 6px; color: var(--ink-3); font-size: 11px; }
@@ -522,7 +522,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .frow .req::after { content: " *"; color: var(--red); }
 .seg { display: flex; background: var(--paper-2); border: 1px solid var(--line-2); border-radius: 3px; padding: 2px; gap: 2px; }
 .seg-btn {
-  flex: 1; border: none; background: transparent; color: var(--ink-2);
+  flex: 1; border: none; background: transparent; color: var(--ink-2); white-space: nowrap;
   padding: 4px 8px; border-radius: 2px; cursor: pointer;
   font-size: 12px; font-family: inherit; transition: all .1s;
 }
@@ -770,3 +770,8 @@ body { display: flex; flex-direction: column; }
 .online-recent { margin-top: 14px; }
 .quick-controls { gap: 8px; }
 .online-running-note { margin: -4px 0 12px; }
+
+/* 通用表单：未保存提示与键盘焦点。 */
+.modal-discard { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 20px; background: var(--panel2); color: var(--muted); font-size: 12px; }
+.modal-discard > span { margin-right: auto; }
+.xitem:focus-visible, .xday:focus-visible { outline: 1px solid var(--gold); outline-offset: -2px; background: var(--panel2); }

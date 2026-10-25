@@ -96,9 +96,6 @@ Views.rerender = function () {
     const page = Views._pages.find(function (p) { return p.id === Views._current; });
     Views.go(page.parent || page.records);
   });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') UI.closeModal();
-  });
   const hideEquipmentTip = function (event) {
     const pop = document.querySelector('.eq-tooltip-pop');
     if (!pop) return;

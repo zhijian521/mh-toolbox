@@ -38,6 +38,10 @@ U.fmtMoney = function (v) {
   return (Number.isInteger(r) ? r : r.toFixed(2)) + ' 万';
 };
 
+U.fmtNumber = function (value) {
+  return Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+};
+
 U.fmtInt = function (v) {
   if (v == null || isNaN(v)) return '0';
   return Math.round(v).toLocaleString('zh-CN');

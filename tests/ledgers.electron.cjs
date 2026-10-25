@@ -3,12 +3,10 @@
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('node:os');
+const { isolate } = require('./helpers/electron.cjs');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-ledger-test-'));
-app.setPath('userData', dir);
-app.disableHardwareAcceleration();
+const dir = isolate('ledgers');
 const legacy = {
   characters: [{ id: 'c1', name: '测试角色', school: '大唐官府' }, { id: 'c2', name: '测试小号' }],
   transactions: [

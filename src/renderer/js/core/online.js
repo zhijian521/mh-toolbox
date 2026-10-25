@@ -72,15 +72,7 @@ D.makeSession = function (input) {
 
 /** 保存在线变更及流水，失败时恢复内存，允许用户重试。 */
 D.commitOnline = async function (change) {
-  const previous = { sessions: this.state.sessions, transactions: this.state.transactions, activeSession: this.state.activeSession };
-  try {
-    const result = change();
-    await this.persist();
-    return result;
-  } catch (error) {
-    Object.assign(this.state, previous);
-    throw error;
-  }
+  return this.commit(change);
 };
 
 D.syncSession = function (session) {
@@ -107,6 +99,9 @@ D.saveSession = async function (input, finishActiveId) {
   if (error) throw new Error(error);
   if (finishActiveId && (!this.state.activeSession || this.state.activeSession.id !== finishActiveId)) throw new Error('该次计时已结束，请刷新后查看');
   return this.commitOnline(() => {
+    const error = this.sessionError(session, finishActiveId);
+    if (error) throw new Error(error);
+    if (finishActiveId && (!this.state.activeSession || this.state.activeSession.id !== finishActiveId)) throw new Error('该次计时已结束');
     this.state.sessions = this.state.sessions.filter(s => s.id !== session.id).concat(session);
     this.syncSession(session);
     if (finishActiveId) this.state.activeSession = null;
@@ -123,7 +118,11 @@ D.startSession = async function (characterId) {
   if (this.state.activeSession) throw new Error('已有未结束的在线记录，请先处理');
   if (!this.charById(characterId)) throw new Error('请先选择归属角色');
   const active = Object.assign({ id: U.uid(), characterId, startAt: Date.now(), createdAt: Date.now() }, this.state.quickSettings);
-  return this.commitOnline(() => { this.state.activeSession = active; return active; });
+  return this.commitOnline(() => {
+    if (this.state.activeSession) throw new Error('已有未结束的在线记录，请先处理');
+    this.state.activeSession = active;
+    return active;
+  });
 };
 
 D.adjustSessionStart = async function (startAt) {
@@ -132,7 +131,13 @@ D.adjustSessionStart = async function (startAt) {
   const candidate = this.makeSession(Object.assign({}, active, { mode: 'range', startAt, endAt: Date.now() }));
   const error = this.sessionError(candidate, active.id);
   if (error) throw new Error(error);
-  return this.commitOnline(() => { this.state.activeSession = Object.assign({}, active, { startAt }); });
+  return this.commitOnline(() => {
+    if (!this.state.activeSession || this.state.activeSession.id !== active.id) throw new Error('该次计时已结束');
+    const current = this.makeSession(Object.assign({}, this.state.activeSession, { mode: 'range', startAt, endAt: Date.now() }));
+    const error = this.sessionError(current, active.id);
+    if (error) throw new Error(error);
+    this.state.activeSession.startAt = startAt;
+  });
 };
 
 D.onlineStats = function (charId, from, to, includeActive) {
@@ -157,11 +162,27 @@ D.onlineStats = function (charId, from, to, includeActive) {
 
 D.earningsStats = function (charId, from, to, includeActive) {
   const stats = this.stats(this.txIn(charId, from, to));
-  const online = this.onlineStats(charId, from, to, includeActive);
-  stats.expense += online.liveCost;
+  const online = this.onlineStats(charId, from, to);
   stats.net = stats.income - stats.expense;
   stats.onlineMinutes = online.minutes;
   stats.cardCost = online.cost;
   stats.hourly = online.minutes > 0 ? stats.net / (online.minutes / 60) : null;
+  return includeActive ? this.includeActiveEarnings(stats, charId, from, to) : stats;
+};
+
+/* 每秒仅计算当前时段；历史汇总由页面在数据或筛选变化时刷新。 */
+D.includeActiveEarnings = function (settled, charId, from, to) {
+  const stats = Object.assign({}, settled);
+  const active = this.state.activeSession;
+  if (!active || charId && charId !== 'all' && active.characterId !== charId) return stats;
+  const session = this.makeSession(Object.assign({}, active, { mode: 'range', endAt: Date.now() }));
+  this.sessionSlices(session).forEach((slice) => {
+    if (from && slice.date < from || to && slice.date > to) return;
+    stats.onlineMinutes += slice.minutes;
+    stats.cardCost += slice.cost;
+    stats.expense += slice.cost;
+  });
+  stats.net = stats.income - stats.expense;
+  stats.hourly = stats.onlineMinutes > 0 ? stats.net / (stats.onlineMinutes / 60) : null;
   return stats;
 };

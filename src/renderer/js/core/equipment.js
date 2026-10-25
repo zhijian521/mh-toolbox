@@ -76,18 +76,37 @@ Object.assign(D, {
   },
 
   equipmentReferences(id) {
-    return this.state.characters.flatMap((character) => {
-      const profile = this.equipmentProfile(character.id);
-      return profile.equipmentSets.flatMap((set, index) => Object.values(set.slots).includes(id)
-        ? [{ characterId: character.id, index, name: set.name, active: profile.activeEquipmentSet === index }] : []);
-    });
+    const eq = this.equipmentById(id);
+    if (!eq || !this.charById(eq.characterId)) return [];
+    return this.equipmentReferenceIndex(eq.characterId).get(id) || [];
   },
 
-  equipmentStatus(eq) {
+  equipmentReferenceIndex(characterId) {
+    const profile = this.equipmentProfile(characterId);
+    const index = new Map();
+    profile.equipmentSets.forEach((set, number) => {
+      Object.values(set.slots).forEach((id) => {
+        if (!index.has(id)) index.set(id, []);
+        index.get(id).push({ characterId, index: number, name: set.name, active: profile.activeEquipmentSet === number });
+      });
+    });
+    return index;
+  },
+
+  equipmentStatus(eq, references = this.equipmentReferences(eq.id)) {
     if (eq.status === 'sold') return 'sold';
-    const references = this.equipmentReferences(eq.id);
     if (references.some((reference) => reference.active)) return 'active';
     return references.length ? 'standby' : 'stored';
+  },
+
+  equipmentById(id) {
+    const list = this.state.equipment;
+    if (this._equipmentList !== list || this._equipmentSize !== list.length) {
+      this._equipmentList = list;
+      this._equipmentSize = list.length;
+      this._equipmentIndex = new Map(list.map((item) => [item.id, item]));
+    }
+    return this._equipmentIndex.get(id);
   },
 
   clearEquipmentReferences(id) {
@@ -166,16 +185,28 @@ Object.assign(D, {
     });
   },
 
+  recordEquipmentChange(id, data) {
+    return this.commitEquipment(() => {
+      const eq = this.equipmentById(id);
+      if (!eq) throw new Error('装备档案已删除');
+      const action = this.gearAction(data.action);
+      if (data.sync && action.dir !== 0) {
+        const tx = { id: U.uid(), ledger: 'account', recordType: 'money', characterId: eq.characterId,
+          date: data.date, kind: action.dir > 0 ? 'income' : 'expense', currency: data.currency,
+          category: ['craft', 'gem', 'dust', 'consecrate'].includes(data.action) ? '养成投入' : '装备交易',
+          amount: data.amount || 0, fee: 0, minutes: 0, channel: data.channel, equipmentId: id, gearAction: data.action,
+          note: data.note || '装备「' + eq.name + '」' + action.t, createdAt: Date.now() };
+        this.state.transactions.push(tx); this.syncAccountEquipment(tx);
+      } else {
+        this.state.gearLogs.push({ id: U.uid(), equipmentId: id, characterId: eq.characterId, date: data.date,
+          action: data.action, amount: data.amount || 0, currency: data.currency, note: data.note || '', synced: false, createdAt: Date.now() });
+        this.syncEquipmentStatus(id);
+      }
+    });
+  },
+
   /** 装备操作写入失败时恢复内存，防止重复提交留下半套方案或重复流水。 */
   async commitEquipment(change) {
-    const snapshot = JSON.parse(JSON.stringify(this.state));
-    try {
-      const result = change();
-      await this.persist();
-      return result;
-    } catch (error) {
-      this.state = snapshot;
-      throw error;
-    }
+    return this.commit(change);
   },
 });

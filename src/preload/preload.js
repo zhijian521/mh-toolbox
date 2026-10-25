@@ -3,7 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('mh', {
   loadData: () => ipcRenderer.invoke('mh:loadData'),
-  saveData: (data) => ipcRenderer.invoke('mh:saveData', data),
+  saveData: (data, options) => ipcRenderer.invoke('mh:saveData', data, options),
+  exportCsv: (text, defaultName) => ipcRenderer.invoke('mh:exportCsv', text, defaultName),
   exportData: (data) => ipcRenderer.invoke('mh:exportData', data),
   exportJson: (data, defaultName) => ipcRenderer.invoke('mh:exportJson', data, defaultName),
   importData: () => ipcRenderer.invoke('mh:importData'),

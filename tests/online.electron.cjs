@@ -3,12 +3,10 @@
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('node:os');
+const { isolate } = require('./helpers/electron.cjs');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-online-test-'));
-app.setPath('userData', dir);
-app.disableHardwareAcceleration();
+const dir = isolate('online');
 const original = { schemaVersion: 2, characters: [{ id: 'c1', name: '测试主号' }, { id: 'c2', name: '测试小号' }],
   transactions: [
     { id: 'legacy-online', ledger: 'earnings', recordType: 'money', characterId: 'c1', source: 'quick',

@@ -30,18 +30,19 @@ Views.goals = function () {
     const pct = g.target ? Math.min(100, Math.round(g.current / g.target * 100)) : 0;
     const done = g.status === 'done';
     const dl = g.deadline ? (done ? '' : (U.daysLeft(g.deadline) >= 0 ? '剩 ' + U.daysLeft(g.deadline) + ' 天' : '已过期 ' + (-U.daysLeft(g.deadline)) + ' 天')) : '';
-    return '<div class="goal-card' + (done ? ' done' : '') + '" data-id="' + g.id + '">' +
+    return '<div class="goal-card' + (done ? ' done' : '') + '" data-id="' + U.esc(g.id) + '">' +
       '<div class="goal-head"><div class="goal-title">' + U.esc(g.title) + '</div>' +
       '<span class="badge ' + (g.type === 'money' ? 'gold' : g.type === 'gear' ? 'purple' : 'blue') + '">' + U.esc(D.goalTypeText(g.type)) + '</span></div>' +
-      '<div class="goal-meta"><span>' + U.esc(D.charName(g.characterId)) + '</span>' + (dl ? '<span>' + U.esc(dl) + '</span>' : '') + (g.deadline && done ? '<span>' + U.esc(g.deadline) + ' 达成</span>' : '') + '</div>' +
-      '<div class="goal-nums"><span>进度 <b>' + pct + '%</b></span><span><b>' + U.fmtMoney(g.current) + '</b> / ' + U.fmtMoney(g.target) + (g.unit && g.unit !== '万' ? '（' + U.esc(g.unit) + '）' : '') + '</span></div>' +
+      '<div class="goal-meta"><span>' + U.esc(D.charName(g.characterId)) + '</span>' + (dl ? '<span>' + U.esc(dl) + '</span>' : '') + (g.doneAt && done ? '<span>' + U.esc(g.doneAt) + ' 达成</span>' : '') + '</div>' +
+      '<div class="goal-nums"><span>进度 <b>' + pct + '%</b></span><span><b>' + U.fmtNumber(g.current) + U.esc(g.unit || '万') + '</b> / ' + U.fmtNumber(g.target) + U.esc(g.unit || '万') + '</span></div>' +
       '<div class="progress' + (done ? ' ok' : '') + '"><i style="width:' + pct + '%"></i></div>' +
       (g.note ? '<div style="font-size:12px;color:var(--muted)">' + U.esc(g.note) + '</div>' : '') +
       '<div class="goal-actions">' +
         (done ? '<button class="btn btn-sm" data-act="reopen">恢复进行</button>'
               : '<button class="btn btn-sm btn-gold" data-act="progress">＋ 记进度</button>' +
                 '<button class="btn btn-sm" data-act="done">标记完成</button>') +
-        '<button class="btn btn-sm btn-ghost" data-act="edit">编辑</button>' +
+        '<button class="btn btn-sm" data-act="history">进度历史</button>' +
+        '<button class="btn btn-sm" data-act="edit">编辑</button>' +
         '<button class="btn btn-sm btn-ghost btn-danger" data-act="del">删除</button>' +
       '</div></div>';
   }
@@ -58,25 +59,25 @@ Views.goals = function () {
 
   el.querySelectorAll('.goal-card').forEach(function (card) {
     const g = D.state.goals.find(function (x) { return x.id === card.dataset.id; });
+    card.querySelector('[data-act="history"]').onclick = () => Views.goalHistoryModal(g.id);
     card.querySelector('[data-act="edit"]').addEventListener('click', function () { Views.goalModal(g); });
     card.querySelector('[data-act="del"]').addEventListener('click', async function () {
       const ok = await UI.confirmModal({ title: '删除目标', message: '确定删除目标「' + g.title + '」吗？进度记录会一并删除。', danger: true, confirmText: '删除' });
       if (!ok) return;
-      D.state.goals = D.state.goals.filter(function (x) { return x.id !== g.id; });
-      await D.persist(); UI.toast('已删除'); Views.goals();
+      try { await D.removeGoal(g.id); UI.toast('已删除'); Views.goals(); }
+      catch (error) { UI.toast(error.message, 'err'); }
     });
     const pBtn = card.querySelector('[data-act="progress"]');
     if (pBtn) pBtn.addEventListener('click', function () { Views.goalProgressModal(g); });
     const dBtn = card.querySelector('[data-act="done"]');
     if (dBtn) dBtn.addEventListener('click', async function () {
-      g.status = 'done'; g.doneAt = U.today();
-      if (g.target && g.current < g.target) g.current = g.target;
-      await D.persist(); UI.toast('恭喜！目标已达成'); Views.goals();
+      try { await D.setGoalStatus(g.id, 'done'); UI.toast('恭喜！目标已达成'); Views.goals(); }
+      catch (error) { UI.toast(error.message, 'err'); }
     });
     const rBtn = card.querySelector('[data-act="reopen"]');
     if (rBtn) rBtn.addEventListener('click', async function () {
-      g.status = 'active';
-      await D.persist(); UI.toast('已恢复进行中'); Views.goals();
+      try { await D.setGoalStatus(g.id, 'active'); UI.toast('已恢复进行中'); Views.goals(); }
+      catch (error) { UI.toast(error.message, 'err'); }
     });
   });
 };
@@ -100,33 +101,53 @@ Views.goalModal = function (g) {
       { key: 'note', label: '备注', type: 'textarea', full: true, placeholder: '记点想法…' }
     ],
     onSubmit: async function (data) {
-      if (isNew) {
-        D.state.goals.push({
-          id: U.uid(), characterId: data.characterId, type: data.type, title: data.title,
-          target: data.target, unit: data.unit || '万', current: 0, status: 'active',
-          deadline: data.deadline || '', note: data.note || '', createdAt: Date.now(), logs: []
-        });
-      } else {
-        Object.assign(g, data, { unit: data.unit || '万', deadline: data.deadline || '', note: data.note || '' });
-      }
-      await D.persist(); UI.toast(isNew ? '目标已创建' : '已保存 ✓'); Views.goals();
+      await D.saveGoal(data, g && g.id); UI.toast(isNew ? '目标已创建' : '已保存 ✓'); Views.goals();
     }
   });
 };
 
-Views.goalProgressModal = function (g) {
+Views.goalProgressModal = function (g, log) {
   UI.formModal({
-    title: '记进度 · ' + g.title,
+    title: (log ? '编辑进度 · ' : '记进度 · ') + g.title,
+    values: log || {},
     submitText: '记入',
     fields: [
       { key: 'date', label: '日期', type: 'date', required: true, default: U.today() },
-      { key: 'delta', label: '进度变化', type: 'number', required: true, step: '0.1', placeholder: '如 200（万）', hint: '填正数增加进度' },
+      { key: 'delta', label: '进度变化', type: 'number', required: true, step: '0.1', placeholder: '单位：' + (g.unit || '万'), hint: '正数增加、负数减少；当前进度最低为 0' },
       { key: 'note', label: '备注', type: 'text', full: true, placeholder: '如：本月捉鬼净收益' }
     ],
     onSubmit: async function (data) {
-      g.current = Math.max(0, (Number(g.current) || 0) + data.delta);
-      g.logs.push({ id: U.uid(), date: data.date, delta: data.delta, note: data.note || '' });
-      await D.persist(); UI.toast('进度已更新 ✓'); Views.goals();
+      await D.saveGoalProgress(g.id, data, log && log.id);
+      UI.toast('进度已更新'); Views.goals();
     }
+  });
+};
+
+Views.goalHistoryModal = function (id) {
+  const goal = D.state.goals.find((item) => item.id === id);
+  if (!goal) return;
+  const logs = goal.logs.slice().sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+  const overlay = UI.openModal({
+    title: '进度历史 · ' + goal.title, wide: true,
+    body: '<p class="char-form-hint">当前 ' + U.fmtNumber(goal.current) + U.esc(goal.unit) +
+      (goal.baseProgress ? ' · 历史基础进度 ' + U.fmtNumber(goal.baseProgress) + U.esc(goal.unit) : '') + '</p>' +
+      (logs.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>日期</th><th>变化</th><th>备注</th><th>操作</th></tr></thead><tbody>' +
+        logs.map((log) => '<tr data-id="' + U.esc(log.id) + '"><td>' + U.esc(log.date) + '</td><td>' +
+          (log.delta > 0 ? '+' : '') + U.fmtNumber(log.delta) + U.esc(goal.unit) + '</td><td>' + U.esc(log.note || '—') +
+          '</td><td><button class="btn btn-sm" data-act="edit">编辑</button> <button class="btn btn-sm btn-danger" data-act="delete">删除</button></td></tr>').join('') +
+        '</tbody></table></div>' : '<div class="empty"><p>暂无进度记录</p></div>'),
+    footer: '<button class="btn" data-act="close">关闭</button><button class="btn btn-gold" data-act="add">记进度</button>',
+  });
+  overlay.querySelector('[data-act="close"]').onclick = UI.requestCloseModal;
+  overlay.querySelector('[data-act="add"]').onclick = () => Views.goalProgressModal(goal);
+  overlay.querySelectorAll('tr[data-id]').forEach((row) => {
+    const log = logs.find((entry) => entry.id === row.dataset.id);
+    row.querySelector('[data-act="edit"]').onclick = () => Views.goalProgressModal(goal, log);
+    row.querySelector('[data-act="delete"]').onclick = async () => {
+      const ok = await UI.confirmModal({ title: '删除进度', message: '删除这条进度记录并重新计算目标进度？', danger: true });
+      if (!ok) { Views.goalHistoryModal(id); return; }
+      try { await D.removeGoalProgress(id, log.id); Views.goals(); Views.goalHistoryModal(id); }
+      catch (error) { UI.toast(error.message, 'err'); Views.goalHistoryModal(id); }
+    };
   });
 };

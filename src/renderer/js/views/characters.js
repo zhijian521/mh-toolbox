@@ -14,6 +14,7 @@ Views.characters = function () {
     card.querySelector('[data-act="auxiliarySkills"]').onclick = () => Views.charSkillsModal(character, 'auxiliarySkills');
     card.querySelector('[data-act="training"]').onclick = () => Views.charTrainingModal(character);
     card.querySelector('[data-act="growth"]').onclick = () => Views.charGrowthModal(character);
+    card.querySelector('[data-act="copy"]').onclick = () => Views.charCopyProgressModal(character);
     card.querySelector('[data-act="del"]').onclick = () => Views.charDelete(character);
   });
   root.scrollTop = scrollTop;
@@ -41,7 +42,7 @@ Views.charCardHtml = function (character) {
     '<section class="char-section">' + heading('其他养成', 'growth') + '<dl class="char-growth">' +
       value('乾元丹', progress.qianyuanPills, '个') + value('潜能果', progress.potentialFruits, '个') + '</dl>' +
       (progress.note ? '<p class="char-note">' + U.esc(progress.note) + '</p>' : '') + '</section>' +
-    '<footer class="char-actions"><button class="btn btn-sm btn-danger" data-act="del">删除角色</button></footer></article>';
+    '<footer class="char-actions"><button class="btn btn-sm" data-act="copy">复制养成配置</button><button class="btn btn-sm btn-danger" data-act="del">删除角色</button></footer></article>';
 };
 
 Views.charModal = function (character) {
@@ -99,6 +100,7 @@ Views.charSkillsModal = function (character, key) {
   const overlay = UI.openModal({
     title: title + ' · ' + character.name,
     body: '<form id="char-skills-form"><p class="char-form-hint">逐项填写技能名称和等级，等级留空表示未记录。</p>' +
+      (!auxiliary && D.schoolSkillNames[character.school] ? '<button type="button" class="btn btn-sm" data-act="template">补齐' + U.esc(character.school) + '技能</button>' : '') +
       '<div class="char-skill-labels"><span>技能名称</span><span>等级</span></div><div class="char-skill-rows">' +
       (skills.length ? skills : [{ name: '', level: null }]).map((skill) => Views.charSkillRow(skill, auxiliary)).join('') + '</div>' +
       '<button type="button" class="btn btn-sm char-skill-add" data-act="add-row">＋ 添加技能</button></form>',
@@ -116,13 +118,22 @@ Views.charSkillsModal = function (character, key) {
     Views.charBindSkillRow(rows.lastElementChild, { name: '' });
     rows.lastElementChild.querySelector(auxiliary ? '[data-mount="skill"] button' : 'input').focus();
   };
+  const readSkills = () => [...rows.querySelectorAll('.char-skill-row')].map((row) => ({
+    name: row.querySelector('[name="skillName"]').value.trim(), level: row.querySelector('[name="skillLevel"]').value,
+  })).filter((skill) => skill.name || skill.level !== '');
+  const template = form.querySelector('[data-act="template"]');
+  if (template) template.onclick = () => {
+    const draft = readSkills();
+    if (draft.some((skill) => !skill.name)) { UI.toast('请先填写已有行的技能名称', 'err'); return; }
+    const filled = D.fillSchoolSkills(character.school, draft);
+    rows.innerHTML = filled.map((skill) => Views.charSkillRow(skill, false)).join('');
+  };
+  UI.watchForm(overlay);
   const submit = async () => {
     const button = overlay.querySelector('[data-act="ok"]');
     if (button.disabled || !form.reportValidity()) return;
-    const values = [...rows.querySelectorAll('.char-skill-row')].map((row) => ({
-      name: row.querySelector('[name="skillName"]').value.trim(), level: row.querySelector('[name="skillLevel"]').value,
-    })).filter((skill) => skill.name || skill.level !== '');
-    button.disabled = true;
+    const values = readSkills();
+    button.disabled = true; overlay._saving = true;
     try {
       await D.saveCharacterProgress(character.id, { [key]: values });
       UI.closeModal();
@@ -130,9 +141,9 @@ Views.charSkillsModal = function (character, key) {
       UI.toast(title + '已保存');
     } catch (error) {
       UI.toast(error.message || '保存失败，请重试', 'err');
-    } finally { button.disabled = false; }
+    } finally { button.disabled = false; overlay._saving = false; }
   };
-  overlay.querySelector('[data-act="cancel"]').onclick = UI.closeModal;
+  overlay.querySelector('[data-act="cancel"]').onclick = UI.requestCloseModal;
   overlay.querySelector('[data-act="ok"]').onclick = submit;
   form.onsubmit = (event) => { event.preventDefault(); submit(); };
 };
@@ -196,4 +207,33 @@ Views.charDelete = async function (character) {
   } catch (error) {
     UI.toast(error.message || '删除失败，请重试', 'err');
   }
+};
+
+Views.charCopyProgressModal = function (character) {
+  const sources = D.state.characters.filter((item) => item.id !== character.id);
+  if (!sources.length) { UI.toast('请先添加另一个角色', 'err'); return; }
+  const sections = [
+    ['schoolSkills', '师门技能'], ['auxiliarySkills', '辅助技能'], ['training', '人物修炼'],
+    ['petTraining', '召唤兽修炼'], ['qianyuanPills', '乾元丹'], ['potentialFruits', '潜能果'], ['note', '养成备注'],
+  ];
+  UI.formModal({
+    title: '复制养成配置 · ' + character.name, submitText: '覆盖选中项目',
+    fields: [
+      { key: 'source', label: '来源角色', type: 'select', options: sources.map((item) =>
+        ({ v: item.id, t: item.name + ' · ' + (item.school || '未选门派') })), full: true,
+        hint: '选中项目会替换目标角色的原记录；其他项目保留。师门技能仅支持相同门派。' },
+      ...sections.map(([key, label]) => ({ key, label, type: 'check', default: key !== 'schoolSkills' && key !== 'note' })),
+    ],
+    validate: (data) => {
+      const source = D.charById(data.source);
+      if (!source) return '来源角色不存在';
+      if (!sections.some(([key]) => data[key])) return '请选择要复制的项目';
+      return data.schoolSkills && (!character.school || source.school !== character.school) ? '师门技能需选择相同门派的角色' : '';
+    },
+    onSubmit: async (data) => {
+      const progress = D.normalizeCharacterProgress(D.charById(data.source).progress);
+      await D.saveCharacterProgress(character.id, Object.fromEntries(sections.filter(([key]) => data[key]).map(([key]) => [key, progress[key]])));
+      Views.characters(); UI.toast('养成配置已复制');
+    },
+  });
 };

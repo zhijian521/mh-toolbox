@@ -200,28 +200,34 @@ Views.loadDemoData = async function (autoConfirm, persist) {
     21: 80000, 99: 100000, 100: 150000, 101: 600000, 102: 80000, 103: 300000
   };
 
-  D.state = D.normalize({
-    characters: characters, transactions: transactions, goals: goals,
-    equipment: equipment, gearLogs: gearLogs,
-    itemPrices: itemPrices,
-    quickSettings: { accounts: 5, cardPrice: 15000 }
-  });
+  const applyDemo = () => {
+    D.state = D.normalize({
+      characters: characters, transactions: transactions, goals: goals,
+      equipment: equipment, gearLogs: gearLogs,
+      itemPrices: itemPrices,
+      quickSettings: { accounts: 5, cardPrice: 15000 }
+    });
 
-  const account = function (n, characterId, kind, currency, category, amount, fee, channel, note, equipmentId) {
-    const record = { id: U.uid(), ledger: 'account', recordType: 'money', characterId, date: day(n), kind, currency, category, amount, fee, channel, note, equipmentId: equipmentId || '', minutes: 0, createdAt: now - n * DAY };
-    D.state.transactions.push(record);
-    if (record.equipmentId) D.syncAccountEquipment(record);
+    const account = function (n, characterId, kind, currency, category, amount, fee, channel, note, equipmentId) {
+      const record = { id: U.uid(), ledger: 'account', recordType: 'money', characterId, date: day(n), kind, currency, category, amount, fee, channel, note, equipmentId: equipmentId || '', minutes: 0, createdAt: now - n * DAY };
+      D.state.transactions.push(record);
+      if (record.equipmentId) D.syncAccountEquipment(record);
+    };
+    account(8, c1, 'expense', 'rmb', '装备交易', 680, 0, '藏宝阁', '购入备用青玉戒指', 'demo-e4');
+    account(5, c1, 'expense', 'rmb', '点卡充值', 100, 0, '官方充值', '充值点卡 100 元');
+    account(1, c1, 'income', 'rmb', '装备交易', 260, 13, '藏宝阁', '旧装备出售到账');
+    account(0, c1, 'expense', 'cash', '养成投入', 80, 0, '游戏内', '给主号补修炼');
+    account(3, c3, 'expense', 'rmb', '召唤兽交易', 350, 0, '藏宝阁', '购入任务须弥');
+    account(0, c3, 'income', 'cash', '装备交易', 90, 0, '游戏内', '出售换下的旧鞋');
+    const soldItem = D.state.transactions.find(function (t) { return t.recordType === 'item' && t.date === day(1); });
+    if (soldItem) D.settleItem(soldItem, { date: day(0), amount: 8.5, note: '摆摊成交示例' });
   };
-  account(8, c1, 'expense', 'rmb', '装备交易', 680, 0, '藏宝阁', '购入备用青玉戒指', 'demo-e4');
-  account(5, c1, 'expense', 'rmb', '点卡充值', 100, 0, '官方充值', '充值点卡 100 元');
-  account(1, c1, 'income', 'rmb', '装备交易', 260, 13, '藏宝阁', '旧装备出售到账');
-  account(0, c1, 'expense', 'cash', '养成投入', 80, 0, '游戏内', '给主号补修炼');
-  account(3, c3, 'expense', 'rmb', '召唤兽交易', 350, 0, '藏宝阁', '购入任务须弥');
-  account(0, c3, 'income', 'cash', '装备交易', 90, 0, '游戏内', '出售换下的旧鞋');
-  const soldItem = D.state.transactions.find(function (t) { return t.recordType === 'item' && t.date === day(1); });
-  if (soldItem) D.settleItem(soldItem, { date: day(0), amount: 8.5, note: '摆摊成交示例' });
+  if (persist) {
+    try { await D.commit(applyDemo, { backupReason: 'demo' }); }
+    catch (error) { UI.toast(error.message, 'err'); return; }
+  } else applyDemo();
+  Views.clearQuickTimer();
   D.setCharFilter('all');
-  if (persist) await D.persist();
   Views.refreshHeader();
   Views.go('dashboard');
 };

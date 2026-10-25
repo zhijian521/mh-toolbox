@@ -12,9 +12,10 @@
     "smoke": "electron . --smoke",
     "shots": "electron . --screenshot",
     "demo": "electron . --demo",
-    "test": "node --test tests/ledgers.test.cjs tests/equipment.test.cjs tests/characters.test.cjs",
-    "test:electron": "electron tests/ledgers.electron.cjs && electron tests/online.electron.cjs && electron tests/equipment.electron.cjs && electron tests/characters.electron.cjs",
-    "dist": "electron-builder --win"
+    "test": "node scripts/test.cjs domain",
+    "test:electron": "node scripts/test.cjs electron",
+    "dist": "electron-builder --win",
+    "check": "node scripts/test.cjs syntax"
   },
   "devDependencies": {
     "electron": "^38.0.0",

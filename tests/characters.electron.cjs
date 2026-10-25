@@ -3,12 +3,10 @@
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('node:os');
+const { isolate } = require('./helpers/electron.cjs');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mh-characters-test-'));
-app.setPath('userData', dir);
-app.disableHardwareAcceleration();
+const dir = isolate('characters');
 fs.writeFileSync(path.join(dir, 'data.json'), JSON.stringify({ schemaVersion: 4,
   characters: [{ id: 'c1', name: '轻舟听雨', level: 109, school: '大唐官府', server: '紫禁城',
     equipmentSets: [{ name: '日常任务', slots: { 武器: 'sword' } }] },

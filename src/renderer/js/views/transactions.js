@@ -32,6 +32,7 @@ Views.txModal = function (tx, moving) {
       { key: 'currency', label: '货币', type: 'segment', options: [{ v: 'cash', t: '游戏币现金' }, { v: 'reserve', t: '储备金' }] },
       { key: 'category', label: '来源 / 分类', type: 'select', required: true, options: catsFor(values.kind) },
       { key: 'amount', label: '金额（万）', type: 'number', required: true, step: '0.01', min: 0 },
+      { key: 'saleQuantity', label: '本次成交数量', type: 'number', required: true, min: 1, step: 1 },
       { key: 'itemName', label: '物品名称', type: 'text', required: true },
       { key: 'quantity', label: '数量', type: 'number', required: true, min: 1, step: 1 },
       { key: 'unitPrice', label: '参考单价（万 / 件）', type: 'number', required: true, min: 0, step: '0.01', hint: '只记估值，出售后按实际成交额计算收入' },
@@ -45,6 +46,7 @@ Views.txModal = function (tx, moving) {
         ['kind', 'currency', 'amount', 'minutes'].forEach(function (k) { api.show(k, !item); });
         ['itemName', 'quantity', 'unitPrice', 'status'].forEach(function (k) { api.show(k, item); });
         api.show('recordType', isNew && !moving);
+        api.show('saleQuantity', !!sale);
       };
       form.addEventListener('segchange', function (e) {
         if (e.detail.key === 'kind' || e.detail.key === 'recordType') {
@@ -57,11 +59,6 @@ Views.txModal = function (tx, moving) {
     validate: function (data) {
       if (data.recordType === 'item' && !Number.isInteger(data.quantity)) return '物品数量需为正整数';
       if (sale && (data.characterId !== sale.characterId || data.kind !== 'income' || data.currency !== 'cash' || data.date < sale.date)) return '出售结算需保留原角色、游戏币收入，日期不能早于获得日期';
-      if (sold) {
-        if (data.quantity !== tx.quantity || data.itemName !== tx.itemName) return '修改已出售物品的名称或数量，请先删除对应的成交记录';
-        const settlement = D.state.transactions.find(function (t) { return t.id === tx.saleId; });
-        if (data.characterId !== tx.characterId || (settlement && data.date > settlement.date)) return '已出售物品需保留原角色，获得日期不能晚于出售日期';
-      }
       return '';
     },
     onSubmit: async function (data) {
@@ -72,8 +69,8 @@ Views.txModal = function (tx, moving) {
       });
       if (item) record.amount = D.itemValue(data);
       if (moving) { delete record.equipmentId; delete record.gearAction; }
-      if (isNew) D.state.transactions.push(record); else Object.assign(tx, record);
-      await D.persist();
+      if (!sale) delete record.saleQuantity;
+      await D.saveTransaction(record, tx && tx.id);
       UI.toast(moving ? '已转入收益记录' : '已保存');
       Views.rerender();
     }
@@ -81,17 +78,26 @@ Views.txModal = function (tx, moving) {
 };
 Views.itemSellModal = function (item) {
   UI.formModal({
-    title: '出售物品 · ' + item.itemName + ' ×' + item.quantity,
-    values: { date: U.today(), amount: D.itemValue(item), note: '' },
+    title: '出售物品 · ' + item.itemName + '（剩余 ' + D.itemRemaining(item) + '）',
+    values: { date: U.today(), quantity: D.itemRemaining(item), amount: D.itemHoldingValue(item), note: '' },
     fields: [
       { key: 'date', label: '出售日期', type: 'date', required: true },
-      { key: 'amount', label: '实际成交总额（万）', type: 'number', required: true, min: 0, step: '0.01', hint: '整笔物品出售，生成一条游戏币收入' },
+      { key: 'quantity', label: '本次出售数量', type: 'number', required: true, min: 1, step: 1 },
+      { key: 'amount', label: '实际成交总额（万）', type: 'number', required: true, min: 0, step: '0.01', hint: '本次数量的成交总额，生成一条游戏币收入；剩余库存继续保留' },
       { key: 'note', label: '备注', type: 'text', full: true }
     ],
-    validate: function (data) { return data.date < item.date ? '出售日期不能早于获得日期' : ''; },
+    onRender: (form, api) => {
+      form.querySelector('[name="quantity"]').addEventListener('input', () => {
+        api.setVal('amount', D.itemValue(item, api.getVal('quantity')));
+      });
+    },
+    validate: function (data) {
+      if (!Number.isSafeInteger(data.quantity) || data.quantity > D.itemRemaining(D.state.transactions.find((tx) => tx.id === item.id))) return '出售数量需为正整数，且不能超过剩余数量';
+      return data.date < item.date ? '出售日期不能早于获得日期' : '';
+    },
     onSubmit: async function (data) {
-      D.settleItem(item, data);
-      await D.persist(); UI.toast('已结算实际收入'); Views.rerender();
+      await D.commit(() => D.settleItem(item, data));
+      UI.toast('已结算实际收入并更新库存'); Views.rerender();
     }
   });
 };
