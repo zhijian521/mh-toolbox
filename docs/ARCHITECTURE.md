@@ -143,6 +143,7 @@ npm run dist       # 打包安装版 + 便携版到 dist/
 
 ### 热更新（`npm run dev`）
 
+- 应用启动命令共用 `scripts/electron.cjs`，将 Electron 的 stdout/stderr 按 UTF-8 解码后交给 Node 输出，避免 Windows GBK 控制台显示中文乱码；保留启动参数、退出码与 Ctrl+C 终止行为，不修改系统代码页。Electron 使用 `windowsHide: false`，避免 Windows 将应用主窗口一起隐藏。
 - `src/renderer` 下 **CSS** 变更 → 免刷新直接替换样式，不丢任何状态；
 - `src/renderer` 下 **JS / HTML** 变更 → 页面自动刷新，并恢复所在页、角色筛选与计时中的快速记录（快照 10 分钟内有效）；
 - `src/main` / `src/preload` 变更 → 终端提示手动重启（`Ctrl+C` 后重新 `npm run dev`），避免自动重启产生游离进程。
