@@ -5,6 +5,32 @@ const D = window.D = {
   state: { schemaVersion: 5, characters: [], transactions: [], sessions: [], activeSession: null, goals: [], equipment: [], gearLogs: [] },
   charFilter: localStorage.getItem('mh.charFilter') || 'all',
 
+  orderedCards(items) {
+    return items.slice().sort((a, b) => (this.characterNumber(a.sortOrder) ?? Infinity) -
+      (this.characterNumber(b.sortOrder) ?? Infinity) || (b.createdAt || 0) - (a.createdAt || 0));
+  },
+
+  /** 在最新集合中按相邻卡片定位；筛选隐藏的项目保留相对顺序。 */
+  moveCard(items, id, changes) {
+    const item = items.find((entry) => entry.id === id), target = items.find((entry) => entry.id === changes.targetId);
+    if (!item) throw new Error('排序项目不存在，请刷新后重试');
+    if (!target || target.id === id || !['before', 'after'].includes(changes.position)) throw new Error('请选择有效的排序位置');
+    let ordered = this.orderedCards(items);
+    if (changes.visibleIds !== undefined) {
+      const ids = changes.visibleIds;
+      if (!Array.isArray(ids) || new Set(ids).size !== ids.length || !ids.includes(id) || !ids.includes(target.id) ||
+        ids.some((key) => !items.some((entry) => entry.id === key))) throw new Error('卡片列表已变更，请重试');
+      const positions = new Map(ids.map((key, index) => [key, index]));
+      const visible = ordered.filter((entry) => positions.has(entry.id)).sort((a, b) => positions.get(a.id) - positions.get(b.id));
+      let index = 0;
+      ordered = ordered.map((entry) => positions.has(entry.id) ? visible[index++] : entry);
+    }
+    ordered = ordered.filter((entry) => entry.id !== id);
+    const position = ordered.findIndex((entry) => entry.id === target.id) + Number(changes.position === 'after');
+    ordered.splice(position, 0, item);
+    ordered.forEach((entry, index) => { entry.sortOrder = index; });
+  },
+
   incomeCats: ['捉鬼', '押镖', '师门', '封妖', '副本', '周末活动', '节日活动', '摆摊卖货', '物品掉落', '宝图', '牧场', '种植', '帮派产出', '其他收入'],
   expenseCats: ['点卡', '修理装备', '药品补给', '其他支出'],
   accountCats: ['装备交易', '召唤兽交易', '点卡充值', '游戏币买入', '游戏币卖出', '养成投入', '其他收支'],

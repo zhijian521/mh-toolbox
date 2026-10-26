@@ -1,6 +1,16 @@
 'use strict';
 /* 版本迁移与导入边界校验。 */
 Object.assign(D, {
+  normalizeCardOrder(items) {
+    // 旧置顶按原显示顺序并入同一列表，只读取克隆后的记录。
+    if (items.some((item) => item.pinned === true)) {
+      items.slice().sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true) ||
+        (this.characterNumber(a.sortOrder) ?? Infinity) - (this.characterNumber(b.sortOrder) ?? Infinity) ||
+        (b.createdAt || 0) - (a.createdAt || 0)).forEach((item, index) => { item.sortOrder = index; });
+    }
+    items.forEach((item) => { delete item.pinned; });
+  },
+
   validateBackup(data) {
     if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.characters) ||
       !['transactions', 'equipment', 'goals'].some((key) => Array.isArray(data[key]))) {
@@ -67,7 +77,6 @@ Object.assign(D, {
       }
     });
     s.goals.forEach((g) => {
-      g.pinned = g.pinned === true;
       g.sortOrder = this.characterNumber(g.sortOrder);
       const metric = g.type === 'progress' && g.tracking && this.goalMetrics.find((item) => item.v === g.tracking.category);
       g.tracking = metric ? { category: metric.v, key: ['schoolSkills', 'auxiliarySkills', 'training', 'petTraining'].includes(metric.v) &&
@@ -79,6 +88,8 @@ Object.assign(D, {
       g.logs = g.logs.map((log) => Object.assign({}, log, { delta: Number(log.delta) || 0 }));
       if (!Number.isFinite(g.baseProgress)) g.baseProgress = g.current - g.logs.reduce((sum, log) => sum + (Number(log.delta) || 0), 0);
     });
+    this.normalizeCardOrder(s.characters);
+    this.normalizeCardOrder(s.goals);
     s.quickSettings = data.quickSettings && typeof data.quickSettings === 'object'
       ? { accounts: Number(data.quickSettings.accounts) || 5, cardPrice: Number(data.quickSettings.cardPrice) || 15000 }
       : { accounts: 5, cardPrice: 15000 };

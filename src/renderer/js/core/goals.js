@@ -2,38 +2,11 @@
 /* 手动累计目标与跟随角色档案的养成目标。 */
 Object.assign(D, {
   orderedGoals(goals = this.state.goals) {
-    return goals.slice().sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true) ||
-      (this.characterNumber(a.sortOrder) ?? Infinity) - (this.characterNumber(b.sortOrder) ?? Infinity) ||
-      (b.createdAt || 0) - (a.createdAt || 0));
+    return this.orderedCards(goals);
   },
 
   saveGoalOrder(id, changes) {
-    return this.commit(() => {
-      const goal = this.state.goals.find((item) => item.id === id);
-      if (!goal) throw new Error('目标不存在');
-      const pinning = changes.pinned !== undefined;
-      const pinned = pinning ? changes.pinned : goal.pinned === true;
-      if (typeof pinned !== 'boolean') throw new Error('置顶状态不正确');
-      let group = this.orderedGoals().filter((item) => (item.pinned === true) === pinned || item.id === id);
-      if (!pinning) {
-        const target = this.state.goals.find((item) => item.id === changes.targetId);
-        if (!target || target.id === id || !['before', 'after'].includes(changes.position)) throw new Error('请选择有效的排序位置');
-        if ((target.pinned === true) !== pinned) throw new Error('置顶目标与普通目标分别排序');
-        if (changes.visibleIds) {
-          const positions = new Map(changes.visibleIds.map((key, index) => [key, index]));
-          if (positions.size !== changes.visibleIds.length || !positions.has(id) || !positions.has(target.id) ||
-            changes.visibleIds.some((key) => !group.some((item) => item.id === key))) throw new Error('目标列表已变更，请重试');
-          // 从自动排序拖动时，先保存可见目标的展示顺序，隐藏目标保留相对顺序。
-          const visible = group.filter((item) => positions.has(item.id)).sort((a, b) => positions.get(a.id) - positions.get(b.id));
-          let index = 0;
-          group = group.map((item) => positions.has(item.id) ? visible[index++] : item);
-        }
-      }
-      group = group.filter((item) => item.id !== id);
-      const position = pinning ? 0 : group.findIndex((item) => item.id === changes.targetId) + Number(changes.position === 'after');
-      group.splice(position, 0, goal);
-      group.forEach((item, index) => { item.pinned = pinned; item.sortOrder = index; });
-    });
+    return this.commit(() => this.moveCard(this.state.goals, id, changes));
   },
 
   goalCharacters(goal) {
@@ -120,7 +93,7 @@ Object.assign(D, {
       if (input.deadline && (!/^\d{4}-\d{2}-\d{2}$/.test(input.deadline) ||
         U.fmtDate(U.parseDate(input.deadline)) !== input.deadline)) throw new Error('请选择有效的期望完成日期');
       const goal = { ...(previous || {
-        id: U.uid(), createdAt: Date.now(), pinned: false, sortOrder: 0, current: 0, baseProgress: 0, status: 'active', logs: [],
+        id: U.uid(), createdAt: Date.now(), sortOrder: 0, current: 0, baseProgress: 0, status: 'active', logs: [],
       }), characterId: input.characterId, type, target: input.target,
         tracking: tracking ? { category: tracking.category,
           key: ['schoolSkills', 'auxiliarySkills', 'training', 'petTraining'].includes(tracking.category) ? tracking.key.trim() : '' } : null,
@@ -129,7 +102,7 @@ Object.assign(D, {
       goal.title = String(input.title || '').trim() || this.goalDefaultTitle(goal);
       if (previous) Object.assign(previous, goal);
       else {
-        this.orderedGoals().filter((item) => !item.pinned).forEach((item, index) => { item.sortOrder = index + 1; });
+        this.orderedGoals().forEach((item, index) => { item.sortOrder = index + 1; });
         this.state.goals.push(goal);
       }
       this.recalculateGoal(previous || goal);

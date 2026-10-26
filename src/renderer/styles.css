@@ -468,16 +468,15 @@ table.tbl { width: 100%; border-collapse: collapse; color: var(--ui-text); font-
 .goal-title { color: var(--ui-title); font-family: var(--font-serif); font-weight: 400; font-size: var(--ui-section-size); overflow-wrap: anywhere; }
 .goal-tools { display: flex; flex: none; gap: 5px; }
 .goal-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 29px; min-height: 29px; padding: 0; }
-.goal-icon-btn.is-pinned { color: var(--red); background: var(--nav-active-bg); border-color: var(--red); }
-.goal-drag-handle { cursor: grab; user-select: none; }
-.goal-drag-handle svg { pointer-events: none; }
-.goal-drag-handle:active { cursor: grabbing; }
-.goal-card.is-dragging { opacity: .45; }
-.goal-card[data-drop-side]::after { content: ''; position: absolute; background: var(--red); border-radius: 2px; pointer-events: none; }
-.goal-card[data-drop-side="left"]::after { left: -7px; top: 0; bottom: 0; width: 3px; }
-.goal-card[data-drop-side="right"]::after { right: -7px; top: 0; bottom: 0; width: 3px; }
-.goal-card[data-drop-side="top"]::after { top: -7px; left: 0; right: 0; height: 3px; }
-.goal-card[data-drop-side="bottom"]::after { bottom: -7px; left: 0; right: 0; height: 3px; }
+.card-drag-handle { cursor: grab; user-select: none; }
+.card-drag-handle svg { pointer-events: none; }
+.card-drag-handle:active { cursor: grabbing; }
+:is(.goal-card, .char-card).is-dragging { opacity: .45; }
+:is(.goal-card, .char-card)[data-drop-side]::after { content: ''; position: absolute; background: var(--red); border-radius: 2px; pointer-events: none; }
+:is(.goal-card, .char-card)[data-drop-side="left"]::after { left: -7px; top: 0; bottom: 0; width: 3px; }
+:is(.goal-card, .char-card)[data-drop-side="right"]::after { right: -7px; top: 0; bottom: 0; width: 3px; }
+:is(.goal-card, .char-card)[data-drop-side="top"]::after { top: -7px; left: 0; right: 0; height: 3px; }
+:is(.goal-card, .char-card)[data-drop-side="bottom"]::after { bottom: -7px; left: 0; right: 0; height: 3px; }
 .goal-meta { font-size: var(--ui-caption-size); color: var(--ui-muted); display: flex; gap: 8px; flex-wrap: wrap; }
 .goal-nums { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: var(--ui-caption-size); color: var(--ui-muted); font-variant-numeric: tabular-nums; }
 .goal-nums > span:last-child { text-align: right; }
@@ -515,13 +514,12 @@ table.tbl { width: 100%; border-collapse: collapse; color: var(--ui-text); font-
 /*== 角色与技能养成 ==*/
 .char-page { max-width: 1366px; margin: 0 auto; }
 .char-grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; }
-.char-card { flex: none; width: var(--character-card-width); max-width: 100%; padding: 14px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 4px; }
+.char-card { position: relative; flex: none; width: var(--character-card-width); max-width: 100%; padding: 14px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 4px; }
 .char-top, .char-section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .char-top { flex-wrap: wrap; row-gap: 12px; }
 .char-identity { display: flex; flex: 1 1 150px; align-items: center; gap: 10px; min-width: 0; }
 .char-toolbar { display: flex; flex: none; align-items: center; gap: 5px; margin-left: auto; }
 .char-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; min-height: 28px; height: 28px; padding: 0; }
-.char-icon-btn[aria-pressed="true"] { color: var(--gold2); border-color: var(--gold); background: var(--paper-2); }
 .char-identity > svg { flex: none; color: var(--ink-3); stroke-width: 1; }
 .char-identity > div { min-width: 0; }
 .char-name { color: var(--character-title); font-size: var(--character-title-size); font-weight: 600; overflow-wrap: anywhere; }

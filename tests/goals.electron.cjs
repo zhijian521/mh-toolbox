@@ -191,14 +191,10 @@ async function ordering() {
   const card = (id) => [...document.querySelectorAll('.goal-card')].find((item) => item.dataset.id === id);
   const automatic = D.state.goals.find((goal) => goal.tracking), manual = D.state.goals.find((goal) => !goal.tracking);
   Views._goalFilter.sort = 'manual'; Views.goals();
-  card(automatic.id).querySelector('[data-act="pin"]').click();
-  await until(() => !Views._goalOrderPending, '置顶');
-  check(ids()[0] === automatic.id && card(automatic.id).querySelector('[aria-pressed="true"]'), '置顶排序和选中图标');
+  check(!document.querySelector('.goal-card [data-act="pin"], .goal-card [data-act="sort"]') &&
+    [...document.querySelectorAll('.goal-card')].every(item => item.querySelectorAll('[data-act="move"]').length === 1), '目标仅保留一个拖动排序手柄');
   const mount = document.querySelector('[data-mount="sort"]');
   mount.querySelector('button').click(); document.querySelector('.xpop [data-v="deadline"]').click();
-  check(ids()[0] === automatic.id, '置顶优先于到期排序');
-  card(automatic.id).querySelector('[data-act="pin"]').click();
-  await until(() => !Views._goalOrderPending, '取消置顶');
   const drag = (from, to, after = false) => {
     const handle = card(from).querySelector('[data-act="move"]'), target = card(to);
     const origin = handle.getBoundingClientRect(), bounds = target.getBoundingClientRect();
@@ -225,15 +221,11 @@ async function ordering() {
   drag(automatic.id, manual.id);
   await until(() => !Views._goalOrderPending, '拖动失败恢复');
   check(JSON.stringify(D.state) === snapshot && ids().join(',') === before &&
-    !document.querySelector('.is-dragging, [data-drop-side], .goal-drag-handle:disabled'), '拖动失败不改顺序并恢复控件');
-  card(automatic.id).querySelector('[data-act="pin"]').click();
-  await until(() => !Views._goalOrderPending, '置顶失败恢复');
-  check(JSON.stringify(D.state) === snapshot && card(automatic.id).querySelector('[data-act="pin"]').getAttribute('aria-pressed') === 'false', '置顶失败不留下高亮状态');
+    !document.querySelector('.is-dragging, [data-drop-side], .card-drag-handle:disabled'), '拖动失败不改顺序并恢复控件');
   D.persist = persist;
   drag(automatic.id, manual.id); await until(() => !Views._goalOrderPending, '重试拖动');
-  card(automatic.id).querySelector('[data-act="pin"]').click(); await until(() => !Views._goalOrderPending, '重试置顶');
   Views.go('dashboard');
-  check(document.querySelector('.goal-overview-grid .card-title').textContent === automatic.title, '总览优先展示置顶目标');
+  check(document.querySelector('.goal-overview-grid .card-title').textContent === automatic.title, '总览遵循拖动后的目标顺序');
   Views.go('goals'); Views._goalFilter.status = 'all'; Views.goals();
   return JSON.stringify(D.state);
 }
@@ -320,11 +312,11 @@ app.whenReady().then(async () => {
     })`);
     assert.deepEqual(JSON.parse(restored), JSON.parse(result.snapshot));
     assert.equal(await run('D.goalSummary(D.state.goals.find(goal => goal.id === ' + JSON.stringify(result.automaticId) + ')).achieved'), 4);
-    assert.equal(await run('D.orderedGoals()[0].pinned && document.querySelector(".goal-card [data-act=pin]").getAttribute("aria-pressed") === "true"'), true);
+    assert.equal(await run('!document.querySelector(".goal-card [data-act=pin]") && !!document.querySelector(".goal-card [data-act=move]")'), true);
     assert.deepEqual(errors, []);
     console.log('[goals] PASS: 全角色/单角色创建、统一下拉与单位联动、自动名称、逐角色进度、筛选搜索及逾期排序');
     console.log('[goals] PASS: 批量更新、失败回滚重试、角色档案和历史联动、自动完成/恢复、总览、动态成员、窄窗口及真实重启');
-    console.log('[goals] PASS: 全成员展开、置顶/取消、原生鼠标拖动和键盘排序、自动排序切换、失败回滚及重启顺序');
+    console.log('[goals] PASS: 全成员展开、单一排序手柄、原生鼠标拖动和键盘排序、自动排序切换、失败回滚及重启顺序');
     console.log('[goals] PASS: 新增/编辑未改动直接关闭，长表单居中确认、四种关闭入口、焦点与 Esc、草稿保留、放弃及窄窗口');
     console.log('[goals] screenshots:', dir);
     clearTimeout(deadline); win.close(); app.exit(0);

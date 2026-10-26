@@ -94,11 +94,11 @@ mh-tool/
 
 | 集合 | 字段要点 |
 |---|---|
-| `characters` | id, name, level, school, server, pinned, sortOrder；progress（schoolSkills[]、auxiliarySkills[]：name/level；training、petTraining；qianyuanPills、potentialFruits、note）；growthHistory[]（id/date/createdAt/source/sourceName/note/changes[]）；equipmentSets[3]（name、slots：部位→装备 ID）、activeEquipmentSet、viewedEquipmentSet、pendingEquipmentSlots、soulJade（unlocked、attribute、level） |
+| `characters` | id, name, level, school, server, sortOrder；progress（schoolSkills[]、auxiliarySkills[]：name/level；training、petTraining；qianyuanPills、potentialFruits、note）；growthHistory[]（id/date/createdAt/source/sourceName/note/changes[]）；equipmentSets[3]（name、slots：部位→装备 ID）、activeEquipmentSet、viewedEquipmentSet、pendingEquipmentSlots、soulJade（unlocked、attribute、level） |
 | `transactions` | id, ledger(earnings/account), recordType(money/item), characterId, date, kind, currency(cash/reserve/rmb), amount, category, minutes, note, fee, channel；物品包含 itemName/quantity/unitPrice/status/saleId；结算包含 itemRecordId/saleQuantity；装备关联包含 equipmentId/gearAction |
 | `sessions` | id, characterId, mode(range/duration/legacy), source(timer/manual/legacy), date, startAt/endAt（本地时间对应的时间戳）, minutes, accounts, cardPrice, cost（万）, note, createdAt |
 | `activeSession` | 未结束的 id, characterId, startAt, accounts, cardPrice, createdAt；开始即落盘，普通重启等待用户恢复 |
-| `goals` | id, characterId（`all` 或角色 ID）, pinned, sortOrder, type(money/gear/progress), title, target, tracking（null 或 category/key）, current, unit, status, deadline, doneAt, baseProgress, logs[]（id/date/delta/note） |
+| `goals` | id, characterId（`all` 或角色 ID）, sortOrder, type(money/gear/progress), title, target, tracking（null 或 category/key）, current, unit, status, deadline, doneAt, baseProgress, logs[]（id/date/delta/note） |
 | `equipment` | id, characterId, slot, name, level, attributes, special, gems, status；截图录入含 ocrText（识别原文）；玉魄含 jade（base、extra1、extra2、dustLevel、holes、enchantments[]、durability） |
 | `gearLogs` | id, equipmentId, characterId, date, action, amount, note |
 | `itemPrices` | 物品 id → 单价（**单位: 梦幻币**，与网页版单价文件互通） |
@@ -114,11 +114,13 @@ mh-tool/
 
 目标领域位于 `core/goals.js`。`characterId: 'all'` 动态涵盖全部角色，单角色筛选仍展示全体目标；目标页和总览共用 `D.goalsFor` 与纯读取的 `D.goalSummary`，不缩小全体目标的计算范围。跟随目标的 `target` 是每个角色的门槛，`tracking` 指向辅助/师门技能、人物/召唤兽修炼、等级、乾元丹或潜能果；进度逐个封顶再汇总，未知值保持 null，只有存在成员且全部达标才完成，调低、清空或新增角色会重新判断。状态与当前值从档案即时派生，存储的 `status/current/logs` 仅用于手动累计模式。`D.saveGoalGrowth` 在同一提交中调用 `applyCharacter` 更新指定项目并生成角色养成记录，任一校验或落盘失败全部回滚；养成目标历史筛选原始角色记录，删除目标不删除档案及养成记录。存钱和装备目标沿用手动流水及完成/恢复操作。
 
-`D.orderedGoals` 按置顶组优先、组内 sortOrder、创建时间排列，新目标放到普通组首位，编辑不重排；总览同样优先置顶。`D.saveGoalOrder` 在提交队列内读取最新目标，通过相邻目标 ID 保存前后位置，置顶和普通组不能跨组拖动；从自动排序拖动时先按可见 ID 顺序排列对应位置，再移动目标，隐藏目标保留相对顺序。保存失败整体回滚，排序字段随备份及重启保留。`Views.goalBindOrdering` 仅在本次网格绑定拖放、方向键和边缘滚动，不重复绑定全局事件；拖放取消或结束清理插入线和滚动帧。每个角色进度直接展示，页面统一滚动。
+`D.orderedGoals` 与 `D.orderedCharacters` 共用 `D.orderedCards`，按 sortOrder、创建时间排列，新卡片放在列表首位，编辑不重排；总览目标沿用相同顺序。两类排序保存均在提交队列内调用 `D.moveCard`，按相邻 ID 和 before/after 定位；自动排序模式拖动时先按可见 ID 顺序排列对应位置，再移动目标，隐藏目标保留相对顺序。落盘失败整体回滚，排序随备份及重启保留。`normalizeCardOrder` 在读取或导入时将旧置顶按原显示顺序转换为单一 sortOrder，并移除旧 pinned 字段，归一化不修改输入且幂等。
 
-角色养成的归一化、验证、保存、排序和关联删除位于 `core/characters.js`，卡片与统一档案编辑位于 `views/characters.js`。未记录值存为 `null`，明确填写的 0 原样保存；人物五项修炼与召唤兽四项修炼独立记录。师门和辅助技能使用可增删、调整顺序的名称/等级列表，技能区达到 580px 时每行两项，否则单列；顺序随档案及备份保存。`D.orderedCharacters` 按置顶组优先、组内 sortOrder 升序排列；新角色加入普通组首位，置顶切换加入目标组首位，组内调整使用 `D.saveCharacterOrder` 串行提交并支持失败回滚；编辑已有档案不计算新角色位置。
+角色和目标卡片排序共用 `UI.bindCardOrdering`，仅在本次网格绑定手柄拖放、方向键和正文边缘滚动，不重复绑定全局事件；拖放取消或结束清理插入线和滚动帧。`Views.charPersistOrder` / `Views.goalPersistOrder` 保存期间锁定排序入口并标记忙碌，成功保留滚动、恢复对应手柄焦点，切页后的异步回调不覆盖其他正文。每个角色进度直接展示，页面统一滚动。
 
-卡片顶部操作依次为置顶、排序、养成记录、复制养成、删除、编辑档案。技能、两类修炼和养成数量的整行使用原生按钮的扩展点击区域打开 `Views.charQuickModal`，保留定义列表与原有排版；快捷弹窗复用 `UI.formModal`，支持步进、输入、前后预览、折叠日期说明和未保存关闭确认。`D.characterProgressMetric` 校验并读取单项信息；`D.saveCharacterValue` 在提交队列内读取最新档案，技能按名称定位，仅更新选中项目后调用 `applyCharacter`，共用养成历史、持久化回滚及目标派生逻辑，避免覆盖其他最新项目或重新加入已删除的技能。重建卡片后按角色 ID、分区和项目键恢复焦点及页面滚动。
+角色养成的归一化、验证、保存、排序和关联删除位于 `core/characters.js`，卡片与统一档案编辑位于 `views/characters.js`。未记录值存为 `null`，明确填写的 0 原样保存；人物五项修炼与召唤兽四项修炼独立记录。师门和辅助技能使用可增删、调整顺序的名称/等级列表，技能区达到 580px 时每行两项，否则单列；顺序随档案及备份保存。`D.orderedCharacters` 按统一拖动顺序展示全部角色，使用 `D.saveCharacterOrder` 串行提交并支持失败回滚；编辑已有档案不计算新角色位置。
+
+卡片顶部操作依次为拖动排序、养成记录、复制养成、删除、编辑档案，取消置顶与独立排序弹窗。技能、两类修炼和养成数量的整行使用原生按钮的扩展点击区域打开 `Views.charQuickModal`，保留定义列表与原有排版；快捷弹窗复用 `UI.formModal`，支持步进、输入、前后预览、折叠日期说明和未保存关闭确认。`D.characterProgressMetric` 校验并读取单项信息；`D.saveCharacterValue` 在提交队列内读取最新档案，技能按名称定位，仅更新选中项目后调用 `applyCharacter`，共用养成历史、持久化回滚及目标派生逻辑，避免覆盖其他最新项目或重新加入已删除的技能。重建卡片后按角色 ID、分区和项目键恢复焦点及页面滚动。
 
 统一编辑器用分区配置显式组织基础信息、师门技能、人物修炼、召唤兽修炼、辅助技能和其他养成，标题下固定导航定位并聚焦分区标题。切换门派后如已有师门技能，须明确选择保留或替换，再允许保存或补齐模板。统一表单只采集一次草稿，通过 `D.saveCharacter` 一次提交全部信息，共用领域校验；保存期间由 `UI.formModal` 锁定全部控件，失败整体回滚、恢复原禁用状态并保留草稿。`UI.openModal` 支持 `returnFocus` 回调，重建页面后按稳定角色 ID 恢复操作焦点；角色异步回调仅在当前仍为角色页时重建卡片，删除则刷新当前页面。
 

@@ -63,12 +63,13 @@ test('调低、清空和移除准确标注；新增未知技能与明确零值�
   assert.equal(changes.some((item) => item.label === '无双一击'), false);
 });
 
-test('无变化、技能排序、备注、昵称、服务器及置顶排序不产生养成噪声', async () => {
+test('无变化、技能排序、备注、昵称、服务器及拖动排序不产生养成噪声', async () => {
   const D = await domain(), id = D.state.characters[0].id;
   await D.saveCharacter({ name: '新昵称', server: '紫禁城' }, id);
   await D.saveCharacterProgress(id, { note: '养成计划', schoolSkills: D.charById(id).progress.schoolSkills.slice().reverse() });
-  await D.saveCharacterOrder(id, { pinned: true });
-  await D.saveCharacterOrder(id, { position: 0 });
+  const other = D.state.characters.find(character => character.id !== id).id;
+  await D.saveCharacterOrder(id, { targetId: other, position: 'after' });
+  await D.saveCharacterOrder(id, { targetId: other, position: 'before' });
   await D.saveCharacter({ progress: plain(D.charById(id).progress) }, id, { date: '2026-01-01', note: '只写说明' });
   assert.equal(D.charById(id).growthHistory.length, 0);
 });

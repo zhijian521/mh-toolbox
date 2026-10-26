@@ -11,8 +11,6 @@ Views.goals = function () {
     (!filter.type || goal.type === filter.type) && (!keyword || [goal.title, goal.note,
       ...D.goalCharacters(goal).map((character) => character.name)].join(' ').toLocaleLowerCase().includes(keyword)));
   list.sort((a, b) => {
-    const pinned = Number(b.goal.pinned === true) - Number(a.goal.pinned === true);
-    if (pinned) return pinned;
     if (filter.sort === 'manual') return 0;
     if (a.summary.status !== b.summary.status) return a.summary.status === 'active' ? -1 : 1;
     if (filter.sort === 'deadline' && a.summary.status === 'active') {
@@ -52,7 +50,6 @@ Views.goals = function () {
   if (reset) reset.onclick = () => { Object.assign(filter, { status: 'all', type: '', keyword: '' }); Views.goals(); };
   el.querySelectorAll('.goal-card').forEach((card) => {
     const goal = D.state.goals.find((item) => item.id === card.dataset.id);
-    card.querySelector('[data-act="pin"]').onclick = () => Views.goalPersistOrder(goal.id, { pinned: !goal.pinned }, 'pin');
     card.querySelector('[data-act="history"]').onclick = () => Views.goalHistoryModal(goal.id);
     card.querySelector('[data-act="edit"]').onclick = () => Views.goalModal(goal);
     card.querySelector('[data-act="del"]').onclick = async () => {
@@ -79,16 +76,13 @@ Views.goals = function () {
   el.scrollTop = scrollTop;
 };
 
-Views.goalPersistOrder = async function (id, changes, action) {
+Views.goalPersistOrder = async function (id, changes, action = 'move') {
   if (Views._goalOrderPending) return;
   Views._goalOrderPending = true;
   const el = document.getElementById('view'), grid = el.querySelector('.goal-grid');
-  const controls = [...el.querySelectorAll('[data-act="move"], [data-act="pin"]')].map((button) => [button, button.disabled]);
+  const controls = [...el.querySelectorAll('[data-act="move"]')].map((button) => [button, button.disabled]);
   if (changes.targetId && Views._goalFilter.sort !== 'manual') {
-    const goals = new Map(D.state.goals.map((goal) => [goal.id, goal]));
-    const pinned = goals.get(id)?.pinned === true;
-    changes.visibleIds = [...el.querySelectorAll('.goal-card')].map((card) => card.dataset.id)
-      .filter((key) => (goals.get(key)?.pinned === true) === pinned);
+    changes.visibleIds = [...el.querySelectorAll('.goal-card')].map((card) => card.dataset.id);
   }
   controls.forEach(([button]) => { button.disabled = true; });
   if (grid) grid.setAttribute('aria-busy', 'true');
@@ -97,7 +91,7 @@ Views.goalPersistOrder = async function (id, changes, action) {
     if (changes.targetId) Views._goalFilter.sort = 'manual';
     Views.goalRefresh();
     Views.goalFocusTarget(id, action)?.focus({ preventScroll: true });
-    UI.toast(changes.pinned === undefined ? '目标顺序已保存' : changes.pinned ? '目标已置顶' : '已取消置顶');
+    UI.toast('目标顺序已保存');
   } catch (error) { UI.toast(error.message, 'err'); }
   finally {
     Views._goalOrderPending = false;
@@ -107,76 +101,8 @@ Views.goalPersistOrder = async function (id, changes, action) {
 };
 
 Views.goalBindOrdering = function (el) {
-  const grid = el.querySelector('.goal-grid');
-  if (!grid) return;
-  const cards = [...grid.querySelectorAll('.goal-card')];
-  const goals = new Map(D.state.goals.map((goal) => [goal.id, goal]));
-  const sameGroup = (a, b) => (goals.get(a.dataset.id).pinned === true) === (goals.get(b.dataset.id).pinned === true);
-  let dragged = null, marked = null, scrollFrame = 0, scrollDelta = 0;
-  const clearMarker = () => {
-    if (marked) { delete marked.dataset.dropSide; marked = null; }
-  };
-  const cleanup = () => {
-    if (dragged) dragged.classList.remove('is-dragging');
-    dragged = null; clearMarker(); scrollDelta = 0;
-    cancelAnimationFrame(scrollFrame); scrollFrame = 0;
-  };
-  const autoScroll = () => {
-    scrollFrame = 0;
-    if (!dragged || !grid.isConnected || !scrollDelta) return;
-    el.scrollTop += scrollDelta;
-    scrollFrame = requestAnimationFrame(autoScroll);
-  };
-  const destination = (event) => {
-    const card = event.target.closest('.goal-card');
-    if (!dragged || !card || card === dragged || !grid.contains(card) || !sameGroup(dragged, card)) return null;
-    const bounds = card.getBoundingClientRect();
-    const sameRow = Math.abs(dragged.getBoundingClientRect().top - bounds.top) < 1;
-    const before = sameRow ? event.clientX < bounds.left + bounds.width / 2 : event.clientY < bounds.top + bounds.height / 2;
-    return { card, position: before ? 'before' : 'after', side: sameRow ? before ? 'left' : 'right' : before ? 'top' : 'bottom' };
-  };
-  for (const card of cards) {
-    const handle = card.querySelector('[data-act="move"]');
-    handle.ondragstart = (event) => {
-      if (Views._goalOrderPending) { event.preventDefault(); return; }
-      UI.closePop(); dragged = card;
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('application/x-mh-goal', card.dataset.id);
-      const bounds = card.getBoundingClientRect();
-      event.dataTransfer.setDragImage(card, event.clientX - bounds.left, event.clientY - bounds.top);
-      card.classList.add('is-dragging');
-    };
-    handle.ondragend = cleanup;
-    handle.onkeydown = (event) => {
-      if (!['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].includes(event.key)) return;
-      event.preventDefault();
-      const direction = ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 1;
-      const group = cards.filter((item) => sameGroup(card, item));
-      const target = group[group.indexOf(card) + direction];
-      if (target) Views.goalPersistOrder(card.dataset.id, { targetId: target.dataset.id, position: direction < 0 ? 'before' : 'after' }, 'move');
-    };
-  }
-  grid.ondragover = (event) => {
-    if (!dragged) return;
-    event.preventDefault();
-    const target = destination(event);
-    event.dataTransfer.dropEffect = target ? 'move' : 'none';
-    clearMarker();
-    if (target) { marked = target.card; marked.dataset.dropSide = target.side; }
-    const bounds = el.getBoundingClientRect();
-    scrollDelta = event.clientY < bounds.top + 48 ? -12 : event.clientY > bounds.bottom - 48 ? 12 : 0;
-    if (scrollDelta && !scrollFrame) scrollFrame = requestAnimationFrame(autoScroll);
-  };
-  grid.ondragleave = (event) => {
-    if (!grid.contains(event.relatedTarget)) { clearMarker(); scrollDelta = 0; }
-  };
-  grid.ondrop = (event) => {
-    if (!dragged) return;
-    event.preventDefault();
-    const target = destination(event), id = dragged.dataset.id;
-    cleanup();
-    if (target) Views.goalPersistOrder(id, { targetId: target.card.dataset.id, position: target.position }, 'move');
-  };
+  UI.bindCardOrdering(el, { grid: '.goal-grid', card: '.goal-card', kind: 'goal',
+    pending: () => Views._goalOrderPending, onMove: Views.goalPersistOrder });
 };
 
 Views.goalMemberHtml = function (member, goal) {
@@ -193,9 +119,9 @@ Views.goalCardHtml = function (goal, summary) {
   const days = goal.deadline ? U.daysLeft(goal.deadline) : null;
   const deadline = !done && days !== null ? (days < 0 ? '已逾期 ' + -days + ' 天' : days === 0 ? '今天到期' : '剩 ' + days + ' 天') : '';
   const iconButton = (action, icon, label) => '<button type="button" class="btn btn-sm goal-icon-btn' +
-    (action === 'del' ? ' btn-danger' : action === 'pin' && goal.pinned ? ' is-pinned' : action === 'move' ? ' goal-drag-handle' : '') +
+    (action === 'del' ? ' btn-danger' : action === 'move' ? ' card-drag-handle' : '') +
     '" data-act="' + action + '" title="' + label + '" aria-label="' + label + '"' +
-    (action === 'pin' ? ' aria-pressed="' + (goal.pinned === true) + '"' : action === 'move' ? ' draggable="true"' : '') + '>' + UI.icon(icon, 15) + '</button>';
+    (action === 'move' ? ' draggable="true"' : '') + '>' + UI.icon(icon, 15) + '</button>';
   const scope = goal.characterId === 'all' ? '全部角色' : D.charName(goal.characterId);
   const unit = '<small class="goal-number-unit">' + U.esc(goal.unit || '万') + '</small>';
   const percent = '<b class="goal-number-pct">' + summary.pct + '</b><small class="goal-number-unit">%</small>';
@@ -210,7 +136,7 @@ Views.goalCardHtml = function (goal, summary) {
   return '<article class="goal-card' + (done ? ' done' : '') + '" data-id="' + U.esc(goal.id) + '"><div class="goal-head">' +
     '<h2 class="goal-title">' + U.esc(goal.title) + '</h2><div class="goal-tools">' +
     iconButton('move', 'grip', '拖动排序，或用方向键前后移动') +
-    iconButton('pin', 'pin', goal.pinned ? '取消置顶' : '置顶目标') + iconButton('edit', 'edit', '编辑目标') +
+    iconButton('edit', 'edit', '编辑目标') +
     iconButton('del', 'trash', '删除目标') + '</div></div><div class="goal-meta"><span class="badge ' +
     (goal.type === 'money' ? 'gold' : goal.type === 'gear' ? 'purple' : 'blue') + '">' + U.esc(D.goalTypeText(goal.type)) + '</span><span>' + U.esc(scope) +
     '</span><span>' + (goal.tracking ? '跟随角色档案' : goal.characterId === 'all' ? '共同累计' : '手动累计') + '</span>' +

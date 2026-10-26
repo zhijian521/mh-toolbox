@@ -62,12 +62,13 @@ async function checks(phase) {
         return persist.apply(D, args);
       };
     };
-    const pinned = card('c1').querySelector('[data-act="pin"]');
-    delay(); pinned.click(); await until(() => release, '置顶写入等待');
+    const handle = card('c1').querySelector('[data-act="move"]');
+    delay(); handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await until(() => release, '排序写入等待');
     Views.go('account'); release();
-    await until(() => !pinned.disabled, '置顶写入完成');
+    await until(() => !Views._charOrderPending, '排序写入完成');
     D.persist = persist;
-    check(Views._current === 'account' && document.getElementById('page-title').textContent === '账号' && !card('c1'), '置顶异步回调不覆盖切换后的页面');
+    check(Views._current === 'account' && document.getElementById('page-title').textContent === '账号' && !card('c1'), '排序异步回调不覆盖切换后的页面');
     const added = await D.saveCharacter({ name: '删除切页验证', school: '大唐官府' });
     Views.go('characters'); delay();
     edit(added.id, 'del'); click('[data-act="yes"]'); await until(() => release, '删除写入等待');
@@ -180,7 +181,7 @@ async function checks(phase) {
     check(progress.qianyuanPills === 3 && progress.potentialFruits === 100 && progress.note.includes('坐骑成长'), '重启保留养成数量和备注');
     check(progress.auxiliarySkills.length === 4 && progress.auxiliarySkills[3].name === '自定义辅助', '重启保留辅助技能自定义行');
     check(D.charById('c1').equipmentSets[0].slots['武器'] === 'sword', '角色编辑保留三套装备');
-    check(D.charById('c1').pinned && !D.charById('c2').pinned && D.orderedCharacters()[0].id === 'c1', '重启保留置顶和排序');
+    check(D.orderedCharacters()[0].id === 'c1' && !card('c1').querySelector('[data-act=pin], [data-act=sort]'), '重启保留拖动顺序且只提供单一排序手柄');
     check(D.charById('c2').progress.schoolSkills[0].level === 79, '另一角色独立保留');
     return JSON.stringify(D.state);
   }
@@ -210,9 +211,9 @@ async function checks(phase) {
   const second = card('c2').getBoundingClientRect();
   check(first.right <= second.left && first.top === second.top, '角色卡片与装备页同样并排展示');
   const other = JSON.stringify(D.charById('c2'));
-  check(card('c1').querySelectorAll('.char-toolbar button').length === 6 &&
+  check(card('c1').querySelectorAll('.char-toolbar button').length === 5 &&
     !card('c1').querySelector('.char-section-head button, .char-actions'), '整体操作集中顶部，分区标题不重复编辑图标');
-  check(['pin', 'sort', 'history', 'copy', 'del', 'edit'].every((action) => {
+  check(['move', 'history', 'copy', 'del', 'edit'].every((action) => {
     const button = card('c1').querySelector('[data-act="' + action + '"]');
     return button.querySelector('svg') && button.title && button.getAttribute('aria-label');
   }) && card('c1').querySelector('.char-toolbar button:last-child').dataset.act === 'edit', '图标操作带提示，编辑在最右侧');
@@ -266,22 +267,26 @@ async function checks(phase) {
   click('[data-act="discard"]');
   check(D.charById('c1').progress.schoolSkills.length === 7, '取消编辑不修改技能');
   const order = () => [...document.querySelectorAll('.char-card')].map((item) => item.dataset.id).join(',');
-  D.persist = async () => { throw new Error('模拟置顶失败'); };
-  edit('c1', 'pin');
-  await until(() => document.getElementById('toast-root').textContent.includes('模拟置顶失败'), '置顶失败提示');
-  check(!D.charById('c1').pinned && !card('c1').querySelector('[data-act="pin"]').disabled, '置顶失败回滚且可重试');
+  const move = (id, key) => card(id).querySelector('[data-act="move"]').dispatchEvent(
+    new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  check(!document.querySelector('.char-card [data-act="pin"], .char-card [data-act="sort"]') &&
+    [...document.querySelectorAll('.char-card [data-act="move"]')].every(button => button.draggable), '仅保留拖动排序手柄');
+  D.persist = async () => { throw new Error('模拟角色排序失败'); };
+  move('c1', 'ArrowRight');
+  await until(() => !Views._charOrderPending, '排序失败恢复');
+  check(order() === 'c1,c2' && !card('c1').querySelector('[data-act="move"]').disabled, '排序失败回滚且可重试');
   D.persist = persist;
-  edit('c1', 'sort');
-  check(document.querySelector('[data-xmount="position"] .xsel') && !document.querySelector('select'), '排序复用统一下拉');
-  field('position', '1'); await save(); check(order() === 'c2,c1', '普通组可调整位置');
-  edit('c1', 'pin'); await until(() => D.charById('c1').pinned, '置顶角色');
-  await until(() => card('c1').querySelector('[aria-pressed="true"]'), '置顶界面更新');
-  check(order() === 'c1,c2', '置顶角色在前');
-  edit('c2', 'pin'); await until(() => order() === 'c2,c1', '另一角色置顶');
-  edit('c1', 'sort'); field('position', '0'); await save();
-  check(order() === 'c1,c2', '置顶组可独立排序');
-  edit('c2', 'pin'); await until(() => !D.charById('c2').pinned, '取消置顶');
-  await until(() => card('c2').querySelector('[aria-pressed="false"]'), '取消置顶界面更新');
+  move('c1', 'ArrowRight'); await until(() => !Views._charOrderPending, '方向键向后');
+  check(order() === 'c2,c1' && document.activeElement.dataset.act === 'move', '方向键排序保存且焦点返回手柄');
+  const handle = card('c1').querySelector('[data-act="move"]'), target = card('c2');
+  const dataTransfer = new DataTransfer(), bounds = target.getBoundingClientRect();
+  handle.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }));
+  target.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer, clientX: bounds.left + 10, clientY: bounds.top + 10 }));
+  check(target.dataset.dropSide && card('c1').classList.contains('is-dragging'), '角色拖动有插入线与淡化提示');
+  target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer, clientX: bounds.left + 10, clientY: bounds.top + 10 }));
+  handle.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer }));
+  await until(() => !Views._charOrderPending, '拖动保存');
+  check(order() === 'c1,c2' && !document.querySelector('.is-dragging, [data-drop-side]'), '拖动前后位置持久化且清理提示');
   click('#quick-add'); field('name', '重试角色'); field('level', 69);
   D.persist = async () => { throw new Error('模拟角色写入失败'); };
   click('.modal [data-act="ok"]');
@@ -316,6 +321,51 @@ async function checks(phase) {
   return backup;
 }
 
+async function nativeCardDrag(win) {
+  const run = (code) => win.webContents.executeJavaScript(code, true);
+  win.webContents.debugger.attach('1.3');
+  await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true });
+  const points = await run(`(() => {
+    const source = document.querySelector('.char-card[data-id="c2"] [data-act="move"]').getBoundingClientRect();
+    const target = document.querySelector('.char-card[data-id="c1"]').getBoundingClientRect();
+    return { from: { x: source.left + source.width / 2, y: source.top + source.height / 2 },
+      to: { x: target.left + target.width * .2, y: target.top + 30 } };
+  })()`);
+  let timer, onDrag;
+  const intercepted = new Promise((resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('角色未触发原生拖动')), 3000);
+    onDrag = (_event, method, params) => {
+      if (method === 'Input.dragIntercepted') { clearTimeout(timer); resolve(params.data); }
+    };
+  });
+  win.webContents.debugger.on('message', onDrag);
+  await win.webContents.debugger.sendCommand('Input.setInterceptDrags', { enabled: true });
+  try {
+    await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', ...points.from });
+    await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mousePressed', ...points.from, button: 'left', buttons: 1, clickCount: 1 });
+    await run('new Promise(resolve => requestAnimationFrame(resolve))');
+    for (const distance of [8, 24, 48]) {
+      await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x: points.from.x - distance, y: points.from.y + 8, button: 'left', buttons: 1 });
+    }
+    const data = await intercepted;
+    for (const type of ['dragEnter', 'dragOver', 'drop']) {
+      await win.webContents.debugger.sendCommand('Input.dispatchDragEvent', { type, ...points.to, data });
+    }
+    await run(`new Promise((resolve, reject) => {
+      let tries = 0; const poll = () => {
+        if (!Views._charOrderPending && document.querySelector('.char-card').dataset.id === 'c2') { resolve(); return; }
+        if (++tries > 150) { reject(new Error('角色原生拖动未保存顺序')); return; }
+        setTimeout(poll, 20);
+      }; poll();
+    })`);
+  } finally {
+    clearTimeout(timer); win.webContents.debugger.removeListener('message', onDrag);
+    await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', ...points.to, button: 'left', clickCount: 1 });
+    await win.webContents.debugger.sendCommand('Input.setInterceptDrags', { enabled: false });
+  }
+  await run("Views.charPersistOrder('c1', { targetId: 'c2', position: 'before' })");
+}
+
 app.whenReady().then(async () => {
   const errors = [];
   const win = new BrowserWindow({ show: false, width: 1280, height: 840, frame: false,
@@ -326,7 +376,9 @@ app.whenReady().then(async () => {
     win.webContents.on('console-message', (_event, level, message) => { if (level === 3) errors.push(message); });
     await win.loadFile(path.join(root, 'src/renderer/index.html'));
     const run = (phase) => win.webContents.executeJavaScript('(' + checks.toString() + ')(' + JSON.stringify(phase) + ')', true);
-    const snapshot = await run('forms');
+    await run('forms');
+    await nativeCardDrag(win);
+    const snapshot = await win.webContents.executeJavaScript('JSON.stringify(D.state)', true);
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'data.json'))), JSON.parse(snapshot));
     const loaded = new Promise((resolve) => win.webContents.once('did-finish-load', resolve));
     win.webContents.reload(); await loaded;
@@ -377,7 +429,7 @@ app.whenReady().then(async () => {
     }
     assert.deepEqual(errors, []);
     console.log('[characters] PASS: 顶部图标与编辑顺序、统一档案一次保存、技能增删/自定义/空值、修炼与装备保留');
-    console.log('[characters] PASS: 置顶/分组排序、失败回滚重试、删除恢复、备份往返、真实重启、窄窗口与滚动位置');
+    console.log('[characters] PASS: 单一手柄/原生鼠标拖动/方向键排序、失败回滚重试、删除恢复、备份往返、真实重启、窄窗口与滚动位置');
     console.log('[characters] PASS: 师门/辅助技能前后移、首尾边界、自定义技能零值、取消与失败重试、落盘与重启顺序');
     console.log('[characters] PASS: 异步切页、保存锁定与恢复、焦点、分区定位、门派保留/替换/取消、复制预览与跳过空值');
     if (process.argv.includes('--screenshots')) console.log('[characters] screenshots:', dir);

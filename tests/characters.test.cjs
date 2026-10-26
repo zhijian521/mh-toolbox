@@ -214,46 +214,71 @@ test('统一档案一次保存基础与全部养成，非法数据和写入失�
   assert.equal(D.charById('c1').progress.potentialFruits, 100);
 });
 
-test('旧顺序保持，新角色加入普通组首位，置顶和组内排序在备份恢复后保留', async () => {
+test('角色拖动使用同一列表，编辑不重排，新角色在首位且备份恢复保留顺序', async () => {
   const D = domain();
   D.charById('c1').createdAt = 1; D.charById('c2').createdAt = 2;
   const ids = () => D.orderedCharacters().map((item) => item.id).join(',');
   assert.equal(ids(), 'c2,c1');
   const third = await D.saveCharacter({ name: '第三位' });
   assert.equal(ids(), third.id + ',c2,c1');
-  await D.saveCharacterOrder('c1', { pinned: true });
-  await D.saveCharacterOrder('c2', { pinned: true });
-  assert.equal(ids(), 'c2,c1,' + third.id);
-  await D.saveCharacterOrder('c1', { position: 0 });
+  await D.saveCharacterOrder('c1', { targetId: third.id, position: 'before' });
+  assert.equal(ids(), 'c1,' + third.id + ',c2');
+  await D.saveCharacterOrder('c2', { targetId: 'c1', position: 'after' });
   assert.equal(ids(), 'c1,c2,' + third.id);
   await D.saveCharacter({ name: '改名' }, 'c2');
   assert.equal(ids(), 'c1,c2,' + third.id);
   D.state = D.normalize(plain(D.state));
   assert.equal(ids(), 'c1,c2,' + third.id);
-  await D.saveCharacterOrder('c1', { pinned: false });
-  assert.equal(ids(), 'c2,c1,' + third.id);
-  await D.saveCharacterOrder('c1', { position: 1 });
+  await D.saveCharacterOrder('c1', { targetId: third.id, position: 'after' });
   assert.equal(ids(), 'c2,' + third.id + ',c1');
   const fourth = await D.saveCharacter({ name: '第四位' });
-  assert.equal(ids(), 'c2,' + fourth.id + ',' + third.id + ',c1');
+  assert.equal(ids(), fourth.id + ',c2,' + third.id + ',c1');
   assert.deepEqual(plain(D.normalize(plain(D.state))), plain(D.state));
 });
 
-test('置顶排序校验及写入失败均恢复原顺序、档案和装备', async () => {
+test('拖动排序校验及写入失败恢复原顺序、档案和装备，队列读取最新位置', async () => {
   const D = domain();
   const before = JSON.stringify(D.state);
-  for (const change of [{ position: -1 }, { position: 2 }, { position: 0.5 }, { pinned: 'true' }]) {
+  for (const change of [{ position: -1 }, { targetId: 'missing', position: 'before' },
+    { targetId: 'c1', position: 'before' }, { targetId: 'c2', position: 'invalid' },
+    { targetId: 'c2', position: 'before', visibleIds: ['c1', 'c1'] }]) {
     await assert.rejects(D.saveCharacterOrder('c1', change));
     assert.equal(JSON.stringify(D.state), before);
   }
-  await assert.rejects(D.saveCharacterOrder('missing', { position: 0 }), /不存在/);
+  await assert.rejects(D.saveCharacterOrder('missing', { targetId: 'c2', position: 'before' }), /不存在/);
   D.persist = async () => { throw new Error('排序写入失败'); };
-  await assert.rejects(D.saveCharacterOrder('c1', { pinned: true }), /排序写入失败/);
+  await assert.rejects(D.saveCharacterOrder('c1', { targetId: 'c2', position: 'after' }), /排序写入失败/);
   assert.equal(JSON.stringify(D.state), before);
   D.persist = async () => {};
-  await D.saveCharacterOrder('c1', { pinned: true });
+  await Promise.all([
+    D.saveCharacterOrder('c1', { targetId: 'c2', position: 'after' }),
+    D.saveCharacterOrder('c1', { targetId: 'c2', position: 'before' }),
+  ]);
   assert.equal(D.orderedCharacters()[0].id, 'c1');
   assert.equal(D.state.equipment[0].id, 'sword');
+  assert.equal(D.charById('c1').growthHistory.length, 0);
+});
+
+test('旧角色与目标置顶按原显示顺序合并为自由排序，归一化幂等且不修改备份', async () => {
+  const D = domain();
+  const items = [
+    { id: 'a', name: 'A', pinned: false, sortOrder: 0 },
+    { id: 'b', name: 'B', pinned: true, sortOrder: 1 },
+    { id: 'c', name: 'C', pinned: true, sortOrder: 0 },
+    { id: 'd', name: 'D', pinned: false, sortOrder: 1 },
+  ];
+  const input = { characters: items, goals: items.map(item => ({ ...item, title: item.name })) };
+  const before = JSON.stringify(input);
+  D.state = D.normalize(input);
+  assert.equal(D.orderedCharacters().map(item => item.id).join(''), 'cbad');
+  assert.equal(D.orderedGoals().map(item => item.id).join(''), 'cbad');
+  assert.ok(D.state.characters.concat(D.state.goals).every(item => !Object.hasOwn(item, 'pinned')));
+  assert.equal(JSON.stringify(input), before);
+  assert.deepEqual(plain(D.normalize(plain(D.state))), plain(D.state));
+  await D.saveCharacterOrder('a', { targetId: 'c', position: 'before' });
+  await D.saveGoalOrder('d', { targetId: 'b', position: 'before' });
+  assert.equal(D.orderedCharacters().map(item => item.id).join(''), 'acbd');
+  assert.equal(D.orderedGoals().map(item => item.id).join(''), 'cdba');
 });
 
 test('编辑与养成保存不执行新建角色的排序计算', async () => {

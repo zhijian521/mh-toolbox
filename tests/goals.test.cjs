@@ -151,23 +151,20 @@ test('目标边界拒绝无效范围、零目标、小数养成和错误日期�
   assert.equal(goal.tracking.key, '强身术');
 });
 
-test('目标置顶和拖动顺序独立保存，编辑不重排，新目标加入普通组首位', async () => {
+test('目标自由拖动顺序保存，编辑不重排，新目标在首位', async () => {
   const D = fixture(), a = await D.saveGoal({ ...strong, title: 'A' });
   const b = await D.saveGoal({ ...strong, title: 'B' }), c = await D.saveGoal({ ...strong, title: 'C' });
   const order = () => D.orderedGoals().map((goal) => goal.title).join('');
   assert.equal(order(), 'CBA');
-  await D.saveGoalOrder(a.id, { pinned: true }); assert.equal(order(), 'ACB');
-  await D.saveGoalOrder(b.id, { pinned: true }); assert.equal(order(), 'BAC');
+  await D.saveGoalOrder(a.id, { targetId: c.id, position: 'before' }); assert.equal(order(), 'ACB');
+  await D.saveGoalOrder(b.id, { targetId: a.id, position: 'before' }); assert.equal(order(), 'BAC');
   await D.saveGoalOrder(a.id, { targetId: b.id, position: 'before' }); assert.equal(order(), 'ABC');
-  await D.saveGoalOrder(a.id, { pinned: false }); assert.equal(order(), 'BAC');
-  await D.saveGoalOrder(c.id, { targetId: a.id, position: 'before' }); assert.equal(order(), 'BCA');
-  await D.saveGoal({ ...strong, title: 'A' }, a.id); assert.equal(order(), 'BCA');
-  await D.saveGoal({ ...strong, title: 'D' }); assert.equal(order(), 'BDCA');
-  const progress = D.goalSummary(a);
-  assert.equal(progress.achieved, 1); assert.equal(D.goalGrowthHistory(a).length, 0);
+  await D.saveGoalOrder(c.id, { targetId: a.id, position: 'after' }); assert.equal(order(), 'ACB');
+  await D.saveGoal({ ...strong, title: 'A' }, a.id); assert.equal(order(), 'ACB');
+  await D.saveGoal({ ...strong, title: 'D' }); assert.equal(order(), 'DACB');
+  assert.equal(D.goalSummary(a).achieved, 1); assert.equal(D.goalGrowthHistory(a).length, 0);
   const restored = D.normalize(plain(D.state));
-  assert.equal(D.orderedGoals(restored.goals).map((goal) => goal.title).join(''), 'BDCA');
-  assert.equal(restored.goals.find((goal) => goal.id === b.id).pinned, true);
+  assert.equal(D.orderedGoals(restored.goals).map((goal) => goal.title).join(''), 'DACB');
 });
 
 test('筛选及自动排序拖动保留隐藏目标的相对顺序，异常位置和落盘失败整体回滚', async () => {
@@ -178,7 +175,7 @@ test('筛选及自动排序拖动保留隐藏目标的相对顺序，异常位�
   assert.equal(D.orderedGoals().map((goal) => goal.title).join(''), 'ACBH');
   const snapshot = JSON.stringify(D.state);
   for (const changes of [
-    { pinned: 'yes' }, { targetId: 'missing', position: 'before' }, { targetId: a.id, position: 'invalid' },
+    { targetId: c.id, position: 'before' }, { targetId: 'missing', position: 'before' }, { targetId: a.id, position: 'invalid' },
     { targetId: a.id, position: 'after', visibleIds: [a.id, a.id, c.id] },
     { targetId: a.id, position: 'after', visibleIds: [a.id, 'missing', c.id] },
   ]) {
@@ -186,11 +183,10 @@ test('筛选及自动排序拖动保留隐藏目标的相对顺序，异常位�
     assert.equal(JSON.stringify(D.state), snapshot);
   }
   D.persist = async () => { throw new Error('排序写入失败'); };
-  await assert.rejects(D.saveGoalOrder(c.id, { pinned: true }), /写入失败/);
   await assert.rejects(D.saveGoalOrder(c.id, { targetId: a.id, position: 'before' }), /写入失败/);
   assert.equal(JSON.stringify(D.state), snapshot);
   D.persist = async () => {};
-  await D.saveGoalOrder(c.id, { pinned: true });
-  await assert.rejects(D.saveGoalOrder(a.id, { targetId: c.id, position: 'before' }), /分别排序/);
-  assert.equal(D.state.goals.find((goal) => goal.id === hidden.id).pinned, false);
+  await D.saveGoalOrder(c.id, { targetId: a.id, position: 'before' });
+  assert.equal(D.orderedGoals().map(goal => goal.title).join(''), 'CABH');
+  assert.equal(D.state.goals.find((goal) => goal.id === hidden.id).characterId, 'c2');
 });

@@ -10,16 +10,6 @@ Views.characters = function () {
   root.querySelectorAll('.char-card').forEach((card) => {
     const character = D.charById(card.dataset.id);
     card.querySelector('[data-act="edit"]').onclick = () => Views.charModal(character);
-    card.querySelector('[data-act="pin"]').onclick = async (event) => {
-      const button = event.currentTarget;
-      button.disabled = true;
-      try {
-        await D.saveCharacterOrder(character.id, { pinned: !character.pinned });
-        Views.charRefresh(character.id, 'pin');
-      } catch (error) { UI.toast(error.message || '置顶失败，请重试', 'err'); }
-      finally { button.disabled = false; }
-    };
-    card.querySelector('[data-act="sort"]').onclick = () => Views.charOrderModal(character);
     card.querySelector('[data-act="history"]').onclick = () => Views.charHistoryModal(character.id);
     card.querySelector('[data-act="copy"]').onclick = () => Views.charCopyProgressModal(character);
     card.querySelector('[data-act="del"]').onclick = () => Views.charDelete(character);
@@ -27,7 +17,28 @@ Views.characters = function () {
       button.onclick = () => Views.charQuickModal(character.id, button.dataset.category, button.dataset.key);
     });
   });
+  UI.bindCardOrdering(root, { grid: '.char-grid', card: '.char-card', kind: 'character',
+    pending: () => Views._charOrderPending, onMove: Views.charPersistOrder });
   root.scrollTop = scrollTop;
+};
+
+Views.charPersistOrder = async function (id, changes) {
+  if (Views._charOrderPending) return;
+  Views._charOrderPending = true;
+  const grid = document.querySelector('.char-grid');
+  const controls = [...document.querySelectorAll('.char-card [data-act="move"]')];
+  controls.forEach((button) => { button.disabled = true; });
+  if (grid) grid.setAttribute('aria-busy', 'true');
+  try {
+    await D.saveCharacterOrder(id, changes);
+    Views.charRefresh(id, 'move');
+    UI.toast('角色顺序已保存');
+  } catch (error) { UI.toast(error.message || '排序失败，请重试', 'err'); }
+  finally {
+    Views._charOrderPending = false;
+    controls.forEach((button) => { button.disabled = false; });
+    if (grid) grid.removeAttribute('aria-busy');
+  }
 };
 
 Views.charFocusTarget = function (id, action = 'edit') {
@@ -50,7 +61,7 @@ Views.charCardHtml = function (character) {
   const progress = D.normalizeCharacterProgress(character.progress);
   const heading = (title) => '<div class="char-section-head"><h3>' + title + '</h3></div>';
   const iconButton = (action, icon, label, extra = '') => '<button class="btn btn-sm char-icon-btn' +
-    (action === 'del' ? ' btn-danger' : '') + '" data-act="' + action + '" title="' + label + '" aria-label="' + label + '"' + extra + '>' + UI.icon(icon, 15) + '</button>';
+    (action === 'del' ? ' btn-danger' : action === 'move' ? ' card-drag-handle' : '') + '" data-act="' + action + '" title="' + label + '" aria-label="' + label + '"' + extra + '>' + UI.icon(icon, 15) + '</button>';
   const value = (label, number, unit, category, key = '') => '<div class="char-value"><dt>' + U.esc(label) + '</dt><dd' +
     (number == null ? ' class="is-empty"' : '') + '><button type="button" class="char-value-edit" data-act="quick-edit" data-category="' + category +
     '" data-key="' + U.esc(key) + '" title="点击修改' + U.esc(label) + '" aria-haspopup="dialog" aria-label="修改' + U.esc(label) +
@@ -64,8 +75,7 @@ Views.charCardHtml = function (character) {
     '<header class="char-top"><div class="char-identity">' + UI.icon('hero', 40) + '<div><h2 class="char-name">' + U.esc(character.name) +
     '</h2><p class="char-sub">' + U.esc([character.level ? character.level + ' 级' : '', character.school, character.server].filter(Boolean).join(' · ')) +
     '</p></div></div><div class="char-toolbar">' +
-      iconButton('pin', 'pin', character.pinned ? '取消置顶' : '置顶角色', ' aria-pressed="' + (character.pinned === true) + '"') +
-      iconButton('sort', 'sort', '调整排序') + iconButton('history', 'calendar', '查看养成记录') +
+      iconButton('move', 'grip', '拖动排序，或用方向键前后移动', ' draggable="true"') + iconButton('history', 'calendar', '查看养成记录') +
       iconButton('copy', 'copy', '复制养成配置') + iconButton('del', 'trash', '删除角色') +
       iconButton('edit', 'edit', '编辑档案') + '</div></header>' +
     '<section class="char-section">' + heading('师门技能') + skills(progress.schoolSkills, 'schoolSkills') + '</section>' +
@@ -370,24 +380,6 @@ Views.charBindSkillEditor = function (editor, skills, auxiliary, api) {
     replace(filled);
   };
   return { read: () => Views.charReadSkills(editor), replace };
-};
-
-Views.charOrderModal = function (character) {
-  const group = D.orderedCharacters().filter((item) => (item.pinned === true) === (character.pinned === true));
-  UI.formModal({
-    title: '调整排序 · ' + character.name,
-    returnFocus: () => Views.charFocusTarget(character.id, 'sort'),
-    values: { position: String(group.findIndex((item) => item.id === character.id)) },
-    fields: [{ key: 'position', label: character.pinned ? '置顶角色中的位置' : '普通角色中的位置', type: 'select', full: true,
-      options: group.map((item, index) => ({ v: String(index), t: '第 ' + (index + 1) + ' 位 · ' + item.name })),
-      hint: '置顶角色始终排在普通角色前；取消置顶后回到普通组首位。' }],
-    onRender: (_form, _api, overlay) => overlay.classList.add('char-modal'),
-    onSubmit: async (data) => {
-      await D.saveCharacterOrder(character.id, { position: Number(data.position) });
-      Views.charRefresh(character.id, 'sort');
-      UI.toast('角色顺序已保存');
-    },
-  });
 };
 
 Views.charDelete = async function (character) {

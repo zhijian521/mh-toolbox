@@ -92,25 +92,11 @@ Object.assign(D, {
   },
 
   orderedCharacters(characters = this.state.characters) {
-    return characters.slice().sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true) ||
-      (this.characterNumber(a.sortOrder) ?? Infinity) - (this.characterNumber(b.sortOrder) ?? Infinity) ||
-      (b.createdAt || 0) - (a.createdAt || 0));
+    return this.orderedCards(characters);
   },
 
   saveCharacterOrder(id, changes) {
-    return this.commit(() => {
-      const character = this.charById(id);
-      if (!character) throw new Error('角色不存在');
-      const pinned = changes.pinned === undefined ? character.pinned === true : changes.pinned;
-      if (typeof pinned !== 'boolean') throw new Error('置顶状态不正确');
-      const group = this.orderedCharacters().filter((item) => item.id !== id && (item.pinned === true) === pinned);
-      const position = changes.position === undefined ? 0 : changes.position;
-      if (!Number.isInteger(position) || position < 0 || position > group.length) throw new Error('排序位置不正确，请重新选择');
-      group.splice(position, 0, character);
-      const positions = new Map(group.map((item, index) => [item.id, index]));
-      this.state.characters = this.state.characters.map((item) => positions.has(item.id) ?
-        Object.assign({}, item, { pinned, sortOrder: positions.get(item.id) }) : item);
-    });
+    return this.commit(() => this.moveCard(this.state.characters, id, changes));
   },
 
   /** 新建和编辑角色只在写入成功后确认；失败恢复角色集合，表单可直接重试。 */
@@ -126,7 +112,7 @@ Object.assign(D, {
     const level = data.level === undefined && previous ? previous.level : data.level;
     if (level != null && level !== '' && this.characterNumber(level) === null) throw new Error('角色等级需填写非负整数');
     if (data.progress !== undefined) this.validateCharacterProgress(data.progress);
-    const saved = Object.assign({}, previous || { id: U.uid(), createdAt: Date.now(), pinned: false, sortOrder: 0 }, {
+    const saved = Object.assign({}, previous || { id: U.uid(), createdAt: Date.now(), sortOrder: 0 }, {
       name, level: this.characterNumber(level),
       school: data.school === undefined && previous ? previous.school : data.school || '',
       server: data.server === undefined && previous ? previous.server : String(data.server || '').trim(),
@@ -138,7 +124,7 @@ Object.assign(D, {
     if (previous) {
       this.state.characters = this.state.characters.map((character) => character.id === id ? saved : character);
     } else {
-      const positions = new Map(this.orderedCharacters().filter((item) => !item.pinned).map((item, index) => [item.id, index + 1]));
+      const positions = new Map(this.orderedCharacters().map((item, index) => [item.id, index + 1]));
       this.state.characters = [...this.state.characters.map((item) => positions.has(item.id) ?
         Object.assign({}, item, { sortOrder: positions.get(item.id) }) : item), saved];
     }
