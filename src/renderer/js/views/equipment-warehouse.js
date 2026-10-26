@@ -7,7 +7,7 @@ Views.eqWarehouseHtml = function (character) {
   const list = D.state.equipment.filter((eq) => eq.characterId === character.id &&
     (!filter.slot || eq.slot === filter.slot) && (!filter.group || (group ? group.slots.includes(eq.slot) : eq.slot === '其他')) &&
     (!filter.status || D.equipmentStatus(eq, references.get(eq.id) || []) === filter.status) && (!filter.kw ||
-      [eq.name, eq.attributes, eq.special, eq.gems, eq.note, eq.jade && JSON.stringify(eq.jade)].join(' ').toLowerCase().includes(filter.kw.toLowerCase())))
+      D.equipmentSearchText(eq).toLowerCase().includes(filter.kw.toLowerCase())))
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   return '<div class="eq-warehouse-head"><div><h2>装备仓库</h2><p class="eq-muted">' + U.esc(character.name) +
     '的全部装备档案 · 共 ' + list.length + ' 件符合筛选</p></div><span class="eq-muted">穿戴目标：' +
@@ -22,9 +22,7 @@ Views.eqWarehouseHtml = function (character) {
       return '<tr data-id="' + U.esc(eq.id) + '"><td><span class="cell-sub">' + U.esc(eq.slot) + '</span>' +
         '<button class="eq-name" data-act="detail" data-eq-hover="' + U.esc(eq.id) + '">' + U.esc(eq.name) + '</button>' +
         (!D.isJade(eq.slot) && eq.level ? '<span class="cell-sub">' + U.esc(eq.level) + ' 级</span>' : '') + '</td><td>' +
-        '<div class="eq-table-attribute">' + U.esc((eq.jade ? eq.jade.base : eq.attributes || '').split('\n')[0] || '—') + '</div>' +
-        '<div class="cell-sub ' + (eq.special ? 'eq-table-special' : 'eq-table-upgrade') + '">' +
-        U.esc(eq.special || (eq.jade ? '灵尘 ' + eq.jade.dustLevel + ' 级' : eq.gems || '')) + '</div></td><td>' +
+        Views.eqSlotPropertiesHtml(eq) + '</td><td>' +
         '<span class="badge ' + (status === 'active' ? 'in' : status === 'sold' ? 'out' : '') + '">' + D.equipmentStatuses[status] + '</span>' +
         '<div class="cell-sub">' + U.esc(refs.map((ref) => ref.name).join(' / ') || '—') + '</div></td><td class="eq-table-actions">' +
         (eq.status !== 'sold' && eq.slot !== '其他' ? '<button class="btn btn-sm" data-act="equip">配置</button>' : '') +

@@ -48,8 +48,8 @@ Views.eqSlotHtml = function (character, index, slot) {
   const locked = D.isJade(slot) && !character.soulJade.unlocked;
   const icons = { 武器: 'sword', 头盔: 'helmet', 项链: 'necklace', 衣服: 'armor', 腰带: 'belt', 鞋子: 'boots',
     戒指: 'ring', 耳饰: 'earring', 手镯: 'bracelet', 佩饰: 'pendant', '玉魄·阳': 'jade-yang', '玉魄·阴': 'jade-yin' };
-  const attribute = eq ? (eq.jade ? eq.jade.base : eq.attributes || '').split('\n').find((line) => line.trim()) : '';
-  const level = eq ? D.isJade(slot) ? (eq.jade ? eq.jade.dustLevel : 0) + ' 级' : eq.level ? eq.level + ' 级' : '' : '';
+  const recordedLevel = eq ? D.isJade(slot) ? D.equipmentDetails(eq).jade.dust : eq.level : null;
+  const level = recordedLevel !== '' && recordedLevel != null ? recordedLevel + ' 级' : '';
   return '<button class="eq-slot' + (eq ? ' is-filled' : '') + (pending ? ' is-pending' : '') + '" data-slot="' + U.esc(slot) +
     '"' + (eq ? ' data-eq-hover="' + U.esc(eq.id) + '"' : '') + ' aria-label="' + U.esc(slot + '：' +
     (eq ? eq.name + '，查看属性与操作' : locked ? '未解锁，设置命魂之玉' : pending ? '旧装备待选择' : '空位，选择装备')) + '">' +
@@ -57,8 +57,7 @@ Views.eqSlotHtml = function (character, index, slot) {
       '<span class="eq-slot-type">' + U.esc(slot) + '</span><span class="eq-slot-level"' +
       (eq && D.isJade(slot) ? ' aria-label="灵尘等级 ' + U.esc(level) + '"' : '') + '>' + U.esc(level) + '</span></span>' +
     '<span class="eq-slot-name">' + U.esc(eq ? eq.name : locked ? '未解锁' : pending ? '待选择' : '＋ 添加') + '</span>' +
-    (eq ? '<span class="eq-slot-attribute">' + U.esc(attribute || '未录入属性') + '</span>' +
-      (eq.special ? '<span class="eq-slot-special">' + U.esc(eq.special) + '</span>' : '') : '') + '</button>';
+    (eq ? Views.eqSlotPropertiesHtml(eq) : '') + '</button>';
 };
 
 Views.eqBoardHtml = function (character, index) {
@@ -77,7 +76,8 @@ Views.eqBoardHtml = function (character, index) {
             '" data-set="' + number + '" title="' + U.esc(label) + '" aria-label="' + U.esc(label) +
             '" aria-pressed="' + (number === index) + '">' + (number + 1) + '</button>';
         }).join('') + '</div><div class="eq-identity">' + UI.icon('hero', 48) +
-        '<h3>' + U.esc(character.name) + '</h3><p>' + U.esc([character.level ? character.level + ' 级' : '', character.school].filter(Boolean).join(' · ') || '角色档案') +
+        '<h3>' + U.esc(character.name) + '</h3><p>' + [character.level ? character.level + ' 级' : '', character.school].filter(Boolean)
+          .map((text) => '<span>' + U.esc(text) + '</span>').join('') +
         '</p><div class="eq-plan-state">' + (index === character.activeEquipmentSet ? '<span>使用中</span>' :
           '<button class="btn btn-sm" data-act="activate">使用此套</button>') + '</div></div></div></div>' +
       '<div class="eq-section-head"><h2>灵饰</h2></div>' +
@@ -131,24 +131,6 @@ Views.eqCommit = async function (change, message) {
     UI.toast(error.message || '保存失败，请重试', 'err');
     return false;
   }
-};
-
-Views.eqPropertiesHtml = function (eq) {
-  const row = (label, value, kind) => '<div class="eq-property' + (kind ? ' eq-property-' + kind : '') + '"><dt>' +
-    U.esc(label) + '</dt><dd>' + U.esc(value || '—') + '</dd></div>';
-  let html = '<div class="eq-attribute-title"><b>' + U.esc(eq.name) + '</b><span>' + U.esc(eq.slot +
-    (!D.isJade(eq.slot) && eq.level ? ' · ' + eq.level + ' 级' : '')) + '</span></div><dl class="eq-properties">';
-  if (D.isJade(eq.slot) && eq.jade) {
-    const jade = eq.jade;
-    html += row('基础属性', jade.base, 'attribute') + row('附加属性', [jade.extra1, jade.extra2].filter(Boolean).join('\n'), 'attribute') +
-      row('灵尘等级', jade.dustLevel + ' 级（含自带加成）', 'upgrade') + row('特效', eq.special, 'special') +
-      row('开光孔', jade.holes + ' 个') + row(eq.slot === '玉魄·阳' ? '女娲灵契' : '女娲祝符',
-        Array.from({ length: jade.holes }, (_, index) => '孔 ' + (index + 1) + '：' + (jade.enchantments[index] || '未强化')).join('\n'), 'special') +
-      (jade.durability !== '' && jade.durability != null ? row('耐久', jade.durability + ' / 300') : '');
-  } else {
-    html += row('属性', eq.attributes, 'attribute') + row('特技 / 特效', eq.special, 'special') + row('宝石', eq.gems, 'upgrade');
-  }
-  return html + (eq.note ? row('备注', eq.note) : '') + '</dl>';
 };
 
 Views.eqBindTooltips = function (root) {

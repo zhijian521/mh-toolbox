@@ -29,7 +29,8 @@ mh-tool/
 │  ├─ preload/preload.js         # contextBridge API 白名单
 │  └─ renderer/
 │     ├─ index.html              # 唯一页面（脚本顺序即依赖顺序）
-│     ├─ styles.css              # 全部样式（按节分区，见规范）
+│     ├─ styles.css              # 全局样式（按节分区，见规范）
+│     ├─ equipment.css           # 完整装备栏与结构化编辑器样式
 │     ├─ assets/
 │     │  ├─ fonts/               # 霞鹜文楷 + OFL 许可
 │     │  └─ images/online-record/  # 快速记录物品图标（59 个）
@@ -47,12 +48,14 @@ mh-tool/
 │        │  ├─ goals.js          # D：目标与进度历史
 │        │  ├─ migration.js      # D：备份校验与版本迁移
 │        │  ├─ equipment.js      # D：三套装备方案、玉魄、引用与迁移
+│        │  ├─ equipment-fields.js # D：部位字段规则、属性校验与旧文本适配
 │        │  ├─ equipment-import.js # D：OCR 文字解析与批量建档
 │        │  ├─ online.js         # D：在线记录、参数快照、跨日点卡结算
 │        │  ├─ ui.js             # UI：Toast/弹窗/表单生成器/SVG 图标库/下拉与日历组件
 │        │  ├─ ui-cards.js       # UI：卡片拖动、键盘排序与保存状态
 │        │  ├─ ui-growth.js      # UI：数字/单位与养成变化呈现
-│        │  └─ ui-history.js     # UI：弹窗记录日期范围、分页和焦点
+│        │  ├─ ui-history.js     # UI：弹窗记录日期范围、分页和焦点
+│        │  └─ ui-equipment.js   # UI：手动录入和 OCR 核对共用装备编辑器
 │        ├─ layout/
 │        │  ├─ titlebar.js       # 自绘标题栏（拖拽/最大化/关闭）
 │        │  │  └─ dev.js            # 开发模式客户端（热替换/状态快照恢复）
@@ -103,7 +106,7 @@ mh-tool/
 | `sessions` | id, characterId, mode(range/duration/legacy), source(timer/manual/legacy), date, startAt/endAt（本地时间对应的时间戳）, minutes, accounts, cardPrice, cost（万）, note, createdAt |
 | `activeSession` | 未结束的 id, characterId, startAt, accounts, cardPrice, createdAt；开始即落盘，普通重启等待用户恢复 |
 | `goals` | id, characterId（`all` 或角色 ID）, sortOrder, type(money/gear/progress), title, target, tracking（null 或 category/key）, current, unit, status, deadline, doneAt, baseProgress, logs[]（id/date/delta/note） |
-| `equipment` | id, characterId, slot, name, level, attributes, special, gems, status；截图录入含 ocrText（识别原文）；玉魄含 jade（base、extra1、extra2、dustLevel、holes、enchantments[]、durability） |
+| `equipment` | id, characterId, slot, name, level, status；details（version: 1，结构化属性/强化/元信息）；兼容文本 attributes/special/gems，玉魄保留 jade 快照；截图录入含 ocrText（识别原文） |
 | `gearLogs` | id, equipmentId, characterId, date, action, amount, note |
 | `itemPrices` | 物品 id → 单价（**单位: 梦幻币**，与网页版单价文件互通） |
 | `quickSettings` | accounts(在线角色数), cardPrice(梦幻币/点) |
@@ -114,7 +117,7 @@ mh-tool/
 
 养成指标位于 `core/growth.js` 的 `D.growthMetrics`，统一分类、分组、标签、单位和技能/修炼/数量类型，`D.goalMetrics` 下拉从此派生。`D.growthValue` 共用数值读取，`D.characterValueChanges` 只构造单项草稿、不修改原档案、不自行提交；角色快捷编辑与目标批量更新在各自的串行事务内调用它，再由 `applyCharacter` 一次保存档案和历史。目标允许补建缺失技能，角色快捷编辑拒绝恢复已删除技能。历史生成与目标历史筛选共用指标元数据，沿用已有中文快照格式，无需变更数据版本；修改分组或标签时须兼容已有历史。
 
-> 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 5。
+> 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 6。
 
 共享账本列表和筛选位于 `views/records.js`，收益表单位于 `transactions.js`，账号快速记录、快捷表单预设和账号表单位于 `account.js`；金额、库存与装备关联在 `core/ledger.js`，统计在 `statistics.js`，CSV 编码在 `export.js`。
 
@@ -133,6 +136,8 @@ mh-tool/
 在线数据逻辑位于 `core/online.js`，表单、恢复提示和列表位于 `views/online.js`；`quick.js` 负责首页，`quick-timer.js` 负责计时，`quick-items.js` 负责物品目录、速记、单价与设置。每秒 tick 仅计算当前时段，历史统计在页面渲染及筛选变化时刷新，非收益首页不扫描历史。`onlineRecords` 与 `transactions` 都归属收益模块，通过内部页签切换。`D.saveSession` 同步生成每日点卡流水，`D.earningsStats` 按独立在线时长计算净时薪，活动用时不重复累计。
 
 装备领域逻辑位于 `core/equipment.js`，在 `data.js` 之后加载。`views/equipment.js` 负责角色装备卡片与浮卡，`equipment-warehouse.js` 负责仓库，`equipment-modals.js` 负责选择、编辑和方案弹窗。装备按 ID 建索引，仓库一次构建当前角色的方案引用索引；装备页不使用全局角色筛选，方案和格子事件限定在各自卡片内，进出仓库保留列表滚动位置。三套方案只引用装备 ID，当前使用和正在查看分别保存；资产 `status` 保留旧在用值兼容历史买卖，界面穿戴状态由方案引用推导。售出、删档和部位/角色变更清理引用，撤销出售只恢复持有。命魂之玉修炼存于角色，阴阳玉魄分别为独立装备资产。装备相关保存使用 `D.commitEquipment`，写入失败整体回滚内存。
+
+部位字段与校验集中在 `core/equipment-fields.js`；`core/ui-equipment.js` 为手动新增和截图核对提供同一个编辑器，按部位缓存 DOM 草稿，原生不完整数字也保留并阻止保存。截图核对还按图片缓存完整表单。`views/equipment-properties.js` 为格子、浮卡、详情和仓库生成同一组安全转义的属性行。旧文本只在读取时投影，无法明确映射的内容进入 `legacy`；编辑保存才写入结构化数据，并同步生成旧文本与玉魄快照。版本 5 首次升级写入前备份为 `.before-equipment-fields-时间戳.bak`。完整字段约定见 [EQUIPMENT_FIELDS.md](EQUIPMENT_FIELDS.md)。
 
 截图录入的解析和事务保存位于 `core/equipment-import.js`，队列、预览裁剪与可编辑草稿位于 `views/equipment-import.js`。最多 30 张、单张 16 MB / 1600 万像素，仅接受 PNG/JPEG/WebP/BMP。主进程再次校验图片，独立 utilityProcess 使用 sharp 放大原始彩色像素，再用 Guten OCR 的 PP-OCRv4 检测、中文识别模型和 ONNX CPU 推理读取文字。保留半透明背景与彩字，避免整图反色丢失文字；模型直接从随包 npm 资源加载，不走 CDN、不依赖语言包或显卡。识别超时 45 秒、空闲 60 秒释放，取消、关窗与刷新清理当前请求；渲染进程按请求 ID 过滤进度，关闭时退订并取消。空文字返回明确失败，不能显示已识别；图片不写入装备数据，原文保留至档案；缺失值保持空白，玉魄遵循现有校验。稀有装备名误读只在已知部位、等级和名称同时匹配时纠正，其他名称按原文填写。批量保存只补方案空位，同角色完整字段相同的档案复用，不新增财务流水。打包解包生产依赖，使 ESM、ONNX 原生库和模型从真实路径加载，并排除 Windows x64 以外的 ONNX 二进制。
 

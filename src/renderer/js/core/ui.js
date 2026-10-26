@@ -463,13 +463,20 @@ UI.select = function (mount, opts = {}) {
     trigger.querySelector('.xsel-t').textContent = current ? current.t : opts.placeholder || '请选择';
   };
   function openMenu(direction) {
-    const pop = UI.openPop(trigger, '<div class="xmenu" role="listbox" aria-label="' +
+    const pop = UI.openPop(trigger, (opts.searchable ? '<input class="xmenu-search" type="search" aria-label="搜索选项" placeholder="输入名称搜索">' : '') + '<div class="xmenu" role="listbox" aria-label="' +
       U.esc(trigger.getAttribute('aria-label')) + '">' + options.map((option) => {
       const on = String(option.v) === value;
       return '<div class="xitem' + (on ? ' on' : '') + '" role="option" aria-selected="' + on + '" tabindex="-1" data-v="' + U.esc(option.v) + '">' +
         '<span class="xitem-t">' + U.esc(option.t) + '</span>' + (on ? UI.icon('check', 13) : '') + '</div>';
     }).join('') + '</div>', { align: opts.align });
-    const items = [...pop.querySelectorAll('.xitem')];
+    let items = [...pop.querySelectorAll('.xitem')];
+    const allItems = items.slice();
+    const search = pop.querySelector('.xmenu-search');
+    if (search) search.oninput = () => {
+      const term = search.value.trim().toLowerCase();
+      allItems.forEach((item) => { item.hidden = !item.textContent.toLowerCase().includes(term); });
+      items = allItems.filter((item) => !item.hidden); index = -1;
+    };
     let index = options.findIndex((option) => String(option.v) === value);
     if (index < 0) index = direction === -1 ? items.length - 1 : 0;
     const focus = (next) => {
@@ -485,10 +492,11 @@ UI.select = function (mount, opts = {}) {
     pop.onkeydown = (event) => {
       if (event.key === 'Tab') { UI.closePop(true); return; }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); focus(index + (event.key === 'ArrowDown' ? 1 : -1)); }
+      if (event.target === search && !['ArrowDown', 'ArrowUp', 'Enter', 'Tab'].includes(event.key)) return;
       if (event.key === 'Home' || event.key === 'End') { event.preventDefault(); focus(event.key === 'Home' ? 0 : items.length - 1); }
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (items[index]) items[index].click(); }
     };
-    focus(index);
+    if (search && !direction) search.focus(); else focus(index);
   }
   trigger.onclick = (event) => { event.stopPropagation(); if (trigger.getAttribute('aria-expanded') === 'true') UI.closePop(true); else openMenu(); };
   trigger.onkeydown = (event) => {

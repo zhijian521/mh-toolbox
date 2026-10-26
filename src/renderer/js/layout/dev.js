@@ -42,8 +42,9 @@ const Dev = window.Dev = {
     location.reload();
   });
   mh.onDevCss(function () {
-    const link = document.querySelector('link[rel="stylesheet"]');
-    if (link) link.href = 'styles.css?v=' + Date.now();
+    document.querySelectorAll('link[rel="stylesheet"]').forEach(function (link) {
+      const url = new URL(link.href); url.searchParams.set('v', Date.now()); link.href = url.href;
+    });
   });
   window.addEventListener('beforeunload', function () { Dev.saveSnapshot(Dev._reloading === true); });
 })();

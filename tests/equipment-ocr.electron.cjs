@@ -7,11 +7,14 @@ const { isolate, createWindow } = require('./helpers/electron.cjs');
 const dir = isolate('equipment-ocr');
 fs.writeFileSync(path.join(dir, 'data.json'), JSON.stringify({ schemaVersion: 5,
   characters: [{ id: 'c1', name: '截图测试' }], equipment: [] }));
-const samples = [
+const known = [
   { file: 'necklace.png', name: '疾风之铃', slot: '项链', level: 80, attribute: '灵力', special: '四海升平', values: ['128'] },
   { file: 'earring.png', name: '明月珰', slot: '耳饰', level: 80, attribute: '治疗能力', special: '回春之术', values: ['16', '7[+12]', '10[+12]', '8[+16]'] },
   { file: 'weapon.png', name: '飞龙在天', slot: '武器', level: 130, attribute: '体质', special: '', values: ['660', '466', '37'] },
 ];
+const samples = require('./fixtures/equipment-ocr/samples.json').map((sample) => ({
+  ...sample, ...known.find((entry) => entry.file === sample.file),
+}));
 let win;
 app.whenReady().then(async () => {
   const errors = [];
@@ -34,10 +37,17 @@ app.whenReady().then(async () => {
       assert.ok(result.text.trim(), sample.file + ': 不应返回空识别结果');
       assert.equal(draft.name, sample.name, sample.file + ': 名称');
       assert.equal(draft.slot, sample.slot, sample.file + ': 部位');
-      assert.equal(draft.level, sample.level, sample.file + ': 等级');
-      assert.ok(draft.attributes.includes(sample.attribute), sample.file + ': 主要属性');
-      for (const value of sample.values) assert.ok(draft.attributes.includes(value), sample.file + ': 数值 ' + value);
-      assert.ok(draft.special.includes(sample.special), sample.file + ': 特技特效');
+      if (sample.level) assert.equal(draft.level, sample.level, sample.file + ': 等级');
+      if (sample.attribute) assert.ok(draft.attributes.includes(sample.attribute), sample.file + ': 主要属性');
+      for (const value of sample.values || []) assert.ok(draft.attributes.includes(value), sample.file + ': 数值 ' + value);
+      if (sample.special) assert.ok(draft.special.includes(sample.special), sample.file + ': 特技特效');
+      const record = await win.webContents.executeJavaScript('D.equipmentImportRecord(' + JSON.stringify(draft) + ', "c1")');
+      await win.webContents.executeJavaScript('D.validateEquipmentDetails(' + JSON.stringify(record.slot) + ', ' + JSON.stringify(record.level) + ', ' + JSON.stringify(record.details) + ')');
+      const expected = await win.webContents.executeJavaScript('D.equipmentImportRecord(D.parseEquipmentText(' + JSON.stringify(sample.text) + '), "c1")');
+      for (const key of ['base', 'extra', 'bonus', 'technique', 'effects', 'forge', 'gems', 'clock']) {
+        assert.deepEqual(record.details[key], expected.details[key], sample.file + ': ' + key);
+      }
+      if (record.slot.startsWith('玉魄')) assert.deepEqual(record.details.jade, expected.details.jade, sample.file + ': 玉魄强化');
     }
     const images = samples.map((sample) => ({ ...sample, base64: fs.readFileSync(path.join(__dirname,
       'fixtures/equipment-ocr', sample.file)).toString('base64') }));
@@ -55,12 +65,12 @@ app.whenReady().then(async () => {
         await new Promise(resolve => setTimeout(resolve, 20));
       }
       const rows = [...document.querySelectorAll('.eq-import-entry')];
-      if (rows.length !== 3) throw new Error('实图队列应有三件装备');
+      if (rows.length !== samples.length) throw new Error('实图队列数量不符');
       for (let index = 0; index < samples.length; index++) {
         rows[index].querySelector('[data-import-pick]').click();
         const form = document.querySelector('.eq-import-fields form');
         if (form.querySelector('[name="name"]').value !== samples[index].name) throw new Error('核对表名称未回填');
-        if (!form.querySelector('[name="attributes"]').value.includes(samples[index].attribute)) throw new Error('属性未回填');
+        if (!form.querySelector('.eq-editor input[type="number"]') || !form.querySelector('.eq-editor input[type="number"]').value) throw new Error('结构化属性未回填');
       }
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     })(${JSON.stringify(images)})`);
@@ -84,7 +94,7 @@ app.whenReady().then(async () => {
     })()`);
     assert.equal(blank.ok, false); assert.match(blank.error, /未识别到文字/);
     assert.deepEqual(errors, []);
-    console.log('[equipment-ocr] PASS: 三张实图的名称/部位/等级/属性/特技、真实批量回填与空结果提示');
+    console.log('[equipment-ocr] PASS: 12 张实图的名称/部位、属性校验、真实批量回填与空结果提示');
     console.log('[equipment-ocr] screenshots:', dir);
     clearTimeout(deadline); win.close(); app.exit(0);
   } catch (error) { console.error('[equipment-ocr] FAIL:', error); console.error('测试数据:', dir); app.exit(1); }

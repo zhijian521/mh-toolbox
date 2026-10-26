@@ -10,7 +10,7 @@ Views.eqPickModal = function (characterId, index, slot) {
     body: '<p class="eq-muted">从当前角色的仓库选择。替换只影响这一套方案。</p><div class="eq-picker">' +
       (candidates.length ? candidates.map((eq) => '<button class="eq-pick-item' + (eq.id === current ? ' is-current' : '') +
         '" data-pick="' + U.esc(eq.id) + '"><b>' + U.esc(eq.name) + '</b><span>' +
-        U.esc((eq.jade ? eq.jade.base : eq.attributes || '').split('\n')[0] || '未录入属性') + '</span><small>' +
+        U.esc(Views.eqPropertyRows(eq).slice(0, 3).map((row) => row.value).join(' · ') || '未录入属性') + '</span><small>' +
         U.esc(D.equipmentReferences(eq.id).map((reference) => reference.name).join(' / ') || '未配置') + '</small></button>').join('') :
         '<p class="eq-picker-empty">仓库里还没有这个部位的装备，可以直接新增。</p>') + '</div>',
     footer: '<button class="btn" data-act="cancel">取消</button>' +
@@ -86,63 +86,46 @@ Views.soulJadeModal = function (characterId) {
   });
 };
 
-Views.eqModal = function (eq, context) {
+Views.eqModal = function (eq, context = {}) {
   if (!D.state.characters.length) { UI.toast('请先创建角色', 'err'); Views.go('characters'); return; }
-  context = context || {};
-  const id = eq && eq.id;
-  const jade = eq && eq.jade || {};
-  const references = id ? D.equipmentReferences(id) : [];
+  const id = eq && eq.id, references = id ? D.equipmentReferences(id) : [];
   const values = Object.assign({ characterId: context.characterId || Views._eq.characterId || D.state.characters[0].id,
-    slot: context.slot || '武器', status: 'stored', equipNow: !!context.slot }, eq || {}, {
-    jadeBase: jade.base || '', jadeExtra1: jade.extra1 || '', jadeExtra2: jade.extra2 || '',
-    dustLevel: jade.dustLevel || 0, holes: String(jade.holes || 1), durability: jade.durability == null ? '' : jade.durability,
-    hole1: jade.enchantments && jade.enchantments[0] || '', hole2: jade.enchantments && jade.enchantments[1] || '',
-    hole3: jade.enchantments && jade.enchantments[2] || '', status: eq && eq.status === 'sold' ? 'sold' : 'stored',
-  });
+    slot: context.slot || '武器', status: 'stored', equipNow: !!context.slot }, eq || {}, { status: eq && eq.status === 'sold' ? 'sold' : 'stored' });
+  let editor;
   UI.formModal({
-    title: id ? '编辑装备档案' : '新增装备档案', values,
+    title: id ? '编辑装备档案' : '新增装备档案', wide: true, values,
+    returnFocus: () => Views._current === 'equipment' && document.querySelector('[data-eq-character="' + CSS.escape(values.characterId) +
+      '"] [data-slot="' + CSS.escape(values.slot) + '"]') || document.getElementById('quick-add'),
     fields: [
       { key: 'characterId', label: '角色', type: 'select', options: D.state.characters.map((character) => ({ v: character.id, t: character.name })) },
       { key: 'slot', label: '部位', type: 'select', options: D.slots },
       { key: 'name', label: '装备名称', type: 'text', required: true, placeholder: '填写游戏中的装备名称' },
-      { key: 'level', label: '装备等级', type: 'number', min: 0 },
-      { key: 'attributes', label: '装备属性', type: 'textarea', full: true, placeholder: '每行一条，如：伤害 +620' },
-      { key: 'jadeBase', label: '玉魄基础属性', type: 'text', required: true, full: true, placeholder: '如：伤害 +15' },
-      { key: 'jadeExtra1', label: '附加属性一', type: 'text', required: true, placeholder: '按游戏中显示数值填写' },
-      { key: 'jadeExtra2', label: '附加属性二', type: 'text', required: true },
-      { key: 'special', label: '特技 / 特效', type: 'text', full: true },
-      { key: 'gems', label: '宝石', type: 'text', full: true, placeholder: '如：太阳石 ×4' },
-      { key: 'dustLevel', label: '灵尘总等级', type: 'number', min: 0, hint: '含同属性自带加成，按游戏显示录入' },
-      { key: 'holes', label: '已解锁开光孔', type: 'select', options: ['1', '2', '3'] },
-      { key: 'hole1', label: '孔一 · 灵契 / 祝符', type: 'text', hint: '阳玉填写女娲灵契，阴玉填写女娲祝符；留空表示未强化' },
-      { key: 'hole2', label: '孔二 · 灵契 / 祝符', type: 'text' },
-      { key: 'hole3', label: '孔三 · 灵契 / 祝符', type: 'text' },
-      { key: 'durability', label: '当前耐久（可选）', type: 'number', min: 0, hint: '0～300' },
+      { key: 'level', label: '装备等级', type: 'number', min: 0, step: '1' },
       { key: 'status', label: '持有状态', type: 'segment', options: [{ v: 'stored', t: '持有' }, { v: 'sold', t: '已出售' }] },
       { key: 'equipNow', label: '保存后放入正在查看的方案', type: 'check', hint: '替换该部位的装备；原装备档案和其他方案保留' },
       { key: 'note', label: '备注', type: 'textarea', full: true },
     ],
-    onRender: (form, api) => {
+    onRender: (form, api, overlay) => {
+      overlay.classList.add('eq-edit-modal');
       if (references.length) form.insertAdjacentHTML('afterbegin', '<p class="eq-notice eq-form-notice">引用方案：' +
         U.esc(references.map((ref) => ref.name).join('、')) + '。改角色、改部位或设为出售会清空这些方案的对应格子。</p>');
+      const mount = document.createElement('div'); mount.className = 'eq-editor-mount';
+      form.querySelector('[data-field="status"]').before(mount);
+      editor = UI.equipmentEditor(mount, { slot: values.slot, equipment: eq || { slot: values.slot } });
+      const initial = editor.snapshot();
       const update = () => {
-        const isJade = D.isJade(api.getVal('slot'));
-        ['level', 'attributes', 'gems'].forEach((key) => api.show(key, !isJade));
-        ['jadeBase', 'jadeExtra1', 'jadeExtra2', 'dustLevel', 'holes', 'durability'].forEach((key) => api.show(key, isJade));
-        ['hole1', 'hole2', 'hole3'].forEach((key, index) => api.show(key, isJade && index < Number(api.getVal('holes'))));
+        editor.setSlot(api.getVal('slot'));
+        api.show('level', !D.isJade(api.getVal('slot')));
         api.show('equipNow', !id && api.getVal('status') !== 'sold' && api.getVal('slot') !== '其他');
-        form.querySelector('[data-field="special"] label').textContent = isJade ? '玉魄特效' : '特技 / 特效';
       };
       form.addEventListener('change', update); form.addEventListener('segchange', update); update();
+      // watchForm 在 onRender 之后初始化；追加缓存中未挂载部位的草稿检测。
+      queueMicrotask(() => { const dirty = overlay._isDirty; overlay._isDirty = () => dirty() || editor.snapshot() !== initial; });
     },
+    validate: () => editor.error(),
     onSubmit: async (data) => {
-      const record = { characterId: data.characterId, slot: data.slot, name: data.name, level: data.level,
-        attributes: data.attributes, special: data.special, gems: data.gems, status: data.status, note: data.note };
-      if (D.isJade(data.slot)) record.jade = {
-        base: data.jadeBase, extra1: data.jadeExtra1, extra2: data.jadeExtra2, dustLevel: data.dustLevel,
-        holes: Number(data.holes), durability: data.durability,
-        enchantments: [data.hole1, data.hole2, data.hole3].slice(0, Number(data.holes)),
-      };
+      const record = { characterId: data.characterId, slot: data.slot, name: data.name, level: D.isJade(data.slot) ? '' : data.level,
+        details: editor.read(), status: data.status, note: data.note };
       await D.commitEquipment(() => {
         const saved = D.saveEquipment(record, id);
         if (!id && data.equipNow && data.status !== 'sold' && data.slot !== '其他') {
@@ -152,7 +135,8 @@ Views.eqModal = function (eq, context) {
         }
       });
       Views._eq.characterId = data.characterId;
-      Views.equipment(); UI.toast(id ? '装备档案已保存' : '装备已登记');
+      if (Views._current === 'equipment') Views.equipment();
+      UI.toast(id ? '装备档案已保存' : '装备已登记');
     },
   });
 };

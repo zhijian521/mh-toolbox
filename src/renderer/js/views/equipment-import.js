@@ -55,7 +55,7 @@ Views.eqImportModal = function (context = {}) {
   });
 
   function busy(item) { return item.status === 'queued' || item.status === 'running'; }
-  function issue(item) { return D.equipmentImportError(item.draft, characterId); }
+  function issue(item) { return item.numberError || D.equipmentImportError(item.draft, characterId); }
   function updateSummary() {
     if (closed) return;
     const pending = queue.filter(busy).length;
@@ -113,18 +113,8 @@ Views.eqImportModal = function (context = {}) {
       '<section class="eq-import-fields">' + (draft ? '<form class="form-grid" novalidate>' +
         [{ key: 'name', label: '装备名称', required: true, full: true },
           { key: 'slot', label: '部位', type: 'select', options: [{ v: '', t: '请选择部位' }].concat(D.slots.filter((slot) => slot !== '其他')), required: true },
-          { key: 'level', label: '等级（可选）', type: 'number', min: 0 },
-          { key: 'attributes', label: '装备属性', type: 'textarea', full: true },
-          { key: 'jadeBase', label: '玉魄基础属性', full: true },
-          { key: 'jadeExtra1', label: '附加属性一', full: true }, { key: 'jadeExtra2', label: '附加属性二', full: true },
-          { key: 'special', label: '特技 / 特效', type: 'textarea', full: true },
-          { key: 'gems', label: '宝石', type: 'textarea', full: true },
-          { key: 'dustLevel', label: '灵尘总等级', type: 'number', min: 0 },
-          { key: 'holes', label: '已解锁开光孔', type: 'select', options: [{ v: '', t: '请选择' }, '1', '2', '3'] },
-          { key: 'hole1', label: '孔一 · 灵契 / 祝符', full: true }, { key: 'hole2', label: '孔二 · 灵契 / 祝符', full: true },
-          { key: 'hole3', label: '孔三 · 灵契 / 祝符', full: true },
-          { key: 'durability', label: '耐久（可选）', type: 'number', min: 0 },
-        ].map((field) => UI.fieldHtml(field, draft[field.key])).join('') +
+          { key: 'level', label: '等级（可选）', type: 'number', min: 0, step: '1' },
+        ].map((field) => UI.fieldHtml(field, draft[field.key])).join('') + '<div class="eq-editor-mount full"></div>' +
         '<p class="eq-import-error full" data-import-error role="status"></p>' +
         '<details class="eq-import-more full"><summary>备注与识别原文</summary>' +
         UI.fieldHtml({ key: 'note', label: '备注', type: 'textarea' }, draft.note) +
@@ -135,31 +125,42 @@ Views.eqImportModal = function (context = {}) {
     find('[data-act="retry"]').onclick = () => requeue(item);
     setupCrop(item);
     if (draft) {
-      const form = selectedRoot.querySelector('form');
-      form.onsubmit = (event) => event.preventDefault();
-      UI.select(form.querySelector('[data-xmount="slot"]'), { label: '部位', value: draft.slot,
-        options: [{ v: '', t: '请选择部位' }].concat(D.slots.filter((slot) => slot !== '其他')),
-        onChange: (value) => { draft.slot = value; showFields(); renderQueue(); updateSummary(); } });
-      UI.select(form.querySelector('[data-xmount="holes"]'), { label: '已解锁开光孔', value: String(draft.holes),
-        options: [{ v: '', t: '请选择' }, '1', '2', '3'],
-        onChange: (value) => { draft.holes = value === '' ? '' : Number(value); showFields(); updateSummary(); } });
-      const capture = (event) => {
-        const input = event.target;
-        if (!input.name || input.type === 'hidden') return;
-        draft[input.name] = input.type === 'number' && input.value !== '' ? Number(input.value) : input.value;
-        if (input.name === 'name') renderQueue();
-        updateSummary();
-      };
-      form.addEventListener('input', capture); form.addEventListener('change', capture);
-      function showFields() {
-        const jade = D.isJade(draft.slot);
-        const show = (keys, visible) => keys.forEach((key) => { form.querySelector('[data-field="' + key + '"]').hidden = !visible; });
-        show(['attributes', 'gems', 'level'], !jade);
-        show(['jadeBase', 'jadeExtra1', 'jadeExtra2', 'dustLevel', 'holes', 'durability'], jade);
-        [1, 2, 3].forEach((index) => show(['hole' + index], jade && index <= Number(draft.holes)));
+      let form = selectedRoot.querySelector('form');
+      if (item.form) {
+        form.replaceWith(item.form); form = item.form;
+      } else {
+        item.form = form;
+        form.onsubmit = (event) => event.preventDefault();
+        UI.select(form.querySelector('[data-xmount="slot"]'), { label: '部位', value: draft.slot,
+          options: [{ v: '', t: '请选择部位' }].concat(D.slots.filter((slot) => slot !== '其他')),
+          onChange: (value) => { draft.slot = value; showFields(); renderQueue(); updateSummary(); } });
+        const mount = form.querySelector('.eq-editor-mount');
+        const editor = UI.equipmentEditor(mount, { slot: draft.slot, equipment: D.equipmentImportRecord(draft, characterId),
+          onChange: (details) => { draft.details = details; item.numberError = numberError(); renderQueue(); updateSummary(); } });
+        const numberError = () => editor.error() || (!D.isJade(draft.slot) && !form.querySelector('[name="level"]').validity.valid ? '请检查装备等级' : '');
+        const capture = (event) => {
+          const input = event.target;
+          if (!['name', 'level', 'note'].includes(input.name)) return;
+          draft[input.name] = input.type === 'number' && input.value !== '' ? Number(input.value) : input.value;
+          item.numberError = numberError();
+          if (input.name === 'name') renderQueue();
+          updateSummary();
+        };
+        form.addEventListener('input', capture); form.addEventListener('change', capture);
+        function showFields() {
+          const jade = D.isJade(draft.slot);
+          form.querySelector('[data-field="level"]').hidden = jade;
+          editor.setSlot(draft.slot);
+          draft.details = editor.read(); item.numberError = numberError();
+        }
+        showFields();
       }
-      showFields();
-      form.querySelectorAll('input,textarea,button').forEach((input) => { input.disabled = busy(item); });
+      if (busy(item)) {
+        if (!item.disabledControls) item.disabledControls = [...form.querySelectorAll('input,textarea,button')].map((input) => [input, input.disabled]);
+        item.disabledControls.forEach(([input]) => { input.disabled = true; });
+      } else if (item.disabledControls) {
+        item.disabledControls.forEach(([input, disabled]) => { input.disabled = disabled; }); item.disabledControls = null;
+      }
     }
     updateSummary();
   }
@@ -230,6 +231,7 @@ Views.eqImportModal = function (context = {}) {
         if (!queue.includes(item)) continue;
         item.status = result.ok ? 'ready' : 'error'; item.error = result.error || ''; item.confidence = result.confidence;
         if (result.ok || !item.draft) {
+          item.form = null; item.disabledControls = null; item.numberError = '';
           item.draft = D.parseEquipmentText(result.text || '');
           if (!item.draft.slot && context.slot) item.draft.slot = context.slot;
         }
@@ -298,7 +300,7 @@ Views.eqImportModal = function (context = {}) {
   overlay.ondrop = (event) => { event.preventDefault(); overlay.classList.remove('is-dragging'); ingest([...event.dataTransfer.files]); };
   find('[data-act="cancel"]').onclick = UI.requestCloseModal;
   saveButton.onclick = async () => {
-    if (saveButton.disabled || closed) return;
+    if (saveButton.disabled || closed || !UI.validateNumberInputs(selectedRoot)) return;
     overlay._saving = true; UI.closePop(); updateSummary();
     const controls = [...overlay.querySelectorAll('input,textarea,button')].map((input) => [input, input.disabled]);
     controls.forEach(([input]) => { input.disabled = true; });

@@ -51,6 +51,14 @@ async function checks(phase) {
     if (input.type === 'checkbox') input.checked = value; else input.value = value;
     input.dispatchEvent(new Event('change', { bubbles: true }));
   };
+  const stat = (group, key, value, boost) => {
+    click('[data-eq-add="' + group + '"]');
+    const rows = document.querySelectorAll('[data-eq-row="' + group + '"]'), row = rows[rows.length - 1];
+    row.querySelector('[data-part="key"] button').click();
+    click('.xitem[data-v="' + key + '"]');
+    const input = row.querySelector('[data-part="value"] input'); input.value = value; input.dispatchEvent(new Event('input', { bubbles: true }));
+    if (boost != null) { const add = row.querySelector('[data-part="boost"] input'); add.value = boost; add.dispatchEvent(new Event('input', { bubbles: true })); }
+  };
   const save = async () => {
     document.querySelector('.modal [data-act="ok"]').click();
     await until(() => !document.querySelector('.modal'), '保存表单');
@@ -168,7 +176,7 @@ async function checks(phase) {
   await until(() => !document.querySelector('.modal'), '备用方案换装');
   check(character().equipmentSets[0].slots['武器'] === 'a' && character().equipmentSets[1].slots['武器'] === 'b', '换装只影响一套');
   click('[data-slot="戒指"]'); click('.modal [data-act="new"]');
-  field('name', '九曜光华'); field('level', 100); field('attributes', '防御 +24\n伤害 +12\n伤害 +12'); field('gems', '星辉石 ×5'); await save();
+  field('name', '九曜光华'); field('level', 100); field('eq-base-key', 'defense'); field('eq-base-value', 24); stat('extra', 'damage', 12); stat('extra', 'damage', 12); field('eq-forge', 5); await save();
   check(eq(character().equipmentSets[1].slots['戒指']).name === '九曜光华', '空位新增预填部位并穿戴');
   click('[data-slot="玉魄·阳"]');
   window.equipmentTestStage = '玉魄解锁';
@@ -177,11 +185,10 @@ async function checks(phase) {
   click('[data-slot="玉魄·阳"]'); click('[data-pick="sun"]');
   await until(() => !document.querySelector('.modal'), '穿戴阳玉');
   click('[data-slot="玉魄·阴"]'); click('.modal [data-act="new"]');
-  check(document.getElementById('mform').querySelector('[data-field="gems"]').hidden &&
-    !document.getElementById('mform').querySelector('[data-field="jadeBase"]').hidden, '玉魄独立表单');
-  field('name', '上古玉魄·阴'); field('jadeBase', '气血 +80'); field('jadeExtra1', '防御 +20'); field('jadeExtra2', '法术防御 +18');
-  field('dustLevel', 8); field('holes', '3'); field('hole1', '小还丹'); field('hole2', '九转还魂丹'); field('hole3', '金香玉');
-  field('durability', 300); field('special', '物伤化劲 4%'); await save();
+  check(!document.querySelector('[data-eq-group="upgrade"]') && document.querySelector('[data-eq-group="jade"]'), '玉魄独立表单');
+  field('name', '上古玉魄·阴'); field('eq-base-key', 'hp'); field('eq-base-value', 80); stat('extra', 'defense', 20); stat('extra', 'spellDefense', 18);
+  field('eq-dust', 8); field('eq-holes', '3'); field('eq-hole-0', '小还丹'); field('eq-hole-1', '九转还魂丹'); field('eq-hole-2', '金香玉');
+  field('eq-durability', 300); field('eq-assault', '奇袭道具'); field('eq-chance', 0.5); await save();
   check(character().equipmentSets[1].slots['玉魄·阴'], '新增阴玉配置');
   click('[data-act="rename"]'); field('set0', '日常任务'); field('set1', '日常输出'); field('set2', '难度任务'); await save();
   window.equipmentTestStage = '强化记账';

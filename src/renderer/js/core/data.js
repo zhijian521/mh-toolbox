@@ -1,8 +1,8 @@
 'use strict';
 /* 数据层：状态、常量、持久化 */
 const D = window.D = {
-  schemaVersion: 5,
-  state: { schemaVersion: 5, characters: [], transactions: [], sessions: [], activeSession: null, goals: [], equipment: [], gearLogs: [] },
+  schemaVersion: 6,
+  state: { schemaVersion: 6, characters: [], transactions: [], sessions: [], activeSession: null, goals: [], equipment: [], gearLogs: [] },
   charFilter: localStorage.getItem('mh.charFilter') || 'all',
 
   orderedCards(items) {

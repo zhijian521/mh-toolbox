@@ -60,7 +60,7 @@ function registerIpc(opts) {
       const oldVersion = fs.existsSync(file) ? readJson(file).schemaVersion : data.schemaVersion;
       if (fs.existsSync(file) && (options.backupReason || data.schemaVersion >= 3 && (!oldVersion || oldVersion < data.schemaVersion))) {
         const suffix = ['import', 'wipe', 'demo'].includes(options.backupReason) ? options.backupReason :
-          oldVersion === 4 ? 'inventory' : oldVersion === 3 ? 'equipment' : oldVersion === 2 ? 'online' : 'ledgers';
+          oldVersion === 5 ? 'equipment-fields' : oldVersion === 4 ? 'inventory' : oldVersion === 3 ? 'equipment' : oldVersion === 2 ? 'online' : 'ledgers';
         fs.copyFileSync(file, file + '.before-' + suffix + '-' + Date.now() + '.bak');
       }
       atomicWriteJson(file, data);

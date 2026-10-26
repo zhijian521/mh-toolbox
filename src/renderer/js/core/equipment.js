@@ -29,12 +29,17 @@ Object.assign(D, {
     const wearable = Object.values(this.equipmentGroups).flatMap((group) => group.slots);
     const equipmentById = new Map(state.equipment.map((eq) => [eq.id, eq]));
     state.equipment.forEach((eq) => {
+      if (eq.details) {
+        this.validateEquipmentDetails(eq.slot, eq.level, eq.details);
+        const detail = JSON.parse(JSON.stringify(eq.details));
+        eq.details = detail;
+      }
       if (!eq.jade || typeof eq.jade !== 'object') return;
       const jade = eq.jade;
       eq.jade = {
         base: String(jade.base || ''), extra1: String(jade.extra1 || ''), extra2: String(jade.extra2 || ''),
         dustLevel: Math.max(0, Math.min(17, Math.trunc(Number(jade.dustLevel) || 0))),
-        holes: Math.max(1, Math.min(3, Math.trunc(Number(jade.holes) || 1))),
+        holes: Math.max(0, Math.min(3, Math.trunc(Number(jade.holes) || 0))),
         enchantments: Array.isArray(jade.enchantments) ? jade.enchantments.map(String).slice(0, 3) : [],
         durability: Number.isInteger(jade.durability) && jade.durability >= 0 && jade.durability <= 300 ? jade.durability : '',
       };
@@ -150,7 +155,11 @@ Object.assign(D, {
     if (previous && previous.characterId !== data.characterId && this.state.transactions.some((tx) => tx.equipmentId === id)) {
       throw new Error('该装备已关联账号流水，请先解除流水关联再更改角色');
     }
-    if (this.isJade(data.slot)) {
+    if (data.details) {
+      this.validateEquipmentDetails(data.slot, data.level, data.details);
+      const details = JSON.parse(JSON.stringify(data.details));
+      data = Object.assign({}, data, this.equipmentDetailsSnapshot(data.slot, details), { details });
+    } else if (this.isJade(data.slot)) {
       const jade = data.jade;
       if (!jade || ![jade.base, jade.extra1, jade.extra2].every((attribute) => String(attribute || '').trim())) {
         throw new Error('请填写玉魄的一条基础属性和两条附加属性');

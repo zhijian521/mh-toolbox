@@ -37,8 +37,8 @@ async function realRecognition() {
   const text = form.querySelector('pre').textContent;
   check(text.includes('520') && text.includes('600') && text.includes('120'), '离线 OCR 数值：' + text);
   check(form.querySelector('[name="name"]').value === '霜冷九州', '离线 OCR 名称：' + text);
-  check(/敏捷\s*\+20/.test(form.querySelector('[name="attributes"]').value), '彩色属性不漏项：' + text);
-  check(form.querySelector('[name="gems"]').value.includes('红玛'), '宝石文字即使存在错字也保留供核对');
+  check([...form.querySelectorAll('[data-eq-row="extra"]')].some((row) => row.querySelector('[data-part="key"] input').value === 'agility' && row.querySelector('[data-part="value"] input').value === '20'), '彩色属性不漏项：' + text);
+  check([...form.querySelectorAll('[data-gem-type]')].some((row) => row.dataset.gemType === '红玛瑙' && row.querySelector('input[type="checkbox"]').checked) || form.querySelector('[name="eq-legacy"]')?.value.includes('红玛'), '宝石文字即使存在错字也保留供核对');
   check(document.querySelector('[data-xmount="slot"] input').value === '武器', '识别武器部位');
   check(!document.querySelector('[data-act="save"]').disabled, '识别后可直接保存');
   return text;

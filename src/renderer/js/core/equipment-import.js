@@ -12,7 +12,7 @@ Object.assign(D, {
       jadeBase: '', jadeExtra1: '', jadeExtra2: '', dustLevel: '', holes: '', durability: '',
       hole1: '', hole2: '', hole3: '', ocrText: raw };
     const attributes = [], special = [], notes = [];
-    let section = '';
+    let section = '', clockSection = false;
     for (const line of lines) {
       if (/^(?:装备)?名称\s*:/.test(line)) { draft.name = line.replace(/^(?:装备)?名称\s*:\s*/, ''); continue; }
       const slot = line.match(/^(?:【|\[)?(?:装备部位|部位|装备类型|灵饰类型|类型)(?:】|\])?\s*:?\s*(.+)$/);
@@ -20,7 +20,7 @@ Object.assign(D, {
         const aliases = { 帽子: '头盔', 头饰: '头盔', 铠甲: '衣服', 鞋: '鞋子', 腰饰: '腰带',
           剑: '武器', 刀: '武器', 枪: '武器', 扇: '武器', 弓: '武器', 双剑: '武器', 飘带: '武器' };
         const value = slot[1].trim();
-        draft.slot = this.slots.includes(value) ? value : aliases[value] || '';
+        draft.slot = this.slots.includes(value) ? value : value === '配饰' ? '佩饰' : aliases[value] || '';
         if (draft.slot) continue;
       }
       const level = line.replace(/[【】\[\]]/g, '')
@@ -38,7 +38,11 @@ Object.assign(D, {
         const position = '一二三'.indexOf(hole[1] || hole[2]);
         draft['hole' + (position >= 0 ? position + 1 : Number(hole[1] || hole[2]))] = hole[3]; continue;
       }
-      if (/^(?:特技|特效|玉魄特效)/.test(line)) { special.push(line); continue; }
+      if (/^(?:特技|特效|玉魄特效)/.test(line)) {
+        special.push(line);
+        if (/^特效.*\(\d+级\)/.test(line)) clockSection = true;
+        continue;
+      }
       if (/^(?:镶嵌宝石|宝石)/.test(line) || /(?:太阳石|红玛瑙|黑宝石|月亮石|舍利子|光芒石|神秘石|翡翠石|星辉石)/.test(line)) {
         draft.gems += (draft.gems ? '\n' : '') + line.replace(/^(?:镶嵌宝石|宝石)\s*:?\s*/, ''); continue;
       }
@@ -50,6 +54,7 @@ Object.assign(D, {
         continue;
       }
       const numeric = /[+\-]\s*\d|(?:伤害|命中|防御|气血|魔法|灵力|敏捷|体质|力量|耐力|魔力|速度|等级)\s*:?\s*\d/.test(line);
+      if (clockSection && numeric) continue; // 钟灵单件/套装数值从原文单独读取，不混入灵饰词条。
       if (section && numeric) { draft[section] = line; section = section === 'jadeExtra1' ? 'jadeExtra2' : ''; continue; }
       if (numeric) {
         attributes.push(line.replace(/^装备属性\s*:?\s*/, '').replace(/([+\-])\s+(?=\d)/g, '$1')); continue;
@@ -72,6 +77,16 @@ Object.assign(D, {
       if (!draft.slot && /(?:靴|履|鞋)$/.test(draft.name)) draft.slot = '鞋子';
       if (!draft.slot && /(?:剑|刀|枪|戟|斧|钺|锤|鞭|爪|扇|弓|杖)$/.test(draft.name)) draft.slot = '武器';
       if (!draft.slot && /伤害\s*[:+]?\s*\d/.test(joined) && /命中\s*[:+]?\s*\d/.test(joined)) draft.slot = '武器';
+      if (!draft.slot && /^(?:蝉翼金丝甲)$/.test(draft.name)) draft.slot = '衣服';
+      if (!draft.slot && /(?:装备角色|装备条件)[\s\S]*(?:防御)[\s\S]*魔法/.test(joined)) draft.slot = '头盔';
+    }
+    if (this.isJade(draft.slot) && !draft.jadeBase && attributes.length) {
+      const rows = attributes.filter((line) => !/^奇袭/.test(line));
+      draft.jadeBase = rows[0] || ''; draft.jadeExtra1 = rows[1] || ''; draft.jadeExtra2 = rows[2] || '';
+      if (draft.holes === '') {
+        const empty = [...joined.matchAll(/奇袭(?:特技|道具)\s*[:：]?\s*\[?空\]?/g)];
+        if (empty.length) draft.holes = 1;
+      }
     }
     draft.attributes = attributes.join('\n');
     if (!this.isJade(draft.slot)) {
@@ -97,6 +112,12 @@ Object.assign(D, {
         dustLevel: draft.dustLevel, holes: Number(draft.holes), durability: draft.durability,
         enchantments: [draft.hole1, draft.hole2, draft.hole3].slice(0, Number(draft.holes)) };
     }
+    if (draft.details) {
+      record.details = JSON.parse(JSON.stringify(draft.details));
+      Object.assign(record, this.equipmentDetailsSnapshot(record.slot, record.details));
+    } else {
+      record.details = this.equipmentDetails(record);
+    }
     return record;
   },
 
@@ -105,7 +126,10 @@ Object.assign(D, {
     if (!this.slots.includes(draft.slot) || draft.slot === '其他') return '请选择装备部位';
     if (!this.charById(characterId)) return '请选择角色';
     if (!this.isJade(draft.slot) && draft.level !== '' && (!Number.isInteger(draft.level) || draft.level < 0 || draft.level > 999)) return '装备等级需为 0～999 的整数';
-    if (this.isJade(draft.slot)) {
+    if (draft.details || this.isJade(draft.slot) && draft.jadeBase && draft.jadeExtra1 && draft.jadeExtra2) {
+      try { this.validateEquipmentDetails(draft.slot, draft.level, draft.details || this.equipmentImportRecord(draft, characterId).details); }
+      catch (error) { return error.message; }
+    } else if (this.isJade(draft.slot)) {
       if (![draft.jadeBase, draft.jadeExtra1, draft.jadeExtra2].every((value) => value.trim())) return '请补充玉魄基础和两条附加属性';
       if (!Number.isInteger(draft.dustLevel) || draft.dustLevel < 0 || draft.dustLevel > 17) return '请补充灵尘等级（0～17）';
       if (![1, 2, 3].includes(Number(draft.holes))) return '请选择开光孔数';
@@ -121,11 +145,10 @@ Object.assign(D, {
       const profile = this.equipmentProfile(characterId);
       if (index !== null && ![0, 1, 2].includes(index)) throw new Error('请选择有效的装备方案');
       const result = { created: 0, reused: 0, equipped: 0, stored: 0 };
-      const fields = ['slot', 'name', 'level', 'attributes', 'special', 'gems', 'note'];
+      const fields = ['slot', 'name', 'level', 'note'];
       const fingerprint = (record) => JSON.stringify([
         ...fields.map((key) => record[key] == null ? '' : record[key]),
-        record.jade ? ['base', 'extra1', 'extra2', 'dustLevel', 'holes', 'durability', 'enchantments']
-          .map((key) => record.jade[key]) : '',
+        this.equipmentDetails(record),
       ]);
       drafts.forEach((draft, position) => {
         const error = this.equipmentImportError(draft, characterId);
