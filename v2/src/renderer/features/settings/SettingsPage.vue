@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import BaseModal from '../../components/BaseModal.vue';
+import PageHeader from '../../components/PageHeader.vue';
 import { useApplication } from '../../stores/application';
 import { desktop, plain } from '../../services/desktop';
 import type { AppData } from '../../app/types';
@@ -71,12 +72,7 @@ async function wipe() {
 }
 </script>
 <template>
-    <header class="page-header">
-        <div>
-            <h1>设置</h1>
-            <p>数据备份、导入与关于</p>
-        </div>
-    </header>
+    <PageHeader title="设置" description="数据备份、导入与关于" />
     <div class="page-content settings-page">
         <section class="paper-section">
             <h2>数据概览</h2>

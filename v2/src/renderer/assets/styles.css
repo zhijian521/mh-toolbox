@@ -23,9 +23,48 @@
     --gold: #a67c2e;
     --green: #4a7c59;
     --blue: #3d5a6c;
+    --scrollbar-thumb: #c2b58f;
+    --scrollbar-thumb-hover: #a68f5d;
+    --scrollbar-thumb-active: #8f7546;
 }
 * {
     box-sizing: border-box;
+}
+/* Match every scrollable region, including dialogs and textareas, to the paper theme. */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    min-height: 32px;
+    border: 3px solid transparent;
+    border-radius: 10px;
+    background: var(--scrollbar-thumb);
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+    border-width: 2px;
+    background-color: var(--scrollbar-thumb-hover);
+}
+::-webkit-scrollbar-thumb:active {
+    background-color: var(--scrollbar-thumb-active);
+}
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+@supports not selector(::-webkit-scrollbar) {
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--scrollbar-thumb) transparent;
+    }
+}
+@media (forced-colors: active) {
+    ::-webkit-scrollbar-thumb {
+        background-color: ButtonText;
+    }
 }
 body {
     margin: 0;
@@ -341,23 +380,36 @@ details[open] summary {
     flex-direction: column;
 }
 .page-header {
-    min-height: 76px;
+    min-height: 56px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    padding: 12px 20px;
+    gap: 10px 16px;
+    padding: 10px 20px;
+    flex-wrap: wrap;
     background: var(--paper);
     border-bottom: 1px solid var(--line);
     flex: none;
 }
+.page-header-heading {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    min-width: 0;
+}
 .page-header h1 {
     line-height: 1.4;
+    flex: none;
 }
-.page-header p {
+.page-header-description {
     color: var(--muted);
     font-size: 12px;
-    margin-top: 2px;
+    line-height: 1.4;
+    min-width: 0;
+    padding-bottom: 2px;
+}
+.page-header-actions {
+    margin-left: auto;
 }
 .page-content {
     padding: 16px 20px 28px;

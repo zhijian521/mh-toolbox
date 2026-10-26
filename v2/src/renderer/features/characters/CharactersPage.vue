@@ -9,6 +9,7 @@ import QuickEditor from './QuickEditor.vue';
 import CharacterHistory from './CharacterHistory.vue';
 import BaseModal from '../../components/BaseModal.vue';
 import AppIcon from '../../components/AppIcon.vue';
+import PageHeader from '../../components/PageHeader.vue';
 const app = useApplication();
 const content = ref<HTMLElement>(),
     addButton = ref<HTMLButtonElement>();
@@ -117,18 +118,14 @@ function drop(event: DragEvent) {
 onBeforeUnmount(endDrag);
 </script>
 <template>
-    <header class="page-header">
-        <div>
-            <h1>角色</h1>
-            <p>角色档案 · 技能修炼 · 养成记录</p>
-        </div>
-        <div class="actions">
+    <PageHeader title="角色" description="角色档案 · 技能修炼 · 养成记录">
+        <template #actions>
             <button class="btn" :disabled="app.busy" @click="historyId = 'all'">养成记录</button>
             <button ref="addButton" class="btn primary" :disabled="app.busy" @click="editing = {}">
                 ＋ 添加角色
             </button>
-        </div>
-    </header>
+        </template>
+    </PageHeader>
     <div ref="content" class="page-content" @dragend="endDrag" @drop="endDrag">
         <div v-if="!app.characters.length" class="empty">
             <AppIcon name="user" :size="38" />
