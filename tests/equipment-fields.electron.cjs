@@ -109,12 +109,46 @@ async function geometry() {
   const view = document.getElementById('view');
   if (view.scrollWidth > view.clientWidth + 1 || document.documentElement.scrollWidth > innerWidth) throw new Error('装备栏横向溢出');
   for (const slot of document.querySelectorAll('.eq-slot')) {
-    if (slot.scrollWidth > slot.clientWidth + 1 || slot.scrollHeight > slot.clientHeight + 1) throw new Error('装备格子属性被截断');
+    if (slot.scrollWidth > slot.clientWidth + 1 || slot.scrollHeight > slot.clientHeight + 1) {
+      throw new Error('装备格子属性被截断：' + slot.dataset.slot + ' ' + slot.clientWidth + '×' + slot.clientHeight + ' / ' + slot.scrollWidth + '×' + slot.scrollHeight);
+    }
   }
   for (const portrait of document.querySelectorAll('.eq-portrait')) {
     const bounds = portrait.getBoundingClientRect(), tabs = portrait.querySelector('.eq-plan-tabs').getBoundingClientRect();
     if (tabs.left < bounds.left - 1 || tabs.right > bounds.right + 1) throw new Error('方案按钮不可覆盖相邻装备');
   }
+  for (const board of document.querySelectorAll('.eq-board')) {
+    const main = board.querySelector('.eq-board-main').getBoundingClientRect(), side = board.querySelector('.eq-board-side').getBoundingClientRect();
+    if (innerWidth >= 1024 && (side.left < main.right || Math.abs(side.top - main.top) > 1)) throw new Error('装备与灵饰玉魄应左右并排');
+    if (innerWidth >= 1024) for (const pair of board.querySelectorAll('.eq-stat-pair')) {
+      const items = [...pair.children];
+      if (items.length === 2 && Math.abs(items[0].getBoundingClientRect().top - items[1].getBoundingClientRect().top) > 1) throw new Error('两条标准属性应同一行');
+    }
+  }
+}
+
+async function presentation() {
+  const detail = D.emptyEquipmentDetails();
+  detail.base = [{ key: 'damage', value: 466, boost: null }, { key: 'hit', value: 660, boost: null }];
+  detail.bonus = [{ key: 'damage', value: 32, boost: null }, { key: 'dodge', value: 20, boost: null }];
+  detail.forge = 4; detail.gems = [{ type: '太阳石', level: null }, { type: '神秘石', level: 2 }];
+  const eq = { slot: '武器', name: '展示测试', details: detail }, before = JSON.stringify(eq);
+  const root = document.createElement('div'); root.innerHTML = Views.eqSlotPropertiesHtml(eq);
+  const pair = root.querySelector('.eq-stat-pair');
+  if (pair.children.length !== 2 || !pair.textContent.includes('466') || pair.textContent.includes('498') || root.textContent.includes('+32')) throw new Error('标准属性保留截图总值，同类宝石不重复加算或显示');
+  const gem = root.querySelector('.eq-property-gem');
+  if (!gem.textContent.includes('躲避 +20')) throw new Error('额外宝石属性应独立显示');
+  if (getComputedStyle(document.querySelector('.eq-property-gem')).color === getComputedStyle(document.querySelector('.eq-property-attribute')).color) throw new Error('宝石属性颜色应区分标准属性');
+  const incompleteBase = { ...eq, details: { ...detail, base: [detail.base[0]], bonus: [{ key: 'hit', value: 20, boost: null }] } };
+  const incompleteRoot = document.createElement('div'); incompleteRoot.innerHTML = Views.eqSlotPropertiesHtml(incompleteBase);
+  if (!incompleteRoot.textContent.includes('命中 +20')) throw new Error('截图未记录的标准属性不能误隐藏宝石加成');
+  const socket = root.querySelectorAll('.eq-property-upgrade');
+  if (socket.length !== 1 || !socket[0].textContent.includes('锻炼 4段 太阳石 神秘石（2段）')) throw new Error('锻炼和混镶应同一行并保留已知等级');
+  for (const full of [false, true]) {
+    const rows = Views.eqPropertyRows(eq, full);
+    if (rows.some(row => row.value.includes('+32')) || !rows.some(row => row.kind === 'gem')) throw new Error('详情和格子遵循相同宝石规则');
+  }
+  if (JSON.stringify(eq) !== before) throw new Error('展示不可改写装备档案');
 }
 
 app.whenReady().then(async () => {
@@ -133,6 +167,7 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript("document.getElementById('toast-root').replaceChildren(); document.getAnimations().forEach(animation => animation.finish()); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
     fs.writeFileSync(path.join(dir, 'editor-import-ring.png'), (await win.webContents.capturePage()).toPNG());
     const snapshot = await run(saveImports);
+    await run(presentation);
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'data.json'))), JSON.parse(snapshot));
     for (const [width, height] of [[1280, 900], [1024, 768], [620, 860]]) {
       win.setSize(width, height);

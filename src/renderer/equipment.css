@@ -1,6 +1,11 @@
 /* 装备属性编辑与完整装备栏，沿用宣纸、语义色与现有字体。 */
-.eq-board { width: 480px; }
+.eq-board { width: min(1120px, 100%); box-sizing: border-box; container-type: inline-size; }
 .eq-board .eq-notice { max-width: 100%; }
+.eq-board-columns { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; gap: 20px; }
+.eq-board-main, .eq-board-side { min-width: 0; }
+.eq-board-side { display: flex; flex-direction: column; gap: 18px; }
+.eq-board-side > .eq-section-head { margin-bottom: -10px; }
+.eq-board-side .eq-soul-head { margin-bottom: -10px; }
 .eq-body-grid { width: 100%; grid-template-columns: minmax(0, 1fr) 88px minmax(0, 1fr); grid-template-rows: repeat(3, auto); gap: 8px 12px; }
 .eq-portrait .eq-plan-tabs { width: 100%; }
 .eq-portrait .eq-plan { width: auto; min-width: 0; flex: 1; }
@@ -12,11 +17,16 @@
 .eq-slot-properties { display: flex; flex-direction: column; align-items: stretch; gap: 3px; width: 100%; text-align: left; }
 .eq-slot-line { display: block; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--equipment-attribute); font-size: 12px; font-weight: 400; line-height: 1.55; }
 .eq-slot-line strong, .eq-stat-number, .eq-stat-boost strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+.eq-stat-pair { display: inline-flex; flex-wrap: nowrap; align-items: baseline; column-gap: 6px; max-width: 100%; white-space: nowrap; }
+.eq-slot .eq-stat-pair { font-size: 11px; }
+.eq-stat-item { white-space: nowrap; }
 .eq-stat-label { font-weight: 400; }
 .eq-stat-boost { color: var(--equipment-upgrade); }
 .eq-inline-label { color: var(--ui-muted); font-size: var(--ui-unit-size); font-weight: 400; }
 .eq-slot-line.eq-property-special { color: var(--equipment-special); }
-.eq-slot-line.eq-property-upgrade { color: var(--equipment-upgrade); }
+.eq-slot-line.eq-property-upgrade, .eq-slot-line.eq-property-gem { color: var(--equipment-upgrade); }
+.eq-property-gem dd { color: var(--equipment-upgrade); }
+.eq-slot-line small { margin-left: 3px; font-size: var(--ui-unit-size); font-weight: 400; }
 .eq-slot-line.eq-property-legacy { color: var(--ui-muted); }
 .eq-property-special dd { font-weight: 400; }
 .eq-property-legacy dd { color: var(--ui-muted); }
@@ -53,6 +63,9 @@
 .eq-editor-more > section + section { margin-top: 20px; }
 .eq-editor [data-eq-group="legacy"] { padding: 12px; background: var(--paper-2); }
 .xmenu-search { display: block; width: calc(100% - 16px); margin: 8px; padding: 8px; font: inherit; background: var(--paper); border: 1px solid var(--line); border-radius: 3px; }
+@container (max-width: 700px) {
+  .eq-board-columns { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+}
 @media (max-width: 720px) {
   .eq-board { padding: 12px; }
   .eq-body-grid { grid-template-columns: minmax(0, 1fr) 88px minmax(0, 1fr); gap: 8px; }

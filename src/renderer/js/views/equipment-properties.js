@@ -9,15 +9,24 @@ Views.eqStatHtml = function (row) {
 Views.eqPropertyRows = function (eq, full = false) {
   const detail = D.equipmentDetails(eq), rule = D.equipmentRule(eq.slot), rows = [];
   const add = (label, value, kind = '', html) => { if (value !== '' && value != null) rows.push({ label, value, kind, html: html || U.esc(value) }); };
-  for (const group of ['base', 'extra', 'bonus', 'melt']) {
-    const prefix = group === 'melt' ? '熔炼' : group === 'bonus' ? '宝石加成' : '';
-    for (const row of detail[group]) add(prefix, D.equipmentStatText(row), 'attribute', (prefix ? '<span class="eq-inline-label">' + prefix + '</span> ' : '') + Views.eqStatHtml(row));
+  if (detail.base.length) add('', detail.base.map((row) => D.equipmentStatText(row)).join(' · '), 'attribute',
+    '<span class="eq-stat-pair">' + detail.base.map((row) => '<span class="eq-stat-item">' + Views.eqStatHtml(row) + '</span>').join('') + '</span>');
+  for (const row of detail.extra) add('', D.equipmentStatText(row), 'attribute', Views.eqStatHtml(row));
+  for (const row of detail.bonus.filter((row) => !detail.base.some((base) => base.key === row.key))) {
+    add('宝石属性', D.equipmentStatText(row), 'gem', Views.eqStatHtml(row));
   }
+  for (const row of detail.melt) add('', D.equipmentStatText(row), 'attribute',
+    '<span class="eq-inline-label">熔炼</span> ' + Views.eqStatHtml(row));
   add('特技', detail.technique, 'special');
   detail.effects.forEach((effect) => add('特效', effect, 'special'));
-  if (detail.forge !== null) add(rule.kind === 'accessory' ? '精炼' : '锻炼', detail.forge + ' 级', 'upgrade', UI.numberHtml(detail.forge, '级'));
-  detail.gems.forEach((gem) => add('宝石', gem.type + (gem.level == null ? '' : ' ×' + gem.level), 'upgrade', U.esc(gem.type) +
-    (gem.level == null ? '' : ' ×' + UI.numberHtml(gem.level))));
+  const socket = [], socketText = [];
+  if (detail.forge !== null) { socket.push(UI.numberHtml(detail.forge, '段', { tag: 'strong' })); socketText.push(detail.forge + ' 段'); }
+  if (rule.kind === 'accessory' && detail.forge !== null) { socket.push('星辉石'); socketText.push('星辉石'); }
+  for (const gem of detail.gems) {
+    socket.push(U.esc(gem.type) + (gem.level == null ? '' : '（' + UI.numberHtml(gem.level, '段', { tag: 'strong' }) + '）'));
+    socketText.push(gem.type + (gem.level == null ? '' : '（' + gem.level + ' 段）'));
+  }
+  if (socket.length) add(rule.kind === 'accessory' ? '精炼' : detail.forge === null ? '宝石' : '锻炼', socketText.join(' '), 'upgrade', socket.join(' '));
   if (detail.clock.name) add('钟灵石', detail.clock.name + ' ' + detail.clock.level + ' 级', 'special', U.esc(detail.clock.name) + ' ' + UI.numberHtml(detail.clock.level, '级'));
   add('套装', detail.suit, 'special'); add('符石', detail.runes, 'upgrade');
   if (rule.kind === 'jade') {

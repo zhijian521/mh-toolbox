@@ -130,7 +130,7 @@ async function checks(phase) {
     [...board().querySelectorAll('[data-set]')].map((button) => button.textContent).join('') === '123', '方案简化为人物上方的三个数字');
   const first = board().getBoundingClientRect();
   const second = board('c2').getBoundingClientRect();
-  check(first.right <= second.left && first.top === second.top, '宽窗口角色卡片并排展示');
+  check(first.right <= second.left || first.bottom <= second.top, '装备卡片按可用宽度并排或上下排列');
   click('[data-eq-character="c2"] [data-act="copy"]'); field('target', '1'); await save();
   await switchSet(1, 'c2');
   click('[data-eq-character="c2"] [data-act="activate"]');
@@ -151,7 +151,7 @@ async function checks(phase) {
   sword.dispatchEvent(new MouseEvent('mouseenter'));
   await frame();
   const tooltip = document.querySelector('[role="tooltip"]');
-  check(tooltip.textContent.includes('伤害 +620') && tooltip.textContent.includes('命中 +380') && tooltip.textContent.includes('太阳石 ×8'), '悬停完整属性');
+  check(tooltip.textContent.includes('伤害 +620') && tooltip.textContent.includes('命中 +380') && tooltip.textContent.includes('太阳石（8段）'), '悬停完整属性');
   check(getComputedStyle(tooltip).boxShadow === 'none', '属性卡沿用无阴影纸面风格');
   const bounds = tooltip.getBoundingClientRect();
   check(bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight, '属性卡避开视口边缘');

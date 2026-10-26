@@ -66,7 +66,7 @@ Views.eqBoardHtml = function (character, index) {
   return '<section class="eq-board" data-eq-character="' + U.esc(character.id) + '" aria-label="' + U.esc(character.name) + '的装备栏">' +
     (pending.length ? '<p class="eq-notice">旧档案中「' + U.esc(pending.join('、')) +
       '」的第一套穿戴待确认。请在对应格子选择装备或暂不配置，全部档案已保留在仓库。</p>' : '') +
-      '<div class="eq-section-head"><h2>装备</h2><span>悬停查看 · 点击换装</span></div>' +
+      '<div class="eq-board-columns"><div class="eq-board-main"><div class="eq-section-head"><h2>装备</h2><span>悬停查看 · 点击换装</span></div>' +
       '<div class="eq-body-grid">' + D.equipmentGroups.gear.slots.map((slot) => Views.eqSlotHtml(character, index, slot)).join('') +
         '<div class="eq-portrait"><div class="eq-plan-tabs" role="group" aria-label="' + U.esc(character.name) + '的装备方案">' +
         character.equipmentSets.map((item, number) => {
@@ -80,12 +80,12 @@ Views.eqBoardHtml = function (character, index) {
           .map((text) => '<span>' + U.esc(text) + '</span>').join('') +
         '</p><div class="eq-plan-state">' + (index === character.activeEquipmentSet ? '<span>使用中</span>' :
           '<button class="btn btn-sm" data-act="activate">使用此套</button>') + '</div></div></div></div>' +
-      '<div class="eq-section-head"><h2>灵饰</h2></div>' +
+      '</div><div class="eq-board-side"><div class="eq-section-head"><h2>灵饰</h2></div>' +
       '<div class="eq-accessory-grid">' + D.equipmentGroups.accessory.slots.map((slot) => Views.eqSlotHtml(character, index, slot)).join('') + '</div>' +
       '<div class="eq-section-head eq-soul-head"><div><h2>命魂之玉</h2><p>' +
         (soul.unlocked ? U.esc(soul.attribute) + ' · 修炼 ' + soul.level + ' 级' : '尚未解锁') +
         '</p></div><button class="btn btn-sm" data-act="soul">修炼设置</button></div>' +
-      '<div class="eq-jade-grid">' + D.equipmentGroups.jade.slots.map((slot) => Views.eqSlotHtml(character, index, slot)).join('') + '</div>' +
+      '<div class="eq-jade-grid">' + D.equipmentGroups.jade.slots.map((slot) => Views.eqSlotHtml(character, index, slot)).join('') + '</div></div></div>' +
       '<div class="eq-board-actions"><button class="btn btn-sm" data-act="warehouse">装备仓库</button>' +
         '<div class="eq-actions"><button class="btn btn-sm" data-act="rename">改名</button>' +
         '<button class="btn btn-sm" data-act="copy">复制方案</button></div></div></section>';
