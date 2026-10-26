@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useApplication } from '../../stores/application';
 import { plain } from '../../services/desktop';
 import { U } from '../../domain/util.js';
+import { defaultSchool } from '../../game-data/schools.js';
 import type { Character } from '../../app/types';
 import BaseModal from '../../components/BaseModal.vue';
 import SkillEditor from './SkillEditor.vue';
@@ -14,7 +15,7 @@ const progress = plain(rules.normalizeCharacterProgress(props.character?.progres
 const draft = reactive({
     name: props.character?.name || '',
     level: props.character?.level ?? '',
-    school: props.character ? props.character.school : '大唐官府',
+    school: props.character ? props.character.school : defaultSchool,
     server: props.character?.server || '',
     progress,
     changeDate: U.today(),

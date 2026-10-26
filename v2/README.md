@@ -60,6 +60,8 @@ EditorConfig 定义 V2 的基础编辑规则，Prettier 通过上述命令统一
 
 ## 后续维护
 
+梦幻游戏资料统一放在 `src/renderer/game-data/`，按主题分文件维护；页面和领域层引用同一份资料。门派列表、门派技能和角色修炼等资料已拆分，新增或调整资料遵循架构文档中的「游戏资料集中维护原则」。
+
 先阅读 [架构](docs/ARCHITECTURE.md)、[阶段与功能清单](docs/ROADMAP.md)、[同步记录](docs/SYNC.md) 和 [验证记录](docs/VALIDATION.md)。
 
 初始基线为 `migration/baseline.json`，包含采集时 Git HEAD、未提交状态、数据版本和实际文件 SHA-256。`migration/baseline/` 是不可覆盖的文本参考快照，包含当时尚未提交的装备改动，不作为运行代码。二进制资源在工程中独立保存。
