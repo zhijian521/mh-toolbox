@@ -154,6 +154,41 @@ Object.assign(D, {
     });
   },
 
+  characterProgressMetric(character, category, key) {
+    if (!character) throw new Error('角色不存在');
+    const progress = this.normalizeCharacterProgress(character.progress);
+    if (['schoolSkills', 'auxiliarySkills'].includes(category)) {
+      const skill = progress[category].find((item) => item.name === key);
+      if (!skill) throw new Error('该技能已变更，请重新打开快捷编辑');
+      return { group: category === 'schoolSkills' ? '师门技能' : '辅助技能', label: skill.name, value: skill.level, unit: '级' };
+    }
+    if (['training', 'petTraining'].includes(category)) {
+      const field = (category === 'training' ? this.characterTraining : this.petTraining).find((item) => item.key === key);
+      if (!field) throw new Error('未知的修炼项目');
+      return { group: category === 'training' ? '人物修炼' : '召唤兽修炼', label: field.label, value: progress[category][key], unit: '级' };
+    }
+    if (['qianyuanPills', 'potentialFruits'].includes(category)) {
+      return { group: '其他养成', label: category === 'qianyuanPills' ? '乾元丹' : '潜能果', value: progress[category], unit: '个' };
+    }
+    throw new Error('未知的角色养成项目');
+  },
+
+  /** 单项编辑在提交队列内读取最新档案，按技能名称定位，保留其余项目及顺序。 */
+  saveCharacterValue(id, category, key, input, record = {}) {
+    return this.commit(() => {
+      const character = this.charById(id);
+      this.characterProgressMetric(character, category, key);
+      const value = this.characterNumber(input);
+      if (input != null && input !== '' && value === null) throw new Error('请填写非负整数或留空');
+      const progress = this.normalizeCharacterProgress(character.progress);
+      if (['schoolSkills', 'auxiliarySkills'].includes(category)) {
+        progress[category].find((skill) => skill.name === key).level = value;
+      } else if (['training', 'petTraining'].includes(category)) progress[category][key] = value;
+      else progress[category] = value;
+      return this.applyCharacter({ progress }, id, record);
+    });
+  },
+
   characterCopyChanges(id, sourceId, keys, skipEmpty) {
     const character = this.charById(id), source = this.charById(sourceId);
     if (!character || !source) throw new Error('来源或目标角色不存在');

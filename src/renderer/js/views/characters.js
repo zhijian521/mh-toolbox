@@ -23,13 +23,19 @@ Views.characters = function () {
     card.querySelector('[data-act="history"]').onclick = () => Views.charHistoryModal(character.id);
     card.querySelector('[data-act="copy"]').onclick = () => Views.charCopyProgressModal(character);
     card.querySelector('[data-act="del"]').onclick = () => Views.charDelete(character);
+    card.querySelectorAll('[data-act="quick-edit"]').forEach((button) => {
+      button.onclick = () => Views.charQuickModal(character.id, button.dataset.category, button.dataset.key);
+    });
   });
   root.scrollTop = scrollTop;
 };
 
 Views.charFocusTarget = function (id, action = 'edit') {
   if (Views._current !== 'characters') return null;
-  return document.querySelector('.char-card[data-id="' + CSS.escape(id || '') + '"] [data-act="' + action + '"]') ||
+  const card = document.querySelector('.char-card[data-id="' + CSS.escape(id || '') + '"]');
+  const selector = typeof action === 'object' ? '[data-act="quick-edit"][data-category="' + CSS.escape(action.category) +
+    '"][data-key="' + CSS.escape(action.key) + '"]' : '[data-act="' + CSS.escape(action) + '"]';
+  return (card && (card.querySelector(selector) || card.querySelector('[data-act="edit"]'))) ||
     document.getElementById('quick-add');
 };
 
@@ -45,13 +51,15 @@ Views.charCardHtml = function (character) {
   const heading = (title) => '<div class="char-section-head"><h3>' + title + '</h3></div>';
   const iconButton = (action, icon, label, extra = '') => '<button class="btn btn-sm char-icon-btn' +
     (action === 'del' ? ' btn-danger' : '') + '" data-act="' + action + '" title="' + label + '" aria-label="' + label + '"' + extra + '>' + UI.icon(icon, 15) + '</button>';
-  const value = (label, number, unit) => '<div class="char-value"><dt>' + U.esc(label) + '</dt><dd' +
-    (number == null ? ' class="is-empty"' : '') + '>' + (number == null ? '—' : U.esc(number) +
-    (unit ? '<small>' + unit + '</small>' : '')) + '</dd></div>';
-  const skills = (list) => list.length ? '<dl class="char-skills">' + list.map((skill) => value(skill.name, skill.level, '级')).join('') +
+  const value = (label, number, unit, category, key = '') => '<div class="char-value"><dt>' + U.esc(label) + '</dt><dd' +
+    (number == null ? ' class="is-empty"' : '') + '><button type="button" class="char-value-edit" data-act="quick-edit" data-category="' + category +
+    '" data-key="' + U.esc(key) + '" title="点击修改' + U.esc(label) + '" aria-haspopup="dialog" aria-label="修改' + U.esc(label) +
+    '，当前' + (number == null ? '未记录' : U.esc(number) + unit) + '">' + (number == null ? '—' : U.esc(number) +
+    (unit ? '<small>' + unit + '</small>' : '')) + '</button></dd></div>';
+  const skills = (list, category) => list.length ? '<dl class="char-skills">' + list.map((skill) => value(skill.name, skill.level, '级', category, skill.name)).join('') +
     '</dl>' : '<p class="char-unrecorded">未记录</p>';
-  const training = (title, fields, values) => '<section><h4>' + title + '</h4><dl class="char-training-values">' +
-    fields.map((field) => value(field.label, values[field.key], '')).join('') + '</dl></section>';
+  const training = (title, fields, values, category) => '<section><h4>' + title + '</h4><dl class="char-training-values">' +
+    fields.map((field) => value(field.label, values[field.key], '', category, field.key)).join('') + '</dl></section>';
   return '<article class="char-card" data-id="' + U.esc(character.id) + '" aria-label="' + U.esc(character.name) + '的角色档案">' +
     '<header class="char-top"><div class="char-identity">' + UI.icon('hero', 40) + '<div><h2 class="char-name">' + U.esc(character.name) +
     '</h2><p class="char-sub">' + U.esc([character.level ? character.level + ' 级' : '', character.school, character.server].filter(Boolean).join(' · ')) +
@@ -60,13 +68,88 @@ Views.charCardHtml = function (character) {
       iconButton('sort', 'sort', '调整排序') + iconButton('history', 'calendar', '查看养成记录') +
       iconButton('copy', 'copy', '复制养成配置') + iconButton('del', 'trash', '删除角色') +
       iconButton('edit', 'edit', '编辑档案') + '</div></header>' +
-    '<section class="char-section">' + heading('师门技能') + skills(progress.schoolSkills) + '</section>' +
+    '<section class="char-section">' + heading('师门技能') + skills(progress.schoolSkills, 'schoolSkills') + '</section>' +
     '<section class="char-section">' + heading('修炼') + '<div class="char-training">' +
-      training('人物', D.characterTraining, progress.training) + training('召唤兽', D.petTraining, progress.petTraining) + '</div></section>' +
-    '<section class="char-section">' + heading('辅助技能') + skills(progress.auxiliarySkills) + '</section>' +
+      training('人物', D.characterTraining, progress.training, 'training') + training('召唤兽', D.petTraining, progress.petTraining, 'petTraining') + '</div></section>' +
+    '<section class="char-section">' + heading('辅助技能') + skills(progress.auxiliarySkills, 'auxiliarySkills') + '</section>' +
     '<section class="char-section">' + heading('其他养成') + '<dl class="char-growth">' +
-      value('乾元丹', progress.qianyuanPills, '个') + value('潜能果', progress.potentialFruits, '个') + '</dl>' +
+      value('乾元丹', progress.qianyuanPills, '个', 'qianyuanPills') + value('潜能果', progress.potentialFruits, '个', 'potentialFruits') + '</dl>' +
       (progress.note ? '<p class="char-note">' + U.esc(progress.note) + '</p>' : '') + '</section></article>';
+};
+
+Views.charQuickModal = function (id, category, key) {
+  const character = D.charById(id);
+  let metric;
+  try { metric = D.characterProgressMetric(character, category, key); }
+  catch (error) { UI.toast(error.message, 'err'); return; }
+  const training = ['training', 'petTraining'].includes(category);
+  const valueHtml = (value) => value == null ? '<span class="char-quick-empty">未记录</span>' :
+    '<strong>' + U.esc(value) + '</strong><small>' + metric.unit + '</small>';
+  let input;
+  UI.formModal({
+    title: metric.label,
+    values: { value: metric.value, changeDate: U.today(), changeNote: '' },
+    fields: [
+      { key: 'value', label: '调整数值', type: 'number', min: 0, step: '1', full: true, placeholder: '未记录' },
+      { key: 'changeDate', label: '变更日期', type: 'date', full: true },
+      { key: 'changeNote', label: '本次说明', type: 'text', full: true, placeholder: '选填' },
+    ],
+    returnFocus: () => Views.charFocusTarget(id, { category, key }),
+    onRender: (form, _api, overlay) => {
+      overlay.classList.add('char-modal', 'char-quick-modal');
+      overlay.classList.toggle('is-training', training);
+      form.classList.add('char-quick-form');
+      form.insertAdjacentHTML('afterbegin', '<p class="char-quick-context">' + U.esc(character.name) + ' · ' + metric.group + '</p>' +
+        '<p class="char-quick-current">当前：' + valueHtml(metric.value) + '</p>');
+      const row = form.querySelector('[data-field="value"]');
+      row.classList.add('char-quick-value');
+      input = row.querySelector('input');
+      input.inputMode = 'numeric'; input.max = Number.MAX_SAFE_INTEGER;
+      const stepper = document.createElement('div');
+      stepper.className = 'char-quick-stepper';
+      stepper.innerHTML = '<button type="button" class="btn" data-step="-1" aria-label="减少 1">−</button>' +
+        '<div class="char-quick-input"></div><button type="button" class="btn" data-step="1" aria-label="增加 1">＋</button>';
+      stepper.querySelector('.char-quick-input').appendChild(input);
+      stepper.querySelector('.char-quick-input').insertAdjacentHTML('beforeend', '<small>' + metric.unit + '</small>');
+      row.appendChild(stepper);
+      const preview = document.createElement('p');
+      preview.className = 'char-quick-preview'; preview.setAttribute('aria-live', 'polite');
+      row.after(preview);
+      const update = () => {
+        const value = D.characterNumber(input.value);
+        const valid = input.validity.valid && (input.value === '' || value !== null);
+        stepper.querySelector('[data-step="-1"]').disabled = !valid || value == null || value === 0;
+        stepper.querySelector('[data-step="1"]').disabled = !valid || value === Number.MAX_SAFE_INTEGER;
+        preview.innerHTML = valid ? '修改后：' + valueHtml(metric.value) + '<span class="char-quick-arrow">→</span>' + valueHtml(value) :
+          '<span class="char-quick-empty">请填写非负整数或留空</span>';
+      };
+      stepper.querySelectorAll('[data-step]').forEach((button) => {
+        button.onclick = () => {
+          input.value = (D.characterNumber(input.value) ?? 0) + Number(button.dataset.step);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+      });
+      input.addEventListener('input', update);
+      input.addEventListener('change', update);
+      const details = document.createElement('details');
+      details.className = 'char-quick-details';
+      details.innerHTML = '<summary>补充信息</summary><div></div>';
+      for (const field of ['changeDate', 'changeNote']) details.lastElementChild.appendChild(form.querySelector('[data-field="' + field + '"]'));
+      form.appendChild(details);
+      form.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.isComposing && event.target.matches('input:not([type="hidden"])')) {
+          event.preventDefault(); form.requestSubmit();
+        }
+      });
+      update(); input.focus(); input.select();
+    },
+    validate: () => input.reportValidity() && (input.value === '' || D.characterNumber(input.value) !== null) ? '' : '请填写非负整数或留空',
+    onSubmit: async (data) => {
+      await D.saveCharacterValue(id, category, key, data.value, { date: data.changeDate, note: data.changeNote });
+      Views.charRefresh(id, { category, key });
+      UI.toast('已保存');
+    },
+  });
 };
 
 Views.charModal = function (character) {

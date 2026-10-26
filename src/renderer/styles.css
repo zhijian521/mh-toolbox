@@ -530,7 +530,12 @@ table.tbl { width: 100%; border-collapse: collapse; color: var(--ui-text); font-
 .char-section-head { margin-bottom: 9px; }
 .char-section-head h3, .char-form-title, .char-copy-preview h4 { display: flex; align-items: center; gap: 8px; color: var(--character-title); font-size: var(--character-section-size); font-weight: 400; }
 .char-skills, .char-growth { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; }
-.char-value { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; font-size: var(--character-body-size); line-height: 1.6; }
+.char-value { position: relative; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; margin: -2px -8px; padding: 2px 8px; border-radius: 3px; font-size: var(--character-body-size); line-height: 1.6; }
+.char-value-edit { display: inline-block; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.char-value-edit::after { position: absolute; inset: 0; content: ''; border-radius: 3px; }
+.char-value:has(.char-value-edit:hover) { background: var(--paper-2); }
+.char-value-edit:focus-visible { outline: none; }
+.char-value-edit:focus-visible::after { outline: 1px solid var(--gold); }
 .char-value dt { color: var(--character-text); overflow-wrap: anywhere; }
 .char-value dd { flex: none; color: var(--gold2); font-weight: 600; font-variant-numeric: tabular-nums; }
 .char-value dd.is-empty { color: var(--character-muted); font-weight: 400; }
@@ -551,6 +556,28 @@ table.tbl { width: 100%; border-collapse: collapse; color: var(--ui-text); font-
 .char-modal .btn { min-height: 36px; font-size: var(--character-body-size); }
 .char-modal .btn-sm { min-height: 30px; font-size: var(--character-caption-size); }
 .char-modal .char-skill-actions .btn { min-height: 36px; }
+.char-quick-modal .modal { width: min(340px, calc(100vw - 32px)); }
+.char-quick-modal .modal-head h3 { min-width: 0; overflow-wrap: anywhere; }
+.char-quick-modal .modal-x { flex: none; }
+.form-grid.char-quick-form { display: flex; flex-direction: column; gap: 14px; }
+.char-quick-context { color: var(--character-muted); font-size: var(--character-caption-size); overflow-wrap: anywhere; }
+.char-quick-current, .char-quick-preview { color: var(--character-muted); }
+.char-quick-modal strong { color: var(--gold2); font-weight: 600; font-variant-numeric: tabular-nums; }
+.char-quick-modal small { margin-left: 3px; color: var(--character-muted); font-size: var(--character-unit-size); font-weight: 400; }
+.char-quick-modal.is-training strong { color: var(--blue); }
+.char-quick-stepper { display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px; gap: 10px; }
+.char-quick-stepper > .btn { padding: 0; min-height: 44px; font-size: var(--ui-stat-size); }
+.char-quick-input { position: relative; min-width: 0; }
+.char-quick-modal .char-quick-value .char-quick-input input { width: 100%; min-height: 44px; padding: 5px 30px 5px 12px; color: var(--gold2); font-size: var(--ui-title-size); font-weight: 600; text-align: center; appearance: textfield; }
+.char-quick-value input::-webkit-inner-spin-button, .char-quick-value input::-webkit-outer-spin-button { margin: 0; appearance: none; }
+.char-quick-modal.is-training .char-quick-input input { color: var(--blue); }
+.char-quick-input small { position: absolute; top: 50%; right: 12px; margin-left: 0; transform: translateY(-50%); pointer-events: none; }
+.char-quick-arrow { margin: 0 10px; }
+.char-quick-preview { min-height: 22px; overflow-wrap: anywhere; }
+.char-quick-details { color: var(--character-muted); font-size: var(--character-caption-size); }
+.char-quick-details summary { width: fit-content; cursor: pointer; }
+.char-quick-details summary:focus-visible { outline: 1px solid var(--gold); outline-offset: 3px; }
+.char-quick-details > div { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 body:has(.char-modal) .xitem { color: var(--character-text); font-size: var(--character-body-size); }
 body:has(.char-modal) .xitem:hover { color: var(--character-title); }
 body:has(.char-modal) .xitem.on { color: var(--gold2); }

@@ -12,6 +12,79 @@ function domain() {
 }
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
+test('单项快捷编辑保留同组其他值及技能顺序，记录单次变化并同步关联目标', async () => {
+  const D = domain();
+  await D.saveCharacterProgress('c1', {
+    schoolSkills: [{ name: '为官之道', level: 119 }, { name: '无双一击', level: null }],
+    auxiliarySkills: [{ name: '强身术', level: 80 }],
+    training: { attack: 17, magic: 0 }, petTraining: { attack: 15 }, qianyuanPills: 3, potentialFruits: 100,
+  });
+  const goal = await D.saveGoal({ characterId: 'c1', type: 'progress', target: 18, tracking: { category: 'training', key: 'attack' } });
+  const previous = plain(D.charById('c1'));
+  await D.saveCharacterValue('c1', 'training', 'attack', 18, { date: '2026-01-01', note: '快捷提升' });
+  const saved = D.charById('c1');
+  assert.equal(saved.progress.training.magic, 0);
+  assert.equal(saved.progress.petTraining.attack, 15);
+  assert.deepEqual(plain(saved.progress.schoolSkills), previous.progress.schoolSkills);
+  assert.deepEqual(plain(saved.equipmentSets), previous.equipmentSets);
+  assert.equal(saved.growthHistory.length, previous.growthHistory.length + 1);
+  assert.deepEqual(plain(saved.growthHistory.at(-1).changes), [
+    { group: '人物修炼', label: '攻击修炼', from: 17, to: 18, unit: '级', kind: 'increase' },
+  ]);
+  assert.equal(saved.growthHistory.at(-1).date, '2026-01-01');
+  assert.equal(saved.growthHistory.at(-1).note, '快捷提升');
+  assert.equal(D.goalSummary(goal).status, 'done');
+  await D.saveCharacterValue('c1', 'schoolSkills', '无双一击', 0);
+  await D.saveCharacterValue('c1', 'auxiliarySkills', '强身术', 81);
+  await D.saveCharacterValue('c1', 'petTraining', 'attack', 16);
+  await D.saveCharacterValue('c1', 'qianyuanPills', '', 0);
+  await D.saveCharacterValue('c1', 'potentialFruits', '', '');
+  assert.deepEqual(plain(D.charById('c1').progress.schoolSkills), [{ name: '为官之道', level: 119 }, { name: '无双一击', level: 0 }]);
+  assert.equal(D.charById('c1').progress.auxiliarySkills[0].level, 81);
+  assert.equal(D.charById('c1').progress.petTraining.attack, 16);
+  assert.equal(D.charById('c1').progress.qianyuanPills, 0);
+  assert.equal(D.charById('c1').progress.potentialFruits, null);
+  const count = D.charById('c1').growthHistory.length;
+  await D.saveCharacterValue('c1', 'qianyuanPills', '', 0);
+  assert.equal(D.charById('c1').growthHistory.length, count);
+});
+
+test('排队的单项编辑读取最新档案，按技能名称更新且不复活已删除技能', async () => {
+  const D = domain();
+  const first = D.saveCharacterProgress('c1', {
+    schoolSkills: [{ name: '乙', level: 20 }, { name: '甲', level: 10 }], training: { attack: 17, magic: 9 },
+  });
+  const second = D.saveCharacterValue('c1', 'schoolSkills', '甲', 11);
+  const third = D.saveCharacterValue('c1', 'training', 'attack', 18);
+  const fourth = D.saveCharacterValue('c1', 'training', 'magic', 10);
+  await Promise.all([first, second, third, fourth]);
+  assert.deepEqual(plain(D.charById('c1').progress.schoolSkills), [{ name: '乙', level: 20 }, { name: '甲', level: 11 }]);
+  assert.equal(D.charById('c1').progress.training.attack, 18);
+  assert.equal(D.charById('c1').progress.training.magic, 10);
+  await D.saveCharacterProgress('c1', { schoolSkills: [{ name: '乙', level: 20 }] });
+  const snapshot = JSON.stringify(D.state);
+  await assert.rejects(D.saveCharacterValue('c1', 'schoolSkills', '甲', 12), /技能已变更/);
+  assert.equal(JSON.stringify(D.state), snapshot);
+});
+
+test('单项编辑校验及持久化失败完整回滚，重试只生成一条记录', async () => {
+  const D = domain();
+  const snapshot = JSON.stringify(D.state);
+  for (const value of [-1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1, '无效', true]) {
+    await assert.rejects(D.saveCharacterValue('c1', 'training', 'attack', value), /非负整数/);
+  }
+  await assert.rejects(D.saveCharacterValue('missing', 'qianyuanPills', '', 1), /角色不存在/);
+  await assert.rejects(D.saveCharacterValue('c1', 'training', 'unknown', 1), /未知/);
+  await assert.rejects(D.saveCharacterValue('c1', 'note', '', 1), /未知/);
+  D.persist = async () => { throw new Error('模拟快捷写入失败'); };
+  await assert.rejects(D.saveCharacterValue('c1', 'training', 'attack', 18), /写入失败/);
+  assert.equal(JSON.stringify(D.state), snapshot);
+  D.persist = async () => {};
+  await D.saveCharacterValue('c1', 'training', 'attack', 18);
+  assert.equal(D.charById('c1').progress.training.attack, 18);
+  assert.equal(D.charById('c1').growthHistory.length, 1);
+});
+
 test('旧角色养成为空，未知等级与明确录入的 0 分开，归一化不修改输入', () => {
   const D = domain();
   assert.equal(D.charById('c1').progress.training.attack, null);
