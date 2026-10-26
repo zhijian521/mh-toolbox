@@ -98,7 +98,7 @@ test('目标历史编辑、删除保留旧基础进度，完成日期独立，�
   await D.removeGoal(created.id); assert.equal(D.state.goals.length, 1);
 });
 
-test('门派模板保留自定义技能与 0 等级，复制配置不共享数组引用', async () => {
+test('门派模板保留自定义技能与 0 等级，技能列表保存不共享数组引用', async () => {
   const D = fixture();
   for (const school of D.schools.filter((name) => name !== '其他')) assert.equal(D.schoolSkillNames[school].length, 7, school);
   const filled = D.fillSchoolSkills('大唐官府', [{ name: '为官之道', level: 0 }, { name: '自定义', level: 20 }]);

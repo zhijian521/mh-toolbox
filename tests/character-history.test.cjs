@@ -130,10 +130,14 @@ test('备份中的非字符串与无效日历日期被过滤，有效记录保�
   assert.equal(D.characterGrowthHistory(id)[0].date, '2026-01-02');
 });
 
-test('复制生成目标独立快照及来源名称，不复制来源历史，之后修改不改写旧记录', async () => {
+test('旧复制记录在载入后保留独立快照及来源名称，之后修改不改写旧记录', async () => {
   const D = await domain(), [target, source] = D.state.characters;
   await D.saveCharacterProgress(source.id, { qianyuanPills: 8 });
-  await D.copyCharacterProgress(target.id, source.id, ['qianyuanPills']);
+  const backup = plain(D.state), legacy = backup.characters.find((character) => character.id === target.id);
+  legacy.progress.qianyuanPills = 8;
+  legacy.growthHistory = [{ id: 'legacy-copy', date: '2026-01-02', createdAt: 1, source: 'copy', sourceName: '山月', note: '',
+    changes: [{ group: '其他养成', label: '乾元丹', from: 3, to: 8, unit: '个', kind: 'increase' }] }];
+  D.state = D.normalize(backup);
   const entry = D.charById(target.id).growthHistory[0];
   assert.equal(entry.source, 'copy'); assert.equal(entry.sourceName, '山月');
   assert.equal(entry.changes[0].from, 3); assert.equal(entry.changes[0].to, 8);

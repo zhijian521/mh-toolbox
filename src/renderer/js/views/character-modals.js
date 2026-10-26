@@ -1,5 +1,5 @@
 'use strict';
-/* 角色完整编辑、单项快捷编辑与复制弹窗。 */
+/* 角色完整编辑与单项快捷编辑弹窗。 */
 Views.charQuickModal = function (id, category, key) {
   const character = D.charById(id);
   let metric;
@@ -178,62 +178,4 @@ Views.charBindSectionNav = function (overlay, sections) {
   };
   body.addEventListener('scroll', update, { passive: true });
   update();
-};
-
-Views.charCopyProgressModal = function (character) {
-  const sources = D.orderedCharacters().filter((item) => item.id !== character.id);
-  if (!sources.length) { UI.toast('请先添加另一个角色', 'err'); return; }
-  const sections = ['schoolSkills', 'auxiliarySkills', 'training', 'petTraining', 'qianyuanPills', 'potentialFruits', 'note']
-    .map((key) => [key, key === 'note' ? '养成备注' : D.growthCategory(key).t]);
-  const describe = (key, value) => {
-    const number = (value) => value == null ? '—' : String(value);
-    if (Array.isArray(value)) return value.length ? value.map((skill) => skill.name + ' ' + number(skill.level)).join('、') : '未记录';
-    if (key === 'training' || key === 'petTraining') {
-      return (key === 'training' ? D.characterTraining : D.petTraining).map((field) => field.label + ' ' + number(value[field.key])).join('、');
-    }
-    return key === 'note' ? value || '未记录' : number(value);
-  };
-  let readPlan;
-  UI.formModal({
-    title: '复制养成配置 · ' + character.name, submitText: '复制选中项目', wide: true,
-    returnFocus: () => Views.charFocusTarget(character.id, 'copy'),
-    fields: [
-      { key: 'source', label: '来源角色', type: 'select', options: sources.map((item) =>
-        ({ v: item.id, t: item.name + ' · ' + (item.school || '未选门派') })), full: true,
-        hint: '勾选要复制的项目，核对下方预览后保存；师门技能仅支持相同门派。' },
-      ...sections.map(([key, label]) => ({ key, label, type: 'check', default: key !== 'schoolSkills' && key !== 'note' })),
-      { key: 'skipEmpty', label: '跳过未记录项', type: 'check', default: true,
-        hint: '保留目标已有数值及独有技能，技能按来源顺序排列；明确填写的 0 正常复制。关闭后完整覆盖所选项目。' },
-    ],
-    onRender: (form, api, overlay) => {
-      overlay.classList.add('char-modal');
-      for (const [key] of sections) form.querySelector('[data-field="' + key + '"]').classList.remove('full');
-      const preview = document.createElement('section');
-      preview.className = 'char-copy-preview'; preview.setAttribute('aria-label', '复制预览');
-      form.appendChild(preview);
-      readPlan = () => {
-        const keys = sections.filter(([key]) => api.getVal(key)).map(([key]) => key);
-        return D.characterCopyChanges(character.id, api.getVal('source'), keys, api.getVal('skipEmpty'));
-      };
-      const update = () => {
-        try {
-          const changes = readPlan();
-          const progress = D.normalizeCharacterProgress(D.charById(character.id).progress);
-          preview.innerHTML = '<h4>复制预览</h4><table class="tbl char-copy-table"><thead><tr><th>项目</th><th>当前</th><th>复制后</th></tr></thead><tbody>' +
-            sections.filter(([key]) => api.getVal(key)).map(([key, label]) => '<tr><th scope="row">' + label + '</th><td>' + U.esc(describe(key, progress[key])) +
-              '</td><td>' + (Object.hasOwn(changes, key) ? U.esc(describe(key, changes[key])) : '<span class="char-copy-unchanged">保持原值</span>') + '</td></tr>').join('') + '</tbody></table>';
-        } catch (error) { preview.innerHTML = '<p class="char-copy-error">' + U.esc(error.message) + '</p>'; }
-      };
-      form.addEventListener('change', update);
-      update();
-    },
-    validate: () => {
-      try { return Object.keys(readPlan()).length ? '' : '所选项目没有可复制的变更'; }
-      catch (error) { return error.message; }
-    },
-    onSubmit: async (data) => {
-      await D.copyCharacterProgress(character.id, data.source, sections.filter(([key]) => data[key]).map(([key]) => key), data.skipEmpty);
-      Views.charRefresh(character.id, 'copy'); UI.toast('养成配置已复制');
-    },
-  });
 };

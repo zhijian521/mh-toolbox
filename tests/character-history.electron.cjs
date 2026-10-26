@@ -80,7 +80,11 @@ async function flows() {
   check(document.activeElement.dataset.range === 'today', '快捷日期切换保留键盘焦点');
   UI.closeModal();
 
-  await D.copyCharacterProgress('c1', 'c2', ['qianyuanPills']);
+  /* 模拟功能移除前保存的复制记录，继续验证旧历史展示和重启恢复。 */
+  const legacy = D.charById('c1');
+  legacy.progress.qianyuanPills = 6;
+  legacy.growthHistory.push({ id: 'legacy-copy', date: U.today(), createdAt: Date.now(), source: 'copy', sourceName: '山月', note: '',
+    changes: [{ group: '其他养成', label: '乾元丹', from: 4, to: 6, unit: '个', kind: 'increase' }] });
   for (let i = 7; i < 20; i++) await D.saveCharacterProgress('c2', { qianyuanPills: i }, { date: '2026-01-03' });
   click('#character-history');
   check(document.querySelectorAll('.char-history-entry').length === 12 && document.querySelector('.ledger-pagination').textContent.includes('共 15 次变更'), '全部角色及分页');

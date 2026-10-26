@@ -79,8 +79,7 @@ Object.assign(D, {
     }
     if (date > U.today()) throw new Error('变更日期不能晚于今天');
     return {
-      id: U.uid(), date, createdAt: Date.now(), source: record.source === 'copy' ? 'copy' : 'edit',
-      sourceName: typeof record.sourceName === 'string' ? record.sourceName : '',
+      id: U.uid(), date, createdAt: Date.now(), source: 'edit', sourceName: '',
       note: typeof record.note === 'string' ? record.note.trim() : '', changes,
     };
   },
@@ -153,43 +152,6 @@ Object.assign(D, {
     return this.commit(() => {
       const character = this.charById(id);
       return this.applyCharacter(this.characterValueChanges(character, category, key, input), id, record);
-    });
-  },
-
-  characterCopyChanges(id, sourceId, keys, skipEmpty) {
-    const character = this.charById(id), source = this.charById(sourceId);
-    if (!character || !source) throw new Error('来源或目标角色不存在');
-    if (id === sourceId) throw new Error('请选择其他来源角色');
-    if (!keys.length) throw new Error('请选择要复制的项目');
-    if (keys.includes('schoolSkills') && (!character.school || source.school !== character.school)) throw new Error('师门技能需选择相同门派的角色');
-    const target = this.normalizeCharacterProgress(character.progress);
-    const progress = this.normalizeCharacterProgress(source.progress);
-    const changes = {};
-    for (const key of keys) {
-      if (!Object.hasOwn(progress, key)) throw new Error('未知的角色养成项目');
-      let value = progress[key];
-      if (skipEmpty) {
-        if (Array.isArray(value)) {
-          if (!value.length) continue;
-          const existing = new Map(target[key].map((skill) => [skill.name, skill]));
-          const names = new Set(value.map((skill) => skill.name));
-          value = [...value.map((skill) => ({ name: skill.name, level: skill.level ?? (existing.get(skill.name)?.level ?? null) })),
-            ...target[key].filter((skill) => !names.has(skill.name))];
-        } else if (value && typeof value === 'object') {
-          value = Object.assign({}, target[key], Object.fromEntries(Object.entries(value).filter(([, number]) => number !== null)));
-        } else if (value == null || (typeof value === 'string' && !value.trim())) continue;
-      }
-      if (JSON.stringify(value) !== JSON.stringify(target[key])) changes[key] = value;
-    }
-    return changes;
-  },
-
-  copyCharacterProgress(id, sourceId, keys, skipEmpty = true) {
-    return this.commit(() => {
-      const changes = this.characterCopyChanges(id, sourceId, keys, skipEmpty);
-      if (!Object.keys(changes).length) throw new Error('所选项目没有可复制的变更');
-      return this.applyCharacter({ progress: Object.assign({}, this.normalizeCharacterProgress(this.charById(id).progress), changes) }, id,
-        { source: 'copy', sourceName: this.charById(sourceId).name });
     });
   },
 

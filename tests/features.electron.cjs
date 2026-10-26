@@ -72,9 +72,6 @@ async function checks() {
   check(document.querySelectorAll('[data-skills="schoolSkills"] .char-skill-row').length === 8, '补齐门派模板保留自定义行');
   check(document.querySelector('[name="skillLevel"]').value === '119' && document.querySelectorAll('[name="skillLevel"]')[1].value === '0', '模板保留等级');
   await save();
-  click('.char-card[data-id="c1"] [data-act="copy"]'); field('schoolSkills', false); await save();
-  check(D.charById('c1').progress.training.attack === 12 && D.charById('c1').progress.qianyuanPills === 3 &&
-    D.charById('c1').progress.schoolSkills.length === 8, '复制选中项目保留其余');
 
   Views.charModal(D.charById('c1')); field('school', '普陀山'); click('[data-act="keep-skills"]'); click('[data-act="template"]');
   check([...document.querySelectorAll('[data-skills="schoolSkills"] [name="skillName"]')].some((input) => input.value === '灵性'),
@@ -179,7 +176,7 @@ app.whenReady().then(async () => {
     await run('new Promise(resolve => setTimeout(resolve, 250))');
     fs.writeFileSync(path.join(dir, 'goal-history.png'), (await win.webContents.capturePage()).toPNG());
     assert.deepEqual(errors, []);
-    console.log('[features] PASS: 库存、目标历史、模板/复制、键盘焦点、关闭与未保存、跨页 CSV、计时缓存、导入校验/回滚/自动副本');
+    console.log('[features] PASS: 库存、目标历史、门派模板、键盘焦点、关闭与未保存、跨页 CSV、计时缓存、导入校验/回滚/自动副本');
     console.log('[features] screenshots:', dir);
     clearTimeout(deadline); win.close(); app.exit(0);
   } catch (error) { console.error('[features] FAIL:', error, '\n测试数据：', dir); app.exit(1); }

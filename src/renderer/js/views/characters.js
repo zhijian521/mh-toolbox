@@ -11,7 +11,6 @@ Views.characters = function () {
     const character = D.charById(card.dataset.id);
     card.querySelector('[data-act="edit"]').onclick = () => Views.charModal(character);
     card.querySelector('[data-act="history"]').onclick = () => Views.charHistoryModal(character.id);
-    card.querySelector('[data-act="copy"]').onclick = () => Views.charCopyProgressModal(character);
     card.querySelector('[data-act="del"]').onclick = () => Views.charDelete(character);
     card.querySelectorAll('[data-act="quick-edit"]').forEach((button) => {
       button.onclick = () => Views.charQuickModal(character.id, button.dataset.category, button.dataset.key);
@@ -64,7 +63,7 @@ Views.charCardHtml = function (character) {
     '</h2><p class="char-sub">' + U.esc([character.level ? character.level + ' 级' : '', character.school, character.server].filter(Boolean).join(' · ')) +
     '</p></div></div><div class="char-toolbar">' +
       iconButton('move', 'grip', '拖动排序，或用方向键前后移动', ' draggable="true"') + iconButton('history', 'calendar', '查看养成记录') +
-      iconButton('copy', 'copy', '复制养成配置') + iconButton('del', 'trash', '删除角色') +
+      iconButton('del', 'trash', '删除角色') +
       iconButton('edit', 'edit', '编辑档案') + '</div></header>' +
     '<section class="char-section">' + heading('师门技能') + skills(progress.schoolSkills, 'schoolSkills') + '</section>' +
     '<section class="char-section">' + heading('修炼') + '<div class="char-training">' +

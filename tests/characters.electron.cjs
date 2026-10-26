@@ -119,22 +119,6 @@ async function checks(phase) {
     field('school', '普陀山'); click('[data-act="replace-skills"]'); click('.modal [data-act="cancel"]'); click('[data-act="discard"]');
     check(D.charById('c1').school === '大唐官府', '取消转门派保留已保存档案');
 
-    await D.saveCharacterProgress('c2', { qianyuanPills: null, potentialFruits: 0 });
-    const quantities = () => {
-      for (const key of ['schoolSkills', 'auxiliarySkills', 'training', 'petTraining', 'note']) field(key, false);
-      field('qianyuanPills', true); field('potentialFruits', true);
-    };
-    edit('c1', 'copy'); quantities();
-    check(document.querySelector('[name="skipEmpty"]').checked && document.querySelector('.char-copy-preview').textContent.includes('保持原值') &&
-      document.querySelectorAll('.char-copy-table tbody tr').length === 2, '复制预览跟随选择，默认跳过未记录项');
-    await save();
-    check(D.charById('c1').progress.qianyuanPills === 3 && D.charById('c1').progress.potentialFruits === 0 &&
-      document.activeElement.dataset.act === 'copy', '跳过空数量，正常复制零值并恢复复制按钮焦点');
-    edit('c1', 'copy'); quantities(); field('skipEmpty', false); await save();
-    check(D.charById('c1').progress.qianyuanPills === null, '关闭跳过后允许完整覆盖清空');
-    edit('c1', 'copy'); field('schoolSkills', true);
-    check(document.querySelector('.char-copy-error').textContent.includes('相同门派'), '复制预览提示门派不匹配');
-    UI.closeModal();
     return JSON.stringify(D.state);
   }
   if (phase === 'skillOrder') {
@@ -211,9 +195,9 @@ async function checks(phase) {
   const second = card('c2').getBoundingClientRect();
   check(first.right <= second.left && first.top === second.top, '角色卡片与装备页同样并排展示');
   const other = JSON.stringify(D.charById('c2'));
-  check(card('c1').querySelectorAll('.char-toolbar button').length === 5 &&
+  check(card('c1').querySelectorAll('.char-toolbar button').length === 4 &&
     !card('c1').querySelector('.char-section-head button, .char-actions'), '整体操作集中顶部，分区标题不重复编辑图标');
-  check(['move', 'history', 'copy', 'del', 'edit'].every((action) => {
+  check(['move', 'history', 'del', 'edit'].every((action) => {
     const button = card('c1').querySelector('[data-act="' + action + '"]');
     return button.querySelector('svg') && button.title && button.getAttribute('aria-label');
   }) && card('c1').querySelector('.char-toolbar button:last-child').dataset.act === 'edit', '图标操作带提示，编辑在最右侧');
@@ -416,12 +400,7 @@ app.whenReady().then(async () => {
       await win.webContents.executeJavaScript("Views.go('characters'); Views.charModal(D.charById('c1')); document.getElementById('mform')._xcomps.school.set('普陀山'); document.querySelector('[name=school]').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('toast-root').replaceChildren()", true);
       await new Promise((resolve) => setTimeout(resolve, 200));
       fs.writeFileSync(path.join(dir, 'characters-school-choice.png'), (await win.webContents.capturePage()).toPNG());
-      await win.webContents.executeJavaScript("UI.closeModal(); Views.charCopyProgressModal(D.charById('c1'))", true);
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      fs.writeFileSync(path.join(dir, 'characters-copy-preview.png'), (await win.webContents.capturePage()).toPNG());
       win.setSize(620, 760);
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      fs.writeFileSync(path.join(dir, 'characters-copy-narrow.png'), (await win.webContents.capturePage()).toPNG());
       await win.webContents.executeJavaScript("UI.closeModal(); Views.charModal(D.charById('c1')); document.querySelector('[data-section-target=auxiliarySkills]').click()", true);
       await new Promise((resolve) => setTimeout(resolve, 200));
       fs.writeFileSync(path.join(dir, 'characters-form-narrow.png'), (await win.webContents.capturePage()).toPNG());
@@ -431,7 +410,7 @@ app.whenReady().then(async () => {
     console.log('[characters] PASS: 顶部图标与编辑顺序、统一档案一次保存、技能增删/自定义/空值、修炼与装备保留');
     console.log('[characters] PASS: 单一手柄/原生鼠标拖动/方向键排序、失败回滚重试、删除恢复、备份往返、真实重启、窄窗口与滚动位置');
     console.log('[characters] PASS: 师门/辅助技能前后移、首尾边界、自定义技能零值、取消与失败重试、落盘与重启顺序');
-    console.log('[characters] PASS: 异步切页、保存锁定与恢复、焦点、分区定位、门派保留/替换/取消、复制预览与跳过空值');
+    console.log('[characters] PASS: 异步切页、保存锁定与恢复、焦点、分区定位、门派保留/替换/取消');
     if (process.argv.includes('--screenshots')) console.log('[characters] screenshots:', dir);
     clearTimeout(deadline); win.close(); app.exit(0);
   } catch (error) {
