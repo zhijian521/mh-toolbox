@@ -78,8 +78,8 @@ Object.assign(D, {
     });
     s.goals.forEach((g) => {
       g.sortOrder = this.characterNumber(g.sortOrder);
-      const metric = g.type === 'progress' && g.tracking && this.goalMetrics.find((item) => item.v === g.tracking.category);
-      g.tracking = metric ? { category: metric.v, key: ['schoolSkills', 'auxiliarySkills', 'training', 'petTraining'].includes(metric.v) &&
+      const metric = g.type === 'progress' && g.tracking && this.growthCategory(g.tracking.category);
+      g.tracking = metric ? { category: metric.v, key: ['skills', 'training'].includes(metric.kind) &&
         typeof g.tracking.key === 'string' ? g.tracking.key.trim() : '' } : null;
       if (metric) g.unit = metric.unit;
       g.target = Number(g.target) || 0;

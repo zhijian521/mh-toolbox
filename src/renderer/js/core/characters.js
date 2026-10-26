@@ -46,24 +46,27 @@ Object.assign(D, {
         typeof from === 'number' && typeof to === 'number' ? (to > from ? 'increase' : 'decrease') : 'changed');
       changes.push({ group, label, from, to, unit, kind });
     };
-    add('基础信息', '等级', this.characterNumber(previous.level), saved.level, '级');
+    const addMetric = (category, key, from, to, kind) => {
+      const metric = this.growthMetric(category, key);
+      add(metric.group, metric.label, from, to, metric.unit, kind);
+    };
+    addMetric('level', '', this.characterNumber(previous.level), saved.level);
     add('基础信息', '门派', previous.school || null, saved.school || null);
     const before = this.normalizeCharacterProgress(previous.progress), after = saved.progress;
-    for (const [key, group] of [['schoolSkills', '师门技能'], ['auxiliarySkills', '辅助技能']]) {
+    for (const key of ['schoolSkills', 'auxiliarySkills']) {
       const oldSkills = new Map(before[key].map((skill) => [skill.name, skill.level]));
       const newSkills = new Map(after[key].map((skill) => [skill.name, skill.level]));
       for (const [name, level] of newSkills) {
-        add(group, name, oldSkills.get(name) ?? null, level, '级', oldSkills.has(name) ? undefined : 'added');
+        addMetric(key, name, oldSkills.get(name) ?? null, level, oldSkills.has(name) ? undefined : 'added');
       }
       for (const [name, level] of oldSkills) {
-        if (!newSkills.has(name)) add(group, name, level, null, '级', 'removed');
+        if (!newSkills.has(name)) addMetric(key, name, level, null, 'removed');
       }
     }
-    for (const [key, group, fields] of [['training', '人物修炼', this.characterTraining], ['petTraining', '召唤兽修炼', this.petTraining]]) {
-      for (const field of fields) add(group, field.label, before[key][field.key], after[key][field.key], '级');
+    for (const key of ['training', 'petTraining']) {
+      for (const field of this.growthCategory(key).fields) addMetric(key, field.key, before[key][field.key], after[key][field.key]);
     }
-    add('其他养成', '乾元丹', before.qianyuanPills, after.qianyuanPills, '个');
-    add('其他养成', '潜能果', before.potentialFruits, after.potentialFruits, '个');
+    for (const key of ['qianyuanPills', 'potentialFruits']) addMetric(key, '', before[key], after[key]);
     return changes;
   },
 
@@ -141,37 +144,15 @@ Object.assign(D, {
   },
 
   characterProgressMetric(character, category, key) {
-    if (!character) throw new Error('角色不存在');
-    const progress = this.normalizeCharacterProgress(character.progress);
-    if (['schoolSkills', 'auxiliarySkills'].includes(category)) {
-      const skill = progress[category].find((item) => item.name === key);
-      if (!skill) throw new Error('该技能已变更，请重新打开快捷编辑');
-      return { group: category === 'schoolSkills' ? '师门技能' : '辅助技能', label: skill.name, value: skill.level, unit: '级' };
-    }
-    if (['training', 'petTraining'].includes(category)) {
-      const field = (category === 'training' ? this.characterTraining : this.petTraining).find((item) => item.key === key);
-      if (!field) throw new Error('未知的修炼项目');
-      return { group: category === 'training' ? '人物修炼' : '召唤兽修炼', label: field.label, value: progress[category][key], unit: '级' };
-    }
-    if (['qianyuanPills', 'potentialFruits'].includes(category)) {
-      return { group: '其他养成', label: category === 'qianyuanPills' ? '乾元丹' : '潜能果', value: progress[category], unit: '个' };
-    }
-    throw new Error('未知的角色养成项目');
+    const { group, label, unit } = this.growthMetric(category, key);
+    return { group, label, unit, value: this.growthValue(character, category, key, { requireSkill: true }) };
   },
 
   /** 单项编辑在提交队列内读取最新档案，按技能名称定位，保留其余项目及顺序。 */
   saveCharacterValue(id, category, key, input, record = {}) {
     return this.commit(() => {
       const character = this.charById(id);
-      this.characterProgressMetric(character, category, key);
-      const value = this.characterNumber(input);
-      if (input != null && input !== '' && value === null) throw new Error('请填写非负整数或留空');
-      const progress = this.normalizeCharacterProgress(character.progress);
-      if (['schoolSkills', 'auxiliarySkills'].includes(category)) {
-        progress[category].find((skill) => skill.name === key).level = value;
-      } else if (['training', 'petTraining'].includes(category)) progress[category][key] = value;
-      else progress[category] = value;
-      return this.applyCharacter({ progress }, id, record);
+      return this.applyCharacter(this.characterValueChanges(character, category, key, input), id, record);
     });
   },
 

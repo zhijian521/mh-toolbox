@@ -38,6 +38,7 @@ mh-tool/
 │        │  ├─ util.js           # U：日期/金额/转义等纯函数
 │        │  ├─ data.js           # D：根状态、常量与基础查询
 │        │  ├─ storage.js        # D：串行提交、失败回滚与持久化
+│        │  ├─ growth.js         # D：共用养成指标定义、读取与单项草稿构造
 │        │  ├─ characters.js     # D：角色、养成与变更快照
 │        │  ├─ schools.js        # D：官网门派技能静态模板
 │        │  ├─ statistics.js     # D：收益与账号统计
@@ -48,7 +49,10 @@ mh-tool/
 │        │  ├─ equipment.js      # D：三套装备方案、玉魄、引用与迁移
 │        │  ├─ equipment-import.js # D：OCR 文字解析与批量建档
 │        │  ├─ online.js         # D：在线记录、参数快照、跨日点卡结算
-│        │  └─ ui.js             # UI：Toast/弹窗/表单生成器/SVG 图标库/下拉与日历组件
+│        │  ├─ ui.js             # UI：Toast/弹窗/表单生成器/SVG 图标库/下拉与日历组件
+│        │  ├─ ui-cards.js       # UI：卡片拖动、键盘排序与保存状态
+│        │  ├─ ui-growth.js      # UI：数字/单位与养成变化呈现
+│        │  └─ ui-history.js     # UI：弹窗记录日期范围、分页和焦点
 │        ├─ layout/
 │        │  ├─ titlebar.js       # 自绘标题栏（拖拽/最大化/关闭）
 │        │  │  └─ dev.js            # 开发模式客户端（热替换/状态快照恢复）
@@ -106,19 +110,21 @@ mh-tool/
 
 角色养成历史由 `applyCharacter` 在串行提交内比较最新档案生成，与档案一起持久化和失败回滚；普通编辑、养成保存、复制共用此入口。`changes[]` 保存分区、项目名称、前后值、单位及类型（提升/调低/补录/清空/新增/移除/调整），技能按名称比较，重排不产生记录。首次建档不生成变更，昵称、服务器和长期备注不参与比较。编辑表单的日期与本次说明通过独立参数传入，不写入当前养成值；复制只记录目标变化并快照来源名称。历史归角色所有，随备份深拷贝保留、随角色删除，装备/记账操作不写入养成历史。
 
-`views/character-history.js` 负责只读日期时间线，提供全部或单个角色、统一日期范围和每页 12 次变更的分页；筛选局限在弹窗，不修改全局角色筛选。
+`views/character-history.js` 负责只读日期时间线，`views/goal-history.js` 负责目标养成与手动进度表格。两者通过 `UI.historyList` 共用日期范围、每页 12 条的分页、空态和焦点恢复，角色按变更事件分页，目标按记录行分页；筛选局限在弹窗，不修改全局角色筛选。目标删除手动记录后保留日期和页码，并在页数减少时修正边界。`UI.numberHtml` 统一数字与单位，`UI.growthHistoryValueHtml` / `ValuesHtml` / `KindHtml` 统一前后值、变更类型及增量，新增与移除保留独立语义。
+
+养成指标位于 `core/growth.js` 的 `D.growthMetrics`，统一分类、分组、标签、单位和技能/修炼/数量类型，`D.goalMetrics` 下拉从此派生。`D.growthValue` 共用数值读取，`D.characterValueChanges` 只构造单项草稿、不修改原档案、不自行提交；角色快捷编辑与目标批量更新在各自的串行事务内调用它，再由 `applyCharacter` 一次保存档案和历史。目标允许补建缺失技能，角色快捷编辑拒绝恢复已删除技能。历史生成与目标历史筛选共用指标元数据，沿用已有中文快照格式，无需变更数据版本；修改分组或标签时须兼容已有历史。
 
 > 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 5。
 
 共享账本列表和筛选位于 `views/records.js`，收益表单位于 `transactions.js`，账号快速记录、快捷表单预设和账号表单位于 `account.js`；金额、库存与装备关联在 `core/ledger.js`，统计在 `statistics.js`，CSV 编码在 `export.js`。
 
-目标领域位于 `core/goals.js`。`characterId: 'all'` 动态涵盖全部角色，单角色筛选仍展示全体目标；目标页和总览共用 `D.goalsFor` 与纯读取的 `D.goalSummary`，不缩小全体目标的计算范围。跟随目标的 `target` 是每个角色的门槛，`tracking` 指向辅助/师门技能、人物/召唤兽修炼、等级、乾元丹或潜能果；进度逐个封顶再汇总，未知值保持 null，只有存在成员且全部达标才完成，调低、清空或新增角色会重新判断。状态与当前值从档案即时派生，存储的 `status/current/logs` 仅用于手动累计模式。`D.saveGoalGrowth` 在同一提交中调用 `applyCharacter` 更新指定项目并生成角色养成记录，任一校验或落盘失败全部回滚；养成目标历史筛选原始角色记录，删除目标不删除档案及养成记录。存钱和装备目标沿用手动流水及完成/恢复操作。
+目标领域位于 `core/goals.js`，卡片与筛选位于 `views/goals.js`，编辑、批量养成与手动进度弹窗位于 `views/goal-modals.js`。`characterId: 'all'` 动态涵盖全部角色，单角色筛选仍展示全体目标；目标页和总览共用 `D.goalsFor` 与纯读取的 `D.goalSummary`，不缩小全体目标的计算范围。跟随目标的 `target` 是每个角色的门槛，`tracking` 指向辅助/师门技能、人物/召唤兽修炼、等级、乾元丹或潜能果；进度逐个封顶再汇总，未知值保持 null，只有存在成员且全部达标才完成，调低、清空或新增角色会重新判断。状态与当前值从档案即时派生，存储的 `status/current/logs` 仅用于手动累计模式。`D.saveGoalGrowth` 在同一提交中调用 `applyCharacter` 更新指定项目并生成角色养成记录，任一校验或落盘失败全部回滚；养成目标历史筛选原始角色记录，删除目标不删除档案及养成记录。存钱和装备目标沿用手动流水及完成/恢复操作。
 
 `D.orderedGoals` 与 `D.orderedCharacters` 共用 `D.orderedCards`，按 sortOrder、创建时间排列，新卡片放在列表首位，编辑不重排；总览目标沿用相同顺序。两类排序保存均在提交队列内调用 `D.moveCard`，按相邻 ID 和 before/after 定位；自动排序模式拖动时先按可见 ID 顺序排列对应位置，再移动目标，隐藏目标保留相对顺序。落盘失败整体回滚，排序随备份及重启保留。`normalizeCardOrder` 在读取或导入时将旧置顶按原显示顺序转换为单一 sortOrder，并移除旧 pinned 字段，归一化不修改输入且幂等。
 
-角色和目标卡片排序共用 `UI.bindCardOrdering`，仅在本次网格绑定手柄拖放、方向键和正文边缘滚动，不重复绑定全局事件；拖放取消或结束清理插入线和滚动帧。`Views.charPersistOrder` / `Views.goalPersistOrder` 保存期间锁定排序入口并标记忙碌，成功保留滚动、恢复对应手柄焦点，切页后的异步回调不覆盖其他正文。每个角色进度直接展示，页面统一滚动。
+角色和目标卡片排序共用 `core/ui-cards.js` 的 `UI.bindCardOrdering`，仅在本次网格绑定手柄拖放、方向键和正文边缘滚动，不重复绑定全局事件；拖放取消或结束清理插入线和滚动帧。`Views.charPersistOrder` / `Views.goalPersistOrder` 通过 `UI.persistCardOrder` 共用防重复、锁定入口、忙碌状态、原禁用状态恢复和错误提示；页面只负责保存接口、成功刷新与焦点恢复，目标另负责自动排序切换及可见 ID。切页后的异步回调不覆盖其他正文。每个角色进度直接展示，页面统一滚动。
 
-角色养成的归一化、验证、保存、排序和关联删除位于 `core/characters.js`，卡片与统一档案编辑位于 `views/characters.js`。未记录值存为 `null`，明确填写的 0 原样保存；人物五项修炼与召唤兽四项修炼独立记录。师门和辅助技能使用可增删、调整顺序的名称/等级列表，技能区达到 580px 时每行两项，否则单列；顺序随档案及备份保存。`D.orderedCharacters` 按统一拖动顺序展示全部角色，使用 `D.saveCharacterOrder` 串行提交并支持失败回滚；编辑已有档案不计算新角色位置。
+角色养成的归一化、验证、保存、排序和关联删除位于 `core/characters.js`，卡片与删除入口位于 `views/characters.js`；完整档案、快捷编辑与复制弹窗位于 `views/character-modals.js`，技能草稿列表及门派切换处理位于 `views/character-skill-editor.js`。未记录值存为 `null`，明确填写的 0 原样保存；人物五项修炼与召唤兽四项修炼独立记录。师门和辅助技能使用可增删、调整顺序的名称/等级列表，技能区达到 580px 时每行两项，否则单列；顺序随档案及备份保存。`D.orderedCharacters` 按统一拖动顺序展示全部角色，使用 `D.saveCharacterOrder` 串行提交并支持失败回滚；编辑已有档案不计算新角色位置。
 
 卡片顶部操作依次为拖动排序、养成记录、复制养成、删除、编辑档案，取消置顶与独立排序弹窗。技能、两类修炼和养成数量的整行使用原生按钮的扩展点击区域打开 `Views.charQuickModal`，保留定义列表与原有排版；快捷弹窗复用 `UI.formModal`，支持步进、输入、前后预览、折叠日期说明和未保存关闭确认。`D.characterProgressMetric` 校验并读取单项信息；`D.saveCharacterValue` 在提交队列内读取最新档案，技能按名称定位，仅更新选中项目后调用 `applyCharacter`，共用养成历史、持久化回滚及目标派生逻辑，避免覆盖其他最新项目或重新加入已删除的技能。重建卡片后按角色 ID、分区和项目键恢复焦点及页面滚动。
 
@@ -138,6 +144,7 @@ mh-tool/
 - `D.replaceState` 先校验并归一化，再事务替换；拒绝单价文件、重复 ID 和未来版本。导入、清空和示例覆盖前保存本地副本，写入失败不改变计时状态。
 - 版本 5 新增成交数量和目标历史基础进度。从版本 4 升级前复制 `data.json.before-inventory-时间戳.bak`；保存仍使用完整 JSON 和原子替换。
 - 下拉与日期保留触发按钮和无障碍名称；Esc 优先关闭浮层。弹窗统一关闭回调、焦点限制和返回。自定义表单调用 `UI.watchForm`，未保存确认居中覆盖原弹窗，下层内容临时 inert；原 dialog 切换为带明确标题和说明的 alertdialog，焦点限制在确认操作内。继续编辑或 Esc 恢复原语义、交互与焦点，保存中阻止关闭。
+- `UI.formModal` 提交前调用 `UI.validateNumberInputs` 检查未隐藏、未禁用的原始数字控件，覆盖动态技能行；`badInput`、范围和步长错误在转换为数值前拦截，主动留空和明确的 0 保持不同语义。`UI.watchForm` 将 `badInput` 纳入草稿比较，空值上的错误输入也需要关闭确认。领域层继续验证安全整数，避免绕过 UI 写入非法养成值。
 - CSV 复用 `Views.filteredRecords`，导出全部匹配记录，不受 50 条分页限制，带 BOM、单位与公式防护。
 - `scripts/test.cjs` 自动发现 `.test.cjs` 和 `.electron.cjs`，共享加载器/隔离窗口在 `tests/helpers`；CI 使用 Windows / Node 22 执行语法、领域和真实窗口测试。
 

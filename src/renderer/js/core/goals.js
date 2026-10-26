@@ -18,32 +18,18 @@ Object.assign(D, {
   },
 
   goalMetricOptions(category, characterId) {
-    if (category === 'training') return this.characterTraining.map((field) => ({ v: field.key, t: field.label }));
-    if (category === 'petTraining') return this.petTraining.map((field) => ({ v: field.key, t: field.label }));
-    if (!['schoolSkills', 'auxiliarySkills'].includes(category)) return [];
-    const characters = this.goalCharacters({ characterId });
-    const names = category === 'auxiliarySkills' ? this.auxiliarySkillNames :
-      characters.flatMap((character) => this.schoolSkillNames[character.school] || []);
-    return [...new Set([...names, ...characters.flatMap((character) => character.progress[category].map((skill) => skill.name))])]
-      .map((name) => ({ v: name, t: name }));
+    return this.growthMetricOptions(category, this.goalCharacters({ characterId }));
   },
 
   goalMetricLabel(tracking) {
-    const metric = this.goalMetrics.find((item) => item.v === tracking.category);
-    if (['training', 'petTraining'].includes(tracking.category)) {
-      return this.goalMetricOptions(tracking.category).find((item) => item.v === tracking.key)?.t || '未知修炼';
-    }
-    return ['schoolSkills', 'auxiliarySkills'].includes(tracking.category) ? tracking.key : metric?.t || '未知项目';
+    try {
+      const metric = this.growthMetric(tracking.category, tracking.key);
+      return metric.kind === 'level' ? metric.t : metric.label;
+    } catch (_) { return this.growthCategory(tracking.category)?.kind === 'training' ? '未知修炼' : '未知项目'; }
   },
 
   goalCharacterValue(character, tracking) {
-    const { category, key } = tracking;
-    if (category === 'level') return this.characterNumber(character.level);
-    const progress = character.progress;
-    if (['schoolSkills', 'auxiliarySkills'].includes(category)) {
-      return this.characterNumber(progress[category].find((skill) => skill.name === key)?.level);
-    }
-    return this.characterNumber(['training', 'petTraining'].includes(category) ? progress[category][key] : progress[category]);
+    return this.growthValue(character, tracking.category, tracking.key);
   },
 
   /* 全体目标始终按完整成员计算；超额部分封顶，不能抵消其他角色的不足。 */
@@ -81,13 +67,13 @@ Object.assign(D, {
       const type = input.type || previous?.type || 'money';
       if (!this.goalTypes.some((item) => item.v === type)) throw new Error('无效的目标类型');
       const tracking = input.tracking === undefined ? previous?.tracking || null : input.tracking;
-      const metric = tracking && this.goalMetrics.find((item) => item.v === tracking.category);
+      const metric = tracking && this.growthCategory(tracking.category);
       if (tracking) {
         if (type !== 'progress' || !metric) throw new Error('请选择有效的养成项目');
         if (!Number.isSafeInteger(input.target)) throw new Error('养成目标需填写正整数');
-        if (['schoolSkills', 'auxiliarySkills'].includes(tracking.category) &&
+        if (metric.kind === 'skills' &&
           (typeof tracking.key !== 'string' || !tracking.key.trim())) throw new Error('请选择技能');
-        if (['training', 'petTraining'].includes(tracking.category) &&
+        if (metric.kind === 'training' &&
           !this.goalMetricOptions(tracking.category).some((item) => item.v === tracking.key)) throw new Error('请选择修炼项目');
       }
       if (input.deadline && (!/^\d{4}-\d{2}-\d{2}$/.test(input.deadline) ||
@@ -96,7 +82,7 @@ Object.assign(D, {
         id: U.uid(), createdAt: Date.now(), sortOrder: 0, current: 0, baseProgress: 0, status: 'active', logs: [],
       }), characterId: input.characterId, type, target: input.target,
         tracking: tracking ? { category: tracking.category,
-          key: ['schoolSkills', 'auxiliarySkills', 'training', 'petTraining'].includes(tracking.category) ? tracking.key.trim() : '' } : null,
+          key: ['skills', 'training'].includes(metric.kind) ? tracking.key.trim() : '' } : null,
         unit: metric ? metric.unit : String(input.unit || '万').trim() || '万',
         deadline: input.deadline || '', note: String(input.note || '').trim() };
       goal.title = String(input.title || '').trim() || this.goalDefaultTitle(goal);
@@ -121,15 +107,8 @@ Object.assign(D, {
       for (const [characterId, input] of Object.entries(values)) {
         const character = members.find((member) => member.id === characterId);
         if (!character) throw new Error('目标角色已变更，请重新打开进度表单');
-        const value = this.characterNumber(input);
-        if (input !== '' && input != null && value === null) throw new Error('养成进度需填写非负整数或留空');
-        if (value === this.goalCharacterValue(character, goal.tracking)) continue;
-        const changes = category === 'level' ? { level: value } : { progress: this.normalizeCharacterProgress(character.progress) };
-        if (['schoolSkills', 'auxiliarySkills'].includes(category)) {
-          const skill = changes.progress[category].find((item) => item.name === key);
-          if (skill) skill.level = value; else changes.progress[category].push({ name: key, level: value });
-        } else if (['training', 'petTraining'].includes(category)) changes.progress[category][key] = value;
-        else if (category !== 'level') changes.progress[category] = value;
+        const changes = this.characterValueChanges(character, category, key, input, { allowMissingSkill: true });
+        if (this.characterNumber(input) === this.goalCharacterValue(character, goal.tracking)) continue;
         this.applyCharacter(changes, characterId, record);
         count++;
       }
@@ -138,12 +117,12 @@ Object.assign(D, {
     });
   },
 
-  goalGrowthHistory(goal) {
-    const groups = { schoolSkills: '师门技能', auxiliarySkills: '辅助技能', training: '人物修炼', petTraining: '召唤兽修炼',
-      level: '基础信息', qianyuanPills: '其他养成', potentialFruits: '其他养成' };
-    const label = goal.tracking.category === 'level' ? '等级' : this.goalMetricLabel(goal.tracking);
-    return this.characterGrowthHistory(goal.characterId).flatMap((entry) => entry.changes
-      .filter((change) => change.group === groups[goal.tracking.category] && change.label === label)
+  goalGrowthHistory(goal, range = {}) {
+    let metric;
+    try { metric = this.growthMetric(goal.tracking.category, goal.tracking.key); }
+    catch (_) { return []; }
+    return this.characterGrowthHistory(goal.characterId, range).flatMap((entry) => entry.changes
+      .filter((change) => change.group === metric.group && change.label === metric.label)
       .map((change) => ({ ...entry, change })));
   },
 

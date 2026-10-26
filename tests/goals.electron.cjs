@@ -277,6 +277,82 @@ async function nativeDrag(win, run) {
   return run(`D.removeGoal(${JSON.stringify(temporaryId)}).then(() => { Views.goals(); return JSON.stringify(D.state); })`);
 }
 
+async function nativeNumberValidation(win, run) {
+  await run(`new Promise((resolve, reject) => {
+    let tries = 0; const poll = () => {
+      if (document.querySelectorAll('.nav-item').length === 7) { resolve(); return; }
+      if (++tries > 150) { reject(new Error('启动超时')); return; }
+      setTimeout(poll, 20);
+    }; poll();
+  })`);
+  const original = await run('JSON.stringify(D.state)');
+  await run(`(async () => {
+    const goal = await D.saveGoal({ characterId: 'c2', type: 'progress', target: 120,
+      tracking: { category: 'auxiliarySkills', key: '强身术' } });
+    window.numberValidationGoal = goal.id; Views.go('goals'); Views.goalGrowthModal(goal);
+  })()`);
+  const before = await run('JSON.stringify(D.state)');
+  for (const text of ['e', '1e', '-']) {
+    await run(`{ const input = document.querySelector('[name="member0"]'); input.value = ''; input.focus(); }
+      new Promise(resolve => requestAnimationFrame(resolve))`);
+    await win.webContents.insertText(text);
+    assert.equal(await run(`document.querySelector('[name="member0"]').validity.badInput`), true, '实际键盘形成错误数字：' + text + ' / ' + await run(`document.querySelector('[name="member0"]').value`));
+    await run(`document.querySelector('.modal [data-act="ok"]').click(); D._commitQueue`);
+    assert.equal(await run('JSON.stringify(D.state)'), before, '错误数字不修改档案或历史');
+    assert.equal(await run(`!!document.querySelector('.modal') && !document.querySelector('.modal [data-act="ok"]').disabled`), true);
+  }
+  await run(`document.querySelector('[name="member0"]').value = ''; document.querySelector('.modal [data-act="ok"]').click(); D._commitQueue`);
+  assert.equal(await run(`D.charById('c2').progress.auxiliarySkills[0].level`), null, '主动留空仍可清空');
+  await run(`UI.closeModal(); Views.goalGrowthModal(D.state.goals.find(goal => goal.id === window.numberValidationGoal)); document.querySelector('[name="member0"]').focus()`);
+  await win.webContents.insertText('e');
+  await run(`document.querySelector('.modal [data-act="cancel"]').click()`);
+  assert.equal(await run(`!!document.querySelector('.modal-discard')`), true, '空值上的错误输入也触发草稿确认');
+  await run(`document.querySelector('[data-act="continue"]').click(); document.querySelector('[name="member0"]').value = '0'; document.querySelector('.modal [data-act="ok"]').click(); D._commitQueue`);
+  assert.equal(await run(`D.charById('c2').progress.auxiliarySkills[0].level`), 0, '明确的零值正常保存');
+  assert.equal(await run(`D.charById('c2').growthHistory.length`), 2, '错误提交不生成额外历史');
+  await run(`UI.closeModal(); D.replaceState(JSON.parse(${JSON.stringify(original)}))`);
+}
+
+async function historyFlows() {
+  const check = (condition, label) => { if (!condition) throw new Error(label); };
+  const click = (selector) => document.querySelector(selector).click();
+  const before = JSON.stringify(D.state), filter = { ...Views._goalFilter }, charFilter = D.charFilter;
+  const goal = await D.saveGoal({ characterId: 'c2', type: 'progress', target: 1000,
+    tracking: { category: 'potentialFruits', key: '' } });
+  for (let i = 1; i <= 15; i++) await D.saveGoalGrowth(goal.id, { c2: i }, { date: i === 15 ? U.today() : '2026-01-01' });
+  Views.goalHistoryModal(goal.id);
+  check(document.querySelectorAll('.modal tbody tr').length === 12 && document.querySelector('.ledger-pagination').textContent.includes('共 15 次变更'), '目标养成记录分页');
+  click('[data-page="next"]');
+  check(document.querySelectorAll('.modal tbody tr').length === 3 && document.activeElement.dataset.page === 'previous', '目标末页边界与焦点');
+  click('[data-range="today"]');
+  check(document.querySelectorAll('.modal tbody tr').length === 1 && document.activeElement.dataset.range === 'today', '目标日期筛选及分页复位');
+  check(D.charFilter === charFilter, '目标历史筛选不改变全局角色范围');
+  check(document.querySelector('.goal-history-kind').textContent.includes('提升 +1'), '目标与角色使用相同的变更类型和增量');
+  UI.closeModal();
+
+  const skill = await D.saveGoal({ characterId: 'c2', type: 'progress', target: 10,
+    tracking: { category: 'auxiliarySkills', key: '记录验证技能' } });
+  await D.saveGoalGrowth(skill.id, { c2: 1 });
+  await D.saveCharacterValue('c2', 'auxiliarySkills', '记录验证技能', '');
+  await D.saveCharacterProgress('c2', { auxiliarySkills: D.charById('c2').progress.auxiliarySkills.filter(item => item.name !== '记录验证技能') });
+  Views.goalHistoryModal(skill.id);
+  const rows = [...document.querySelectorAll('.modal tbody tr')];
+  check(rows.length === 3 && rows.some(row => row.textContent.includes('未添加') && row.textContent.includes('新增')) &&
+    rows.some(row => row.textContent.includes('清空')) && rows.some(row => row.textContent.includes('已移除') && row.textContent.includes('移除')), '新增、清空和移除在目标历史中可区分');
+  UI.closeModal();
+
+  const manual = await D.saveGoal({ characterId: 'c2', type: 'money', target: 1000, unit: '万' });
+  for (let i = 0; i < 15; i++) await D.saveGoalProgress(manual.id, { date: '2026-01-02', delta: 10 });
+  Views.goalHistoryModal(manual.id); click('[data-page="next"]'); click('.modal tbody [data-act="delete"]');
+  click('.modal [data-act="yes"]');
+  for (let i = 0; i < 100 && !document.querySelector('.goal-history-modal'); i++) await new Promise(resolve => setTimeout(resolve, 20));
+  check(document.querySelectorAll('.modal tbody tr').length === 2 && document.querySelector('.ledger-pagination').textContent.includes('2 / 2'), '删除记录后保留分页并重新计算');
+  click('[data-range="today"]');
+  check(document.querySelector('[data-history="records"] .empty').textContent.includes('此时间范围'), '目标手动历史筛选空态');
+  UI.closeModal();
+  await D.replaceState(JSON.parse(before)); Object.assign(Views._goalFilter, filter); Views.go('goals');
+}
+
 app.whenReady().then(async () => {
   const errors = [], deadline = setTimeout(() => { console.error('[goals] 超时'); app.exit(1); }, 60000);
   try {
@@ -284,9 +360,23 @@ app.whenReady().then(async () => {
     require('../src/main/ipc').registerIpc({ getWindow: () => win });
     win = await createWindow(errors);
     const run = (code) => win.webContents.executeJavaScript(code, true);
+    await nativeNumberValidation(win, run);
     const result = await run('(' + flows.toString() + ')()');
+    await run('(' + historyFlows.toString() + ')()');
     result.snapshot = await run('(' + ordering.toString() + ')()');
     result.snapshot = await nativeDrag(win, run);
+    for (const [width, height, name] of [[1280, 840, 'wide'], [1024, 680, 'narrow']]) {
+      win.setSize(width, height);
+      await run(`Views.goalHistoryModal(${JSON.stringify(result.automaticId)}); document.getElementById('toast-root').replaceChildren();
+        document.fonts.ready.then(() => { document.getAnimations().forEach(animation => animation.finish());
+          return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); })`);
+      assert.equal(await run(`(() => { const modal = document.querySelector('.modal'), body = modal.querySelector('.modal-body');
+        const bounds = modal.getBoundingClientRect(); return bounds.top >= 0 && bounds.bottom <= innerHeight &&
+          bounds.left >= 0 && bounds.right <= innerWidth && body.scrollWidth <= body.clientWidth; })()`), true, '目标历史窄窗口不溢出');
+      fs.writeFileSync(path.join(dir, 'goal-history-' + name + '.png'), (await win.webContents.capturePage()).toPNG());
+      await run('UI.closeModal()');
+    }
+    win.setSize(1280, 840);
     await run('(' + discardFlows.toString() + ')()');
     await nativeDiscard(win, run);
     const frame = () => run('document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))');
@@ -318,6 +408,7 @@ app.whenReady().then(async () => {
     console.log('[goals] PASS: 批量更新、失败回滚重试、角色档案和历史联动、自动完成/恢复、总览、动态成员、窄窗口及真实重启');
     console.log('[goals] PASS: 全成员展开、单一排序手柄、原生鼠标拖动和键盘排序、自动排序切换、失败回滚及重启顺序');
     console.log('[goals] PASS: 新增/编辑未改动直接关闭，长表单居中确认、四种关闭入口、焦点与 Esc、草稿保留、放弃及窄窗口');
+    console.log('[goals] PASS: 真实错误数字不清空档案、主动留空和零值、目标历史日期筛选/分页/删除保留页码及统一变更类型');
     console.log('[goals] screenshots:', dir);
     clearTimeout(deadline); win.close(); app.exit(0);
   } catch (error) { console.error('[goals] FAIL:', error, '\n测试数据：', dir); clearTimeout(deadline); app.exit(1); }

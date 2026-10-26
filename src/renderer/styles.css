@@ -490,6 +490,10 @@ table.tbl { width: 100%; border-collapse: collapse; color: var(--ui-text); font-
 .goal-caption, .goal-history-hint { color: var(--ui-muted); font-size: var(--ui-caption-size); }
 .goal-history-hint { margin-bottom: 12px; }
 .goal-history-values { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.goal-history-kind { display: block; color: var(--ui-muted); font-size: var(--ui-caption-size); }
+.goal-history-kind.is-increase { color: var(--green); }
+.goal-history-filters { margin-bottom: 16px; }
+.goal-history-filters [data-history="range"] { margin-bottom: 0; }
 .growth-history-number, .growth-history-delta { color: var(--gold2); font-weight: 600; font-variant-numeric: tabular-nums; }
 .growth-history-number.is-training { color: var(--blue); }
 .growth-history-number.is-before, .growth-history-text, .growth-history-arrow { color: var(--ui-muted); font-weight: 400; }
