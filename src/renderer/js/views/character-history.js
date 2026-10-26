@@ -64,19 +64,27 @@ Views.charHistoryModal = function (characterId = 'all') {
   renderRecords();
 };
 
+/* 两处养成记录共用数字与单位呈现，保留未记录和非数值文字的区别。 */
+Views.growthHistoryValueHtml = function (value, change, before = false) {
+  if (typeof value !== 'number') return '<span class="growth-history-text">' + U.esc(value == null ? '未记录' : String(value)) + '</span>';
+  const training = ['人物修炼', '召唤兽修炼'].includes(change.group);
+  return '<span class="growth-history-number' + (before ? ' is-before' : training ? ' is-training' : '') + '">' +
+    U.fmtNumber(value) + '</span><small class="growth-history-unit">' + U.esc(change.unit || '') + '</small>';
+};
+
 Views.charHistoryEntryHtml = function (entry) {
   const context = [entry.source === 'copy' ? '复制自 ' + entry.sourceName : '', entry.note].filter(Boolean).join('\n');
   return '<article class="char-history-entry" data-entry="' + U.esc(entry.id) + '" aria-label="' + U.esc(entry.characterName) +
     '的养成变化"><ul class="char-history-changes">' + entry.changes.map((change, index) => {
       const labels = { added: '新增', removed: '移除', recorded: '补录', cleared: '清空', increase: '提升', decrease: '调低', changed: '调整' };
       const number = (value) => value == null ? '未记录' : String(value) + (typeof value === 'number' ? change.unit : '');
-      const delta = change.kind === 'increase' ? ' +' + (change.to - change.from) : '';
+      const delta = change.kind === 'increase' ? ' <b class="growth-history-delta">+' + (change.to - change.from) + '</b>' : '';
       const from = change.kind === 'added' ? '未添加' : number(change.from);
       const to = change.kind === 'removed' ? '已移除' : number(change.to);
       return '<li><span class="char-history-character" title="' + U.esc(entry.characterName) + '">' + U.esc(entry.characterName) + '</span>' +
         '<span class="char-history-item"><small>' + U.esc(change.group) + '</small><span class="char-history-label" title="' + U.esc(change.label) + '">' + U.esc(change.label) + '</span></span>' +
-        '<span class="char-history-values" title="' + U.esc(from + ' → ' + to) + '">' + U.esc(from) +
-        '<span class="char-history-arrow"> → </span><span class="char-history-after">' + U.esc(to) + '</span></span>' +
+        '<span class="char-history-values" title="' + U.esc(from + ' → ' + to) + '">' + Views.growthHistoryValueHtml(change.kind === 'added' ? '未添加' : change.from, change, true) +
+        '<span class="growth-history-arrow"> → </span>' + Views.growthHistoryValueHtml(change.kind === 'removed' ? '已移除' : change.to, change) + '</span>' +
         '<span class="char-history-kind ' + (change.kind === 'increase' ? 'is-increase' : '') + '">' + labels[change.kind] + delta + '</span>' +
         (index === 0 && context ? '<span class="char-history-context" tabindex="0" role="img" aria-label="' + U.esc(context) + '">' +
           UI.icon('book', 13) + '<span class="char-history-note">' + U.esc(context) + '</span></span>' : '') + '</li>';

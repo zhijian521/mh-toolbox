@@ -38,19 +38,35 @@ UI.watchForm = function (overlay) {
 UI.requestCloseModal = function () {
   const overlay = document.querySelector('.modal-overlay');
   if (!overlay || overlay._saving) return;
+  const existing = overlay.querySelector('.modal-discard');
+  if (existing) { existing.querySelector('[data-act="continue"]').focus({ preventScroll: true }); return; }
   if (!overlay._isDirty || !overlay._isDirty()) { UI.closeModal(); return; }
-  if (overlay.querySelector('.modal-discard')) return;
   const previous = document.activeElement;
+  UI.closePop();
+  const modal = overlay.querySelector('.modal');
+  const content = [...modal.children].map((element) => [element, element.inert]);
+  const semantics = ['role', 'aria-labelledby', 'aria-describedby'].map((name) => [name, modal.getAttribute(name)]);
   const notice = document.createElement('div');
   notice.className = 'modal-discard';
-  notice.setAttribute('role', 'group');
-  notice.setAttribute('aria-label', '未保存的修改');
-  notice.innerHTML = '<span>修改尚未保存</span><button class="btn btn-sm" data-act="continue">继续编辑</button>' +
-    '<button class="btn btn-sm btn-danger" data-act="discard">放弃修改</button>';
-  overlay.querySelector('.modal').appendChild(notice);
-  notice.querySelector('[data-act="continue"]').onclick = () => { notice.remove(); if (previous.isConnected) previous.focus(); };
+  notice.innerHTML = '<div class="modal-discard-panel">' +
+    '<h4 id="modal-discard-title" class="modal-discard-title">放弃未保存的修改？</h4>' +
+    '<p id="modal-discard-description">本次修改尚未保存，关闭后将丢失。</p>' +
+    '<div class="modal-discard-actions"><button type="button" class="btn btn-gold" data-act="continue">继续编辑</button>' +
+    '<button type="button" class="btn btn-danger" data-act="discard">放弃修改</button></div></div>';
+  modal.appendChild(notice);
+  content.forEach(([element]) => { element.inert = true; });
+  modal.setAttribute('role', 'alertdialog');
+  modal.setAttribute('aria-labelledby', 'modal-discard-title');
+  modal.setAttribute('aria-describedby', 'modal-discard-description');
+  notice.querySelector('[data-act="continue"]').onclick = () => {
+    notice.remove();
+    content.forEach(([element, inert]) => { element.inert = inert; });
+    semantics.forEach(([name, value]) => { if (value === null) modal.removeAttribute(name); else modal.setAttribute(name, value); });
+    const target = previous.isConnected && modal.contains(previous) && !previous.closest('[inert]') ? previous : modal;
+    target.focus({ preventScroll: true });
+  };
   notice.querySelector('[data-act="discard"]').onclick = () => { if (!overlay._saving) UI.closeModal(); };
-  notice.querySelector('button').focus();
+  notice.querySelector('[data-act="continue"]').focus({ preventScroll: true });
 };
 
 UI.openModal = function (opts) {
@@ -73,7 +89,9 @@ UI.openModal = function (opts) {
   overlay._returnFocus = returnFocus;
   overlay._resolveReturnFocus = resolveReturnFocus;
   overlay._onClose = opts.onClose;
-  overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) UI.requestCloseModal(); });
+  overlay.addEventListener('mousedown', (e) => {
+    if (e.target === overlay) { e.preventDefault(); UI.requestCloseModal(); }
+  });
   root.querySelector('.modal-x').addEventListener('click', UI.requestCloseModal);
   requestAnimationFrame(() => {
     if (!overlay.isConnected || document.querySelector('.xpop') || overlay.contains(document.activeElement)) return;
@@ -239,6 +257,7 @@ UI.formModal = function (opts) {
   };
 
   async function submit() {
+    if (ov._saving || ov.querySelector('.modal-discard')) return;
     const data = {};
     for (const f of fields) data[f.key] = api.getVal(f.key);
     for (const f of fields) {
@@ -258,8 +277,6 @@ UI.formModal = function (opts) {
     if (error) { UI.toast(error, 'err'); return; }
     const button = ov.querySelector('[data-act="ok"]');
     if (button.disabled) return;
-    const discard = ov.querySelector('.modal-discard');
-    if (discard) discard.remove();
     const controls = [...ov.querySelectorAll('button, input, textarea, select')].map((element) => [element, element.disabled]);
     const label = button.textContent;
     UI.closePop();
@@ -397,6 +414,7 @@ document.addEventListener('keydown', function (event) {
   if (event.defaultPrevented) return;
   if (event.key === 'Escape') {
     if (document.querySelector('.xpop')) UI.closePop(true);
+    else if (document.querySelector('.modal-discard')) document.querySelector('.modal-discard [data-act="continue"]').click();
     else UI.requestCloseModal();
     event.preventDefault();
     return;
@@ -404,13 +422,14 @@ document.addEventListener('keydown', function (event) {
   if (event.key !== 'Tab') return;
   const overlay = document.querySelector('.modal-overlay');
   if (!overlay) return;
-  const focusable = [...overlay.querySelectorAll('button:not([disabled]), input:not([type="hidden"]):not([disabled]), textarea, [tabindex="0"]')]
-    .filter((el) => el.getClientRects().length && !el.closest('[hidden]'));
+  const scope = overlay.querySelector('.modal-discard') || overlay;
+  const focusable = [...scope.querySelectorAll('button:not([disabled]), input:not([type="hidden"]):not([disabled]), textarea, [tabindex="0"]')]
+    .filter((el) => el.getClientRects().length && !el.closest('[hidden], [inert]'));
   const first = focusable[0], last = focusable[focusable.length - 1];
   if (!first) { event.preventDefault(); return; }
-  if (event.shiftKey && (document.activeElement === first || !overlay.contains(document.activeElement))) {
+  if (event.shiftKey && (document.activeElement === first || !scope.contains(document.activeElement))) {
     event.preventDefault(); last.focus();
-  } else if (!event.shiftKey && (document.activeElement === last || !overlay.contains(document.activeElement))) {
+  } else if (!event.shiftKey && (document.activeElement === last || !scope.contains(document.activeElement))) {
     event.preventDefault(); first.focus();
   }
 });

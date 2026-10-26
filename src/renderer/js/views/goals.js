@@ -180,11 +180,12 @@ Views.goalBindOrdering = function (el) {
 };
 
 Views.goalMemberHtml = function (member, goal) {
+  const unit = '<small class="goal-number-unit">' + U.esc(goal.unit) + '</small>';
   return '<div class="goal-member" role="listitem"><span class="goal-member-name" title="' + U.esc(member.name) + '">' +
     U.esc(member.name) + '</span><span class="goal-member-value">' +
-    (member.value === null ? '未记录' : U.fmtNumber(member.value) + ' / ' + goal.target + U.esc(goal.unit)) +
+    (member.value === null ? '未记录' : '<b class="goal-number-current">' + U.fmtNumber(member.value) + '</b> <span class="goal-number-separator">/</span> <b class="goal-number-target">' + goal.target + '</b>' + unit) +
     '</span><span class="goal-member-state' + (member.done ? ' complete' : member.value === null ? ' unknown' : '') + '">' +
-    (member.done ? '已达标' : member.value === null ? '待补录' : '还差 ' + member.remaining + U.esc(goal.unit)) + '</span></div>';
+    (member.done ? '已达标' : member.value === null ? '待补录' : '还差 <b class="goal-number-remaining">' + member.remaining + '</b>' + unit) + '</span></div>';
 };
 
 Views.goalCardHtml = function (goal, summary) {
@@ -196,9 +197,12 @@ Views.goalCardHtml = function (goal, summary) {
     '" data-act="' + action + '" title="' + label + '" aria-label="' + label + '"' +
     (action === 'pin' ? ' aria-pressed="' + (goal.pinned === true) + '"' : action === 'move' ? ' draggable="true"' : '') + '>' + UI.icon(icon, 15) + '</button>';
   const scope = goal.characterId === 'all' ? '全部角色' : D.charName(goal.characterId);
-  const numbers = goal.tracking ? '<span>达成 <b>' + summary.achieved + ' / ' + summary.members.length + '</b> 个角色</span><span>' + summary.pct + '%</span>' :
-    '<span>进度 <b>' + summary.pct + '%</b></span><span><b>' + U.fmtNumber(goal.current) + U.esc(goal.unit || '万') +
-    '</b> / ' + U.fmtNumber(goal.target) + U.esc(goal.unit || '万') + '</span>';
+  const unit = '<small class="goal-number-unit">' + U.esc(goal.unit || '万') + '</small>';
+  const percent = '<b class="goal-number-pct">' + summary.pct + '</b><small class="goal-number-unit">%</small>';
+  const numbers = goal.tracking ? '<span>达成 <b class="goal-number-achieved">' + summary.achieved + '</b> <span class="goal-number-separator">/</span> <b class="goal-number-total">' + summary.members.length +
+    '</b> 个角色</span><span>' + percent + '</span>' :
+    '<span>进度 ' + percent + '</span><span><b class="goal-number-current">' + U.fmtNumber(goal.current) + '</b>' + unit +
+    ' <span class="goal-number-separator">/</span> <b class="goal-number-target">' + U.fmtNumber(goal.target) + '</b>' + unit + '</span>';
   const pendingFirst = goal.tracking ? summary.members.slice().sort((a, b) => Number(a.done) - Number(b.done)) : [];
   const members = goal.tracking ? '<p class="goal-caption">' + U.esc(D.goalMetricLabel(goal.tracking)) + ' · 每个角色 ' + goal.target + U.esc(goal.unit) +
     (summary.unknown ? ' · ' + summary.unknown + ' 个待补录' : '') + '</p><div class="goal-members" role="list" aria-label="各角色养成进度">' +
@@ -358,18 +362,21 @@ Views.goalHistoryModal = function (id) {
   const automatic = !!goal.tracking;
   const logs = automatic ? D.goalGrowthHistory(goal) : goal.logs.slice().sort((a, b) =>
     b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
-  const number = (value) => value === null ? '未记录' : U.fmtNumber(value) + U.esc(goal.unit);
+  const number = (value, unit = goal.unit) => Views.growthHistoryValueHtml(value, { unit });
   const summary = D.goalSummary(goal);
   const overlay = UI.openModal({
     title: (automatic ? '养成记录 · ' : '进度历史 · ') + goal.title, wide: true,
     returnFocus: () => Views.goalFocusTarget(id, 'history'),
-    body: '<p class="goal-history-hint">' + (automatic ? '当前 ' + summary.achieved + ' / ' + summary.members.length +
-      ' 个角色达标 · 以下为角色档案中该项目的养成变更' : '当前 ' + U.fmtNumber(goal.current) + U.esc(goal.unit) +
-      (goal.baseProgress ? ' · 历史基础进度 ' + U.fmtNumber(goal.baseProgress) + U.esc(goal.unit) : '')) + '</p>' +
+    body: '<p class="goal-history-hint">' + (automatic ? '当前 ' + number(summary.achieved, '') + ' / ' + number(summary.members.length, '') +
+      ' 个角色达标 · 以下为角色档案中该项目的养成变更' : '当前 ' + number(goal.current) +
+      (goal.baseProgress ? ' · 历史基础进度 ' + number(goal.baseProgress) : '')) + '</p>' +
       (logs.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>日期</th>' + (automatic ? '<th>角色</th>' : '') +
         '<th>变化</th><th>备注</th>' + (automatic ? '' : '<th>操作</th>') + '</tr></thead><tbody>' + logs.map((log) =>
         '<tr data-id="' + U.esc(log.id) + '"><td>' + U.esc(log.date) + '</td>' + (automatic ? '<td>' + U.esc(log.characterName) + '</td>' : '') +
-        '<td>' + (automatic ? number(log.change.from) + ' → ' + number(log.change.to) : (log.delta > 0 ? '+' : '') + U.fmtNumber(log.delta) + U.esc(goal.unit)) +
+        '<td class="goal-history-values">' + (automatic ? Views.growthHistoryValueHtml(log.change.from, log.change, true) +
+          '<span class="growth-history-arrow"> → </span>' + Views.growthHistoryValueHtml(log.change.to, log.change) :
+          '<span class="goal-history-delta' + (log.delta > 0 ? ' is-increase' : log.delta === 0 ? ' is-zero' : '') + '"><b class="growth-history-delta">' +
+          (log.delta > 0 ? '+' : '') + U.fmtNumber(log.delta) + '</b><small class="growth-history-unit">' + U.esc(goal.unit) + '</small></span>') +
         '</td><td>' + U.esc(log.note || '—') + '</td>' + (automatic ? '' : '<td><button class="btn btn-sm" data-act="edit">编辑</button> ' +
           '<button class="btn btn-sm btn-danger" data-act="delete">删除</button></td>') + '</tr>').join('') + '</tbody></table></div>' :
         '<div class="empty"><p>' + (automatic ? '暂无该项目的养成变更；首次建档不生成记录' : '暂无进度记录') + '</p></div>'),

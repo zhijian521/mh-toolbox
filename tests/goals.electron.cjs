@@ -111,6 +111,73 @@ async function flows() {
   return result;
 }
 
+async function discardFlows() {
+  const check = (condition, label) => { if (!condition) throw new Error(label); };
+  const frame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const key = (name, shiftKey = false) => document.activeElement.dispatchEvent(
+    new KeyboardEvent('keydown', { key: name, shiftKey, bubbles: true, cancelable: true }));
+  const before = JSON.stringify(D.state);
+  Views.go('goals');
+  for (const goal of [null, D.state.goals[0]]) {
+    Views.goalModal(goal); await frame();
+    document.querySelector('.modal [data-act="cancel"]').click();
+    check(!document.querySelector('.modal'), '未改动的新增和编辑直接关闭');
+    for (const close of ['cancel', 'x', 'escape', 'backdrop']) {
+      Views.goalModal(goal); await frame();
+      const modal = document.querySelector('.modal'), body = modal.querySelector('.modal-body');
+      const title = modal.querySelector('[name="title"]'), note = modal.querySelector('[name="note"]');
+      title.value = '未保存的目标草稿'; title.dispatchEvent(new Event('input', { bubbles: true }));
+      note.value = '滚动后仍应在中央看到确认'; note.style.minHeight = '420px';
+      body.scrollTop = body.scrollHeight;
+      const scrollTop = body.scrollTop;
+      const trigger = close === 'x' ? modal.querySelector('.modal-x') : modal.querySelector('[data-act="cancel"]');
+      trigger.focus({ preventScroll: true });
+      if (close === 'escape') key('Escape');
+      else if (close === 'backdrop') modal.parentElement.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      else trigger.click();
+      await frame();
+      const notice = modal.querySelector('.modal-discard'), panel = notice.querySelector('.modal-discard-panel');
+      const rect = panel.getBoundingClientRect(), bounds = modal.getBoundingClientRect();
+      check(rect.top >= 0 && rect.bottom <= innerHeight && rect.left >= 0 && rect.right <= innerWidth &&
+        Math.abs((rect.top + rect.bottom - bounds.top - bounds.bottom) / 2) <= 1, '确认完整显示在长表单中央');
+      const resume = notice.querySelector('[data-act="continue"]'), discard = notice.querySelector('[data-act="discard"]');
+      check(document.activeElement === resume && modal.getAttribute('role') === 'alertdialog' &&
+        modal.getAttribute('aria-describedby') === 'modal-discard-description', '确认焦点与丢失说明可被感知');
+      check([...modal.children].filter((element) => element !== notice).every((element) => element.inert), '确认时暂停下层表单操作');
+      key('Tab', true); check(document.activeElement === discard, 'Shift Tab 仅在确认操作循环');
+      key('Tab'); check(document.activeElement === resume, 'Tab 不进入下层表单');
+      modal.querySelector('[data-act="ok"]').click();
+      modal.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      UI.requestCloseModal(); await frame();
+      check(modal.querySelectorAll('.modal-discard').length === 1 && JSON.stringify(D.state) === before, '确认期间重复关闭及提交不丢失或保存草稿');
+      if (close === 'escape') key('Escape'); else resume.click();
+      check(!modal.querySelector('.modal-discard') && modal.getAttribute('role') === 'dialog' &&
+        modal.getAttribute('aria-labelledby') === 'modal-title' && !modal.hasAttribute('aria-describedby') &&
+        !modal.querySelector('[inert]') && document.activeElement === trigger, '继续编辑与 Esc 恢复语义、操作和焦点');
+      check(title.value === '未保存的目标草稿' && note.value === '滚动后仍应在中央看到确认' && body.scrollTop === scrollTop,
+        '返回编辑保留草稿与滚动位置');
+      UI.requestCloseModal(); modal.querySelector('[data-act="discard"]').click();
+      check(!document.querySelector('.modal') && JSON.stringify(D.state) === before &&
+        document.activeElement === Views.goalFocusTarget(goal?.id), '明确放弃关闭且不改变已保存目标，返回目标操作');
+    }
+  }
+}
+
+async function nativeDiscard(win, run) {
+  await run(`Views.goalModal(); document.querySelector('.modal [name="title"]').value = '原生关闭草稿';
+    new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`);
+  win.webContents.sendInputEvent({ type: 'mouseDown', x: 8, y: 100, button: 'left', clickCount: 1 });
+  win.webContents.sendInputEvent({ type: 'mouseUp', x: 8, y: 100, button: 'left', clickCount: 1 });
+  await run('new Promise(resolve => requestAnimationFrame(resolve))');
+  assert.equal(await run('document.activeElement.dataset.act'), 'continue', '原生点击遮罩后确认保留默认焦点');
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+  await run('new Promise(resolve => requestAnimationFrame(resolve))');
+  assert.equal(await run('!!document.querySelector(".modal-discard")'), false, '原生 Esc 返回编辑');
+  assert.equal(await run('document.querySelector(".modal [name=title]").value'), '原生关闭草稿');
+  await run('UI.closeModal()');
+}
+
 async function ordering() {
   const check = (condition, label) => { if (!condition) throw new Error(label); };
   const until = async (predicate, label) => {
@@ -228,10 +295,14 @@ app.whenReady().then(async () => {
     const result = await run('(' + flows.toString() + ')()');
     result.snapshot = await run('(' + ordering.toString() + ')()');
     result.snapshot = await nativeDrag(win, run);
+    await run('(' + discardFlows.toString() + ')()');
+    await nativeDiscard(win, run);
     const frame = () => run('document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))');
     await run("document.getElementById('toast-root').replaceChildren()"); await frame();
     fs.writeFileSync(path.join(dir, 'goals.png'), (await win.webContents.capturePage()).toPNG());
     win.setSize(1024, 680); await frame();
+    await run('(' + discardFlows.toString() + ')()');
+    await nativeDiscard(win, run);
     assert.equal(await run('document.getElementById("view").scrollWidth <= document.getElementById("view").clientWidth'), true);
     await run("Views.goalModal(); document.getElementById('toast-root').replaceChildren()"); await frame();
     await run('new Promise(resolve => setTimeout(resolve, 200))');
@@ -254,6 +325,7 @@ app.whenReady().then(async () => {
     console.log('[goals] PASS: 全角色/单角色创建、统一下拉与单位联动、自动名称、逐角色进度、筛选搜索及逾期排序');
     console.log('[goals] PASS: 批量更新、失败回滚重试、角色档案和历史联动、自动完成/恢复、总览、动态成员、窄窗口及真实重启');
     console.log('[goals] PASS: 全成员展开、置顶/取消、原生鼠标拖动和键盘排序、自动排序切换、失败回滚及重启顺序');
+    console.log('[goals] PASS: 新增/编辑未改动直接关闭，长表单居中确认、四种关闭入口、焦点与 Esc、草稿保留、放弃及窄窗口');
     console.log('[goals] screenshots:', dir);
     clearTimeout(deadline); win.close(); app.exit(0);
   } catch (error) { console.error('[goals] FAIL:', error, '\n测试数据：', dir); clearTimeout(deadline); app.exit(1); }
