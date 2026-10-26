@@ -35,7 +35,7 @@ npm run format        # 格式化源码、配置、脚本、测试和文档
 npm run format:check  # 只检查格式
 ```
 
-EditorConfig 在 V2 内生效；以 `v2/` 为工作区打开 VS Code 时，推荐的 Prettier 扩展支持保存时自动格式化。迁移基线 `migration/`、依赖锁文件、依赖目录、构建产物和测试输出不参与格式化。
+EditorConfig 定义 V2 的基础编辑规则，Prettier 通过上述命令统一格式，不依赖特定编辑器。迁移基线 `migration/`、依赖锁文件、依赖目录、构建产物和测试输出不参与格式化。
 
 ## 已实现
 
