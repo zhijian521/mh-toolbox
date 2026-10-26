@@ -1,0 +1,7 @@
+migration/
+package-lock.json
+node_modules/
+dist/
+release/
+.runtime/
+test-results/

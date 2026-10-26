@@ -1,0 +1,4 @@
+* text=auto eol=lf
+
+# Preserve the exact snapshot bytes recorded in migration/baseline.json.
+migration/baseline/** -text
