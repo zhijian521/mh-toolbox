@@ -4,6 +4,7 @@ import type { Character } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import NumberValue from '../../components/NumberValue.vue';
 import AppIcon from '../../components/AppIcon.vue';
+import CharacterAvatar from '../../components/CharacterAvatar.vue';
 const props = defineProps<{ character: Character; busy: boolean }>();
 const emit = defineEmits<{
     edit: [];
@@ -63,10 +64,20 @@ const groups = computed(() => [
     >
         <header class="character-heading">
             <div class="character-identity">
-                <AppIcon name="user" :size="36" />
+                <CharacterAvatar :name="character.name" />
                 <div>
-                    <h2>{{ character.name }}</h2>
-                    <p>
+                    <h2 :title="character.name">{{ character.name }}</h2>
+                    <p
+                        :title="
+                            [
+                                character.level == null ? '等级未记录' : character.level + ' 级',
+                                character.school,
+                                character.server,
+                            ]
+                                .filter(Boolean)
+                                .join(' · ')
+                        "
+                    >
                         <button
                             class="text-button"
                             :disabled="busy"
@@ -93,31 +104,34 @@ const groups = computed(() => [
                     @keydown.right.prevent="emit('move', 1)"
                     @keydown.down.prevent="emit('move', 1)"
                 >
-                    <AppIcon name="grip" :size="15" />
+                    <AppIcon name="grip" :size="16" />
                 </button>
                 <button
                     class="icon-button"
                     :disabled="busy"
                     aria-label="查看养成记录"
+                    title="查看养成记录"
                     @click="emit('history')"
                 >
-                    <AppIcon name="calendar" :size="15" />
+                    <AppIcon name="calendar" :size="16" />
                 </button>
                 <button
                     class="icon-button danger"
                     :disabled="busy"
                     aria-label="删除角色"
+                    title="删除角色"
                     @click="emit('delete')"
                 >
-                    <AppIcon name="trash" :size="15" />
+                    <AppIcon name="trash" :size="16" />
                 </button>
                 <button
                     class="icon-button"
                     :disabled="busy"
                     aria-label="编辑档案"
+                    title="编辑档案"
                     @click="emit('edit')"
                 >
-                    <AppIcon name="edit" :size="15" />
+                    <AppIcon name="edit" :size="16" />
                 </button>
             </div>
         </header>
