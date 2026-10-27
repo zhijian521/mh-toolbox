@@ -1,7 +1,7 @@
 import { schoolSkillNames } from '../game-data/school-skills.js';
 
 // Migrated from the immutable v1 baseline; see migration/baseline.json.
-export default function install(D, U, gateway, localStorage) {
+export default function install(D, _U, _gateway, _localStorage) {
     /* 门派资料静态快照，原始来源说明见 migration/baseline/docs/SCHOOL_TEMPLATES.md。 */
     D.schoolSkillNames = structuredClone(schoolSkillNames);
 

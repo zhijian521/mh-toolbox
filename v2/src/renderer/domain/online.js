@@ -1,5 +1,5 @@
 // Migrated from the immutable v1 baseline; see migration/baseline.json.
-export default function install(D, U, gateway, localStorage) {
+export default function install(D, U, _gateway, _localStorage) {
     /* 在线记录与关联点卡流水共用一份结算、跨日分摊及保存逻辑。 */
     D.normalizeOnline = function (state, data) {
         state.sessions = Array.isArray(data.sessions)

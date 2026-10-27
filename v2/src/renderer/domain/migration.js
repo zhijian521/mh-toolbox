@@ -1,5 +1,5 @@
 // Migrated from the immutable v1 baseline; see migration/baseline.json.
-export default function install(D, U, gateway, localStorage) {
+export default function install(D, _U, _gateway, _localStorage) {
     /* 版本迁移与导入边界校验。 */
     Object.assign(D, {
         normalizeCardOrder(items) {

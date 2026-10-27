@@ -1,5 +1,5 @@
 // Migrated from the immutable v1 baseline; see migration/baseline.json.
-export default function install(D, U, gateway, localStorage) {
+export default function install(D, _U, _gateway, _localStorage) {
     /* 装备规则、结构化属性与旧文本适配。显示值按原样记录，不反算宝石或灵尘。 */
     Object.assign(D, {
         equipmentStats: {
@@ -380,13 +380,13 @@ export default function install(D, U, gateway, localStorage) {
             if (maker) detail.maker = maker[1].trim();
             if (runes) detail.runes = runes[0].trim();
             if (suit)
-                detail.suit = (suit[1].replace(/[\[\]【】]/g, '').trim() || suit[2] || '').trim();
+                detail.suit = (suit[1].replace(/[[\]【】]/g, '').trim() || suit[2] || '').trim();
             // 钟灵石后的单件效果、套装效果并非附加属性，不占灵饰词条。
             if (rule.kind === 'accessory' && raw) {
                 const afterClock = raw.split(/特效\s*[:：]?[^\n]+/)[1];
                 if (afterClock) {
                     const part = afterClock.split(/制造者|制作者/)[0];
-                    const effect = part.split(/[\[【]?套装效果[\]】]?/)[0].trim();
+                    const effect = part.split(/[[【]?套装效果[\]】]?/)[0].trim();
                     if (effect)
                         detail.suit = [effect, detail.suit && '套装：' + detail.suit]
                             .filter(Boolean)

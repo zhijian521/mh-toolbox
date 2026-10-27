@@ -1,5 +1,5 @@
 // Migrated from the immutable v1 baseline; see migration/baseline.json.
-export default function install(D, U, gateway, localStorage) {
+export default function install(D, _U, _gateway, _localStorage) {
     /* 角色与目标共用养成指标；中文分组/名称保持与已有历史快照兼容。 */
     Object.assign(D, {
         growthMetrics: [

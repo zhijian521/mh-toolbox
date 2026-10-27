@@ -1,5 +1,5 @@
 // Migrated from the immutable v1 baseline; see migration/baseline.json.
-export default function install(D, U, gateway, localStorage) {
+export default function install(D, U, _gateway, _localStorage) {
     /* 装备资产与穿戴方案分开保存：方案只引用装备 ID，不复制档案和成本。 */
     Object.assign(D, {
         equipmentGroups: {

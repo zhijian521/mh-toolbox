@@ -1,5 +1,5 @@
 // Migrated from the immutable v1 baseline; see migration/baseline.json.
-export default function install(D, U, gateway, localStorage) {
+export default function install(D, U, _gateway, _localStorage) {
     /* 手动累计目标与跟随角色档案的养成目标。 */
     Object.assign(D, {
         orderedGoals(goals = this.state.goals) {

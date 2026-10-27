@@ -1,5 +1,5 @@
 // Migrated from the immutable v1 baseline; see migration/baseline.json.
-export default function install(D, U, gateway, localStorage) {
+export default function install(D, U, _gateway, _localStorage) {
     /* 收益、物品库存与装备关联账本。 */
     Object.assign(D, {
         itemSales(item, list = this.state.transactions) {

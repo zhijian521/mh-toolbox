@@ -1,5 +1,5 @@
 // Migrated from the immutable v1 baseline; see migration/baseline.json.
-export default function install(D, U, gateway, localStorage) {
+export default function install(D, _U, _gateway, _localStorage) {
     /* 截图文字解析与批量建档：保留原文，不推算属性或成交成本。 */
     Object.assign(D, {
         equipmentImportLimits: { count: 30, bytes: 16 * 1024 * 1024, pixels: 16 * 1024 * 1024 },
@@ -70,7 +70,7 @@ export default function install(D, U, gateway, localStorage) {
                 }
                 const level =
                     line
-                        .replace(/[【】\[\]]/g, '')
+                        .replace(/[【】[\]]/g, '')
                         .match(
                             /^(?:装备条件\s*)?(?:装备等级|使用等级|佩戴等级|等级限制|等级)\s*:?\s*(\d{1,3})(?!\d)/,
                         ) || line.match(/^(\d{1,3})\s*级(?:装备|灵饰)?$/);
@@ -132,7 +132,7 @@ export default function install(D, U, gateway, localStorage) {
                     continue;
                 }
                 const numeric =
-                    /[+\-]\s*\d|(?:伤害|命中|防御|气血|魔法|灵力|敏捷|体质|力量|耐力|魔力|速度|等级)\s*:?\s*\d/.test(
+                    /[+-]\s*\d|(?:伤害|命中|防御|气血|魔法|灵力|敏捷|体质|力量|耐力|魔力|速度|等级)\s*:?\s*\d/.test(
                         line,
                     );
                 if (section && numeric) {
@@ -142,13 +142,13 @@ export default function install(D, U, gateway, localStorage) {
                 }
                 if (numeric) {
                     attributes.push(
-                        line.replace(/^装备属性\s*:?\s*/, '').replace(/([+\-])\s+(?=\d)/g, '$1'),
+                        line.replace(/^装备属性\s*:?\s*/, '').replace(/([+-])\s+(?=\d)/g, '$1'),
                     );
                     continue;
                 }
                 if (
                     !draft.name &&
-                    /^[\u4e00-\u9fff][\u4e00-\u9fff·()（）\-]{1,19}$/.test(line) &&
+                    /^[\u4e00-\u9fff][\u4e00-\u9fff·()（）-]{1,19}$/.test(line) &&
                     !/^(?:装备|属性|基础|附加|绑定|制造|制作者|装备条件|使用条件|不可|专用)/.test(
                         line,
                     )

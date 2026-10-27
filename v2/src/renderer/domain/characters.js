@@ -1,5 +1,5 @@
 // Migrated from the immutable v1 baseline; see migration/baseline.json.
-export default function install(D, U, gateway, localStorage) {
+export default function install(D, U, _gateway, _localStorage) {
     /* 角色档案与技能养成。 */
     Object.assign(D, {
         /* 未记录值与明确填写的 0 分开保存。 */

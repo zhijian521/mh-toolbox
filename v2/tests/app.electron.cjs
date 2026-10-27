@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, dialog } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');

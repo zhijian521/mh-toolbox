@@ -1,5 +1,5 @@
 // Migrated from the immutable v1 baseline; see migration/baseline.json.
-export default function install(D, U, gateway, localStorage) {
+export default function install(D, _U, gateway, _localStorage) {
     /* 串行提交与持久化，所有领域写入共用失败回滚。 */
     Object.assign(D, {
         async init() {
