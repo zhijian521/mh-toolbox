@@ -12,11 +12,12 @@ src/renderer/game-data/     按主题独立维护的梦幻游戏资料，供页�
 src/renderer/domain/        从基线迁入的领域规则，ES 模块工厂
 src/renderer/stores/        Pinia 应用状态、完成或回滚后的界面快照
 src/renderer/services/      桌面接口及普通数据转换
-src/renderer/assets/        独立字体、许可和样式
+src/renderer/assets/        独立字体、许可和样式；只保留设计基座
 migration/                  不可变初始基线、文件哈希和参考快照
 tests/domain/               从基线复制的领域回归用例
 tests/isolation.test.mjs    profile、磁盘失败、导出边界与基线完整性
 tests/app.electron.cjs      Electron 真实窗口与 IPC 集成流程
+scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单文件脚本
 ```
 
 ## 游戏资料集中维护原则
@@ -50,7 +51,7 @@ tests/app.electron.cjs      Electron 真实窗口与 IPC 集成流程
 - `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`。IPC 校验调用者为当前主窗口的主 frame。
 - V2 的脚本监听仅覆盖自身目录。所有输出均位于 `v2/dist` 和 `v2/release`。
 - 打包使用本工程已安装的 Electron 分发目录，避免打包时重复下载另一份运行时。
-- 根目录原有 CI 不作修改；V2 的本地检查由自己的 npm scripts 提供，后续可单独接入 CI。
+- 根目录原有 CI 不作修改；V2 在 `.github/workflows/ci.yml` 中单独一个 job（`working-directory: v2`），依次 `npm ci`、`npm run check`、`npm run build`、`npm run test:electron`。
 
 ## 界面
 
@@ -67,3 +68,13 @@ tests/app.electron.cjs      Electron 真实窗口与 IPC 集成流程
 养成记录弹窗的筛选区使用固定宽度（角色 180px、日期范围 150px、自定义日期各 165px），不随弹窗宽度拉伸。每条变更压缩为单行网格：日期、角色、组别与项目、变化前后数值、变化类型、说明图标；同一条记录只在首个变更行渲染日期，其余行留空占位以保持列对齐。备注与「复制自」来源合并为行尾图标，悬停或聚焦时以原生提示展示全文，不再单独占行。后续若新增变更字段，并入该行网格而不是再加一行。
 
 拖动排序逻辑集中在 `components/drag-sort.ts` 的 `useDragSort()`，角色卡片与技能行共用：调用方提供当前的键顺序 `keys()` 与落位回调 `onMove()`，组合式函数只维护拖动状态、插入提示（`is-dragging`、`drop-before`、`drop-after`）与正文边缘自动滚动。落位回调同时给出按下标算好的 `from`/`to` 与相对位置 `targetKey`/`position`：按下标移动的列表（技能行）直接 `splice`，按「移动到某项前后」持久化的列表（角色、目标卡片）把 `targetKey` 与 `position` 交给领域方法。`axis` 决定插入提示的判定轴，纵向卡片用 `y`，双列技能行按从左到右的阅读顺序用 `x`；`moveBy()` 把方向键换算成相邻项的前后落位，键盘操作与拖动共用同一套落位计算。拖动入口统一是六点握把图标按钮：角色卡片在顶部操作区最左侧，技能行放在「移除」按钮右侧。
+
+## 样式分层
+
+样式分两层，`src/renderer/assets/styles.css` 只放设计基座，其余跟随各自组件：
+
+- 基座：`@font-face`、`:root` 变量、`body` 与滚动条、元素级重置与表单基线（含数字框去箭头、占位符与禁用态）、跨页复用的工具类（`.btn`、`.icon-button`、`.text-button`、`.actions`、`.hint`、`.error`、`.empty`、`.page-content`、`.form-grid`、`.footer-hint`、`.popover` 及拖动契约 `.drag-handle`/`.is-dragging`/`.drop-before`/`.drop-after`），以及共用断点里仅关乎基座的两条规则。
+- 组件层：页面与组件的专有类写进该 `.vue` 的 `<style scoped>`。新增类先判断它只服务一个组件，是则直接写在组件内；只有出现在两个以上组件、或属于元素级默认外观时才提到基座。
+- 跨组件命中要显式穿透：scoped 只能命中子组件根节点，所以技能行改写 `BaseNumber` 内部输入框时写 `.skill-row :deep(.number-field) > input`，快捷弹窗改写 `NumberValue` 加粗数值时写 `.quick-context-current :deep(.number-value b)`。其余选择器不得依赖 `:deep()`。
+- 颜色与尺寸仍从 `:root` 变量取值；少量半透明描边与阴影沿用既有字面值，新增字面值前先确认没有对应变量。
+- 弹层（`BaseSelect`、`BaseDate`）用 Teleport 挂到 body，作用域属性随组件节点保留，因此它们的样式仍写在各自组件的 scoped 块里，不需要提到基座。
