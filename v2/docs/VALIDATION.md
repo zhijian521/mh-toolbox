@@ -141,3 +141,26 @@ Electron 流程验证了：首次建档、技能模板、明确 0 与未记录�
 `checkJs` 全局仍为 `false`，只在试点文件顶部写 `// @ts-check` 逐个开启：实测 `vue-tsc --noEmit` 会按该注释校验文件内的 JSDoc 类型，写错即报错，而不写注释的文件保持现状。这样可以在不改动 14 个领域模块、不把它们转成 TS 的前提下，先把最容易复用的两个模块纳入类型保护。
 
 `util.js` 顺带删除了 V1 遗留的 `U.esc`：V2 用 Vue 模板渲染，HTML 转义由框架负责，保留它只会诱导调用方手工拼 HTML。同一批改动把散落在 `U.xxx = function` 上的赋值改成具名函数导出，再由末尾的 `U` 对象聚合，既保住原有 `U.xxx()` 调用写法，也让类型可以逐函数标注。
+
+## 领域契约与类型纳管扩展
+
+日期：2026-10-27。范围：新增 `domain-contract.d.ts`，把 `@ts-check` 从 2 个模块扩到 12 个，并加契约漂移测试。
+
+| 检查              | 结果                                                                                                                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 契约文件          | 全局 `interface Domain`/`DomainState`，不含 import/export，`vue-tsc` 可见                                                                           |
+| 纳管模块数        | 12 个：`create-domain`、`data`、`equipment-fields`、`export`、`growth`、`ledger`、`migration`、`online`、`schools`、`statistics`、`storage`、`util` |
+| 未纳管模块        | `characters`、`equipment`、`equipment-import`、`goals` 共四个大模块，留待后续                                                                       |
+| 单模块首次开启    | `growth.js` 单文件报 34 项（隐参数 `any` 与成员不存在），补契约后归零                                                                               |
+| 未纳管模块试算    | 四个大模块一次性开启共 339 项错误（`TS7006` 183、`TS2339` 129 等），确认超出一轮范围后回退                                                          |
+| 契约声明修正      | `goalTypes`/`gearActions`/`gearAction`/`moveCard` 四处宽松类型收紧，补 `equipmentStatus`                                                            |
+| 契约与实现一致性  | 新增 4 项测试：运行时成员、状态字段双向比对、纳管模块的 `@param {Domain} D` 标注                                                                    |
+| 类型检查          | `vue-tsc --noEmit` 0 错误                                                                                                                           |
+| ESLint            | 0 错误 11 警告（警告数与引入契约前一致，契约内 `any` 单独放行）                                                                                     |
+| 领域测试          | 86 项通过 0 失败（原 82 项 + 新增 4 项契约测试）                                                                                                    |
+| Vite 生产构建     | 通过，CSS 28.99 kB、JS 229.33 kB                                                                                                                    |
+| Electron 集成流程 | 通过，`tests/app.electron.cjs` 全流程 PASS                                                                                                          |
+
+`package.json` 的 `test` 脚本同步补齐 `tests/domain/*.test.mjs`：原写法只匹配 `.cjs`，新加的 `.mjs` 契约测试不会被跑到，属于静默漏测。
+
+四个未纳管模块的错误分布说明「先建契约再纳管」这条路是对的：`TS2339` 的 129 项里，`state` 占 42、`commit` 占 13、`charById` 占 9，都是跨模块 `this` 互调，契约一旦补齐这些就能一次性消掉；剩下的主要是逐方法补 JSDoc 的机械工作量。

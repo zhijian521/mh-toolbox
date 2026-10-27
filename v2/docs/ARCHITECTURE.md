@@ -91,7 +91,18 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 
 ## 类型检查
 
-`tsconfig.json` 的 `checkJs` 仍为 `false`，领域层的 `.js` 尚未逐个纳管。要纳管的文件在首行写 `// @ts-check`，用 JSDoc 标注参数与返回值即可，`vue-tsc --noEmit` 会按注释逐文件校验。
+`tsconfig.json` 的 `checkJs` 仍为 `false`，领域层的 `.js` 逐个纳管：要纳管的文件在首行写 `// @ts-check`，用 JSDoc 标注参数与返回值即可，`vue-tsc --noEmit` 会按注释逐文件校验。目前 12 个模块已纳管（`create-domain`、`data`、`equipment-fields`、`export`、`growth`、`ledger`、`migration`、`online`、`schools`、`statistics`、`storage`、`util`），`characters`、`equipment`、`equipment-import`、`goals` 四个大模块尚未纳管。
+
+### 领域契约 `domain-contract.d.ts`
+
+13 个模块用 `Object.assign(D, {...})` 把约 140 个成员平铺到同一个对象上，模块之间靠 `this.*` 互调，因此单独给某个模块开 `@ts-check` 会立刻报一片 `Property 'xxx' does not exist on type` 与参数隐式 `any`。解决办法是先有一份契约：`src/renderer/domain/domain-contract.d.ts` 用真正的 `interface Domain`、`interface DomainState` 声明全部成员，各模块的 JSDoc 直接写 `@type {Domain}`、`@param {Domain} D`。
+
+- 这个文件必须是**不含 `import`/`export` 的全局声明文件**，否则不是全局作用域。反过来，在 `.d.ts` 里写 JSDoc `@typedef` 当作类型声明是不生效的（`TS2304: Cannot find name 'Domain'`），必须是 `interface`。
+- 每个纳管模块的固定写法：`/** @typedef {Partial<Domain> & ThisType<Domain>} XxxMixin */`，`install` 标 `@param {Domain} D`，`Object.assign(D, /** @type {XxxMixin} */ ({ ... }),)`。
+- `Object.assign` 的实参是普通对象字面量，拿不到上下文类型，**每个方法的参数都要单独写 JSDoc**，否则一片 `TS7006`。
+- JS 文件里不能用 TS 断言 `x as T`（`TS8016`），只能用 `/** @type {T} */ (x)`。默认参数表达式里的 `this` 也拿不到 `@this` 标注（`TS2683`），默认值要挪进函数体。
+- 契约只写形状，不追求完整类型：方法参数多为 `any`，先让成员名与关键返回类型受检，再逐块收紧。`Domain` 里 `any` 的提示在 `eslint.config.js` 中对 `domain/*.d.ts` 关掉了，因为这是全领域层唯一的兜底集中地。
+- 契约与实现的一致性由 `tests/domain/domain-contract.test.mjs` 守卫：它从 `.d.ts` 解析出成员名，与 `Object.keys(createDomain())`、`Object.keys(createDomain().state)` 双向比对，漏声明或残留已删成员都会让测试失败。**新增领域方法时必须同步补契约**，否则要么测试红，要么纳管模块报「属性不存在」。
 
 目前试点的是 `src/renderer/domain/util.js` 与 `src/renderer/domain/export.js`：前者被领域与界面共用，后者是纯数据到文本的转换，都没有外部依赖，改起来不会牵动调用方。后续按同样方式推进有测试保护的模块，不要一次性把 14 个领域模块全开——平铺的 `Object.assign` 混入模型会让 `this` 上的方法互相引用无法推断，一次性开启会产生大量与真实缺陷无关的报错。
 
