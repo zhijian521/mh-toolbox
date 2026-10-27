@@ -1,15 +1,33 @@
 <script setup lang="ts">
+import { nextTick, ref } from 'vue';
 import type { Skill } from '../../app/types';
 import AppIcon from '../../components/AppIcon.vue';
 import BaseNumber from '../../components/BaseNumber.vue';
 import { useDragSort } from '../../components/drag-sort';
 const skills = defineModel<Skill[]>({ required: true });
 defineProps<{ auxiliary?: boolean; suggestions?: string[] }>();
+const root = ref<HTMLElement>(),
+    addButton = ref<HTMLButtonElement>();
 const keys = new WeakMap<Skill, string>();
 let sequence = 0;
 function key(skill: Skill) {
     if (!keys.has(skill)) keys.set(skill, 'skill-' + sequence++);
     return keys.get(skill)!;
+}
+/* 增删技能后把焦点留在这一组操作里：新行直接进入名称框，删行落到相邻行的「移除」。 */
+async function addSkill() {
+    skills.value.push({ name: '', level: null });
+    await nextTick();
+    const inputs = root.value?.querySelectorAll<HTMLInputElement>(
+        '.skill-row input:not([type="number"])',
+    );
+    inputs?.[inputs.length - 1]?.focus();
+}
+async function removeSkill(index: number) {
+    skills.value.splice(index, 1);
+    await nextTick();
+    const buttons = root.value?.querySelectorAll<HTMLButtonElement>('.skill-row button.danger');
+    (buttons?.[Math.min(index, buttons.length - 1)] ?? addButton.value)?.focus();
 }
 /* 技能行按从左到右、从上到下的顺序排列，落位判定取横向中点。 */
 const sort = useDragSort({
@@ -23,7 +41,7 @@ const sort = useDragSort({
 });
 </script>
 <template>
-    <div class="skill-editor" @dragend="sort.end()" @drop="sort.end()">
+    <div ref="root" class="skill-editor" @dragend="sort.end()" @drop="sort.end()">
         <div v-if="!skills.length" class="hint">尚未填写技能，可添加或补齐门派技能。</div>
         <div class="skill-rows">
             <div
@@ -51,7 +69,7 @@ const sort = useDragSort({
                         type="button"
                         class="btn compact danger"
                         aria-label="移除此技能"
-                        @click="skills.splice(index, 1)"
+                        @click="removeSkill(index)"
                     >
                         移除
                     </button>
@@ -76,7 +94,7 @@ const sort = useDragSort({
         <datalist v-if="auxiliary" id="auxiliary-suggestions">
             <option v-for="name in suggestions" :key="name" :value="name" />
         </datalist>
-        <button type="button" class="btn compact" @click="skills.push({ name: '', level: null })">
+        <button ref="addButton" type="button" class="btn compact" @click="addSkill">
             ＋ 添加技能
         </button>
     </div>

@@ -52,9 +52,14 @@ function settleSchool(replace: boolean) {
     schoolChoice.value = false;
     skillSchool = draft.school;
 }
+// badInput 只在「数字框里打了非法内容」时为真；每次输入重算一次，
+// 否则用户把那格清空后 dirty 仍然是 true，关窗时白问一次「放弃未保存的修改」。
 function captureInput(event: Event) {
-    if (event.target instanceof HTMLInputElement && event.target.validity.badInput)
-        invalidEdit.value = true;
+    const form = event.currentTarget;
+    if (!(form instanceof HTMLElement)) return;
+    invalidEdit.value = [...form.querySelectorAll('input')].some(
+        (input) => input.validity.badInput,
+    );
 }
 async function save() {
     error.value = '';

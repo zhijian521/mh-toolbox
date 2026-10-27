@@ -231,6 +231,60 @@ app.on('browser-window-created', (_event, win) => {
                 order[2],
             );
             assert.deepEqual(await skillNames(), [order[2], order[1], order[0], ...order.slice(3)]);
+            // 增删技能后焦点仍留在技能组内：新行落到名称框，删行落到相邻的「移除」。
+            await click('＋ 添加技能');
+            await until(
+                (count) => document.querySelectorAll('.skill-row').length === count + 1,
+                '添加技能行',
+                order.length,
+            );
+            assert.equal(
+                await read(() => document.activeElement?.getAttribute('placeholder')),
+                '技能名称',
+            );
+            await read(() => {
+                const rows = document.querySelectorAll('.skill-row');
+                rows[rows.length - 1].querySelector('button.danger').click();
+            });
+            await until(
+                (count) => document.querySelectorAll('.skill-row').length === count,
+                '移除技能行',
+                order.length,
+            );
+            assert.equal(
+                await read(() => document.activeElement?.getAttribute('aria-label')),
+                '移除此技能',
+            );
+            // 分区导航跟随滚动，而不是只在点击时切换。
+            const bodyMetrics = await read(() => {
+                const body = document.querySelector('.modal-body');
+                return { client: body.clientHeight, scroll: body.scrollHeight };
+            });
+            assert.ok(
+                bodyMetrics.scroll > bodyMetrics.client,
+                '弹窗内容应可滚动：' + JSON.stringify(bodyMetrics),
+            );
+            await read(() => {
+                const body = document.querySelector('.modal-body');
+                body.scrollTop = body.scrollHeight;
+            });
+            await until(
+                () =>
+                    document
+                        .querySelector('.section-nav [aria-current="location"]')
+                        ?.textContent.trim() === '其他养成',
+                '滚动到底部高亮其他养成',
+            );
+            await read(() => {
+                document.querySelector('.modal-body').scrollTop = 0;
+            });
+            await until(
+                () =>
+                    document
+                        .querySelector('.section-nav [aria-current="location"]')
+                        ?.textContent.trim() === '基础信息',
+                '滚回顶部高亮基础信息',
+            );
             await submit('#character-form');
             await until(() => !document.querySelector('.modal'), '保存技能顺序');
             assert.deepEqual(

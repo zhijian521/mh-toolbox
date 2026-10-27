@@ -25,6 +25,10 @@ const dirty = computed(
     () => invalidEdit.value || initial !== JSON.stringify([value.value, date.value, note.value]),
 );
 const parsed = computed(() => rules.characterNumber(value.value));
+/** 非法数字只在当次输入成立，每次重算，避免清空后仍被判为「有未保存修改」。 */
+function markInvalid(event: Event) {
+    invalidEdit.value = event.target instanceof HTMLInputElement && event.target.validity.badInput;
+}
 function step(offset: number) {
     value.value = Math.max(0, (parsed.value ?? 0) + offset);
 }
@@ -83,12 +87,7 @@ async function save() {
                             :max="Number.MAX_SAFE_INTEGER"
                             placeholder="未记录"
                             autofocus
-                            @input="
-                                (event) => {
-                                    if ((event.target as HTMLInputElement).validity.badInput)
-                                        invalidEdit = true;
-                                }
-                            "
+                            @input="markInvalid"
                         />
                         <span class="stepper-unit" aria-hidden="true">{{ metric.unit }}</span>
                     </div>
