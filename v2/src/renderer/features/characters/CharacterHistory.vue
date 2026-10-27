@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import type { GrowthEntry } from '../../app/types';
+import AppIcon from '../../components/AppIcon.vue';
 import BaseDate from '../../components/BaseDate.vue';
 import BaseModal from '../../components/BaseModal.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
@@ -47,24 +49,30 @@ const presetOptions = [
     { value: 'year', label: '本年' },
     { value: 'custom', label: '自定义' },
 ];
+/* 备注与复制来源合并成一次记录上的说明，悬停图标查看，不再单占一行。 */
+function contextOf(entry: GrowthEntry) {
+    return [entry.source === 'copy' ? '复制自 ' + entry.sourceName : '', entry.note]
+        .filter(Boolean)
+        .join('\n');
+}
 </script>
 <template>
     <BaseModal title="养成记录" wide @close="emit('close')">
         <div class="history-filters">
-            <label>
+            <label class="filter-character">
                 角色
                 <BaseSelect v-model="selected" label="筛选角色" :options="characterOptions" />
             </label>
-            <label>
+            <label class="filter-range">
                 日期范围
                 <BaseSelect v-model="preset" label="日期范围" :options="presetOptions" />
             </label>
             <template v-if="preset === 'custom'">
-                <label>
+                <label class="filter-date">
                     开始日期
                     <BaseDate v-model="from" label="开始日期" :max="to || U.today()" />
                 </label>
-                <label>
+                <label class="filter-date">
                     结束日期
                     <BaseDate v-model="to" label="结束日期" :min="from" :max="U.today()" />
                 </label>
@@ -74,13 +82,21 @@ const presetOptions = [
         <div v-if="!entries.length" class="empty compact-empty">
             还没有养成记录。下次修改并保存养成数值后，会自动出现在这里。
         </div>
-        <article v-for="entry in visible" :key="entry.id" class="history-entry">
-            <header>
-                <time :datetime="entry.date">{{ entry.date }}</time>
-                <span>{{ entry.characterName }}</span>
-            </header>
+        <article
+            v-for="entry in visible"
+            :key="entry.id"
+            class="history-entry"
+            :aria-label="entry.characterName + '的养成变化'"
+        >
             <ul>
                 <li v-for="(change, index) in entry.changes" :key="index">
+                    <time v-if="index === 0" class="history-date" :datetime="entry.date">
+                        {{ entry.date }}
+                    </time>
+                    <span v-else class="history-date" aria-hidden="true"></span>
+                    <span class="history-character" :title="entry.characterName">
+                        {{ entry.characterName }}
+                    </span>
                     <span class="history-label">
                         <small>{{ change.group }}</small>
                         {{ change.label }}
@@ -106,12 +122,18 @@ const presetOptions = [
                             +{{ Number(change.to) - Number(change.from) }}
                         </b>
                     </span>
+                    <span v-if="index === 0 && contextOf(entry)" class="history-context">
+                        <span
+                            :title="contextOf(entry)"
+                            tabindex="0"
+                            role="img"
+                            :aria-label="contextOf(entry)"
+                        >
+                            <AppIcon name="book" :size="13" />
+                        </span>
+                    </span>
                 </li>
             </ul>
-            <p v-if="entry.note || entry.source === 'copy'" class="hint preserve">
-                {{ entry.source === 'copy' ? '复制自 ' + entry.sourceName + '\n' : ''
-                }}{{ entry.note }}
-            </p>
         </article>
         <div v-if="entries.length" class="pagination">
             <button class="btn compact" :disabled="page === 1" @click="page--">上一页</button>
