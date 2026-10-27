@@ -28,6 +28,7 @@
 - 顶部用 `PageHeader`：`title`、`description`，操作按钮放 `#actions` 插槽。
 - 主体容器用 `.page-content`；无数据时用 `.empty` 加 `AppIcon`，不要只留一片空白。
 - 列表 `v-for` 的 `:key` 用实体 `id`，不要用下标。
+- 不要再给页面套一层 `try/catch` 或 `errorCaptured`：工作区外层的 `ErrorBoundary` 已经把渲染异常换成替代界面（见 `UI_GUIDE.md`），页面内叠加兜底反而吞掉统一的恢复入口。
 
 ## 4. 状态读写
 

@@ -36,9 +36,21 @@
 
 `active` 同时跟随手动滚动：滚到哪个分区，高亮就切到哪个分区，滚到底时固定为最后一段。实现上有两个坑——`scroll` 事件不冒泡，所以监听挂在 window 的捕获阶段；元素首次 `register` 时可能还没挂进弹窗，`parentElement` 为空，因此滚动宿主按需解析而不是一次探死。`register` 对同一 key 返回同一个闭包，避免模板重渲染时反复卸载/挂载；`active` 用取值器暴露而不是直接返回 ref，否则模板拿到的是未解包的 Ref。
 
+### 错误边界 `ErrorBoundary`
+
+工作区外层是 `components/ErrorBoundary.vue`：页面在初始化、渲染或事件回调里抛错时，失败页面被换成替代界面（错误摘要、技术细节、`重开此页面`、`返回角色页`），侧栏与已保存数据不受影响。
+
+- `onErrorCaptured` 返回 `false` 终止冒泡，全局 `app.config.errorHandler` 因此收不到同一个错误，**上报必须由边界自己调用** `app/error-reporting.ts` 的 `reportRendererError`。漏掉这一步就等于错误彻底没有记录。
+- 失败状态按 `resetKey`（当前传 `route.path`）重置，切走再回来是重新挂载，不会卡在替代界面。
+- 替代界面渲染后焦点落在面板上，键盘用户不会掉回文档开头。
+- 边界只覆盖工作区；应用外壳与侧栏的异常仍由全局处理器兜底（只写日志，界面上无提示）。
+- 新增页面不要自己再包一层 `try/catch` 或 `errorCaptured`：重复兜底会让错误停在页面内部，反而拿不到统一的替代界面。
+
 ## 页面布局
 
 顶部用 `PageHeader`（`title`、`description`、`#actions` 插槽），主体容器用 `.page-content`，无数据时用 `.empty` 加 `AppIcon`。完整清单见 `PAGE_GUIDE.md`。
+
+页面不需要自己处理「渲染失败」：工作区外层已有错误边界，未捕获的异常会被换成替代界面而不是白屏，见上面的组件契约。
 
 ## 记录列表的密度
 

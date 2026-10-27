@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useApplication } from '../stores/application';
 import AppIcon from '../components/AppIcon.vue';
+import ErrorBoundary from '../components/ErrorBoundary.vue';
 import WindowControls from '../components/WindowControls.vue';
 import RescuePanel from '../features/rescue/RescuePanel.vue';
 import { sections } from './navigation';
@@ -67,7 +68,13 @@ onMounted(application.initialize);
                 在路由未挂载时又不可达。这里直接给出可执行的自救手段。
             -->
             <RescuePanel v-else-if="application.startupError" />
-            <RouterView v-else :key="route.path" />
+            <!--
+                单个页面渲染抛错时只换掉工作区，侧栏仍可用：替代界面给出重开与回角色页
+                两条出路，而不是留一片白屏。
+            -->
+            <ErrorBoundary v-else :reset-key="route.path">
+                <RouterView :key="route.path" />
+            </ErrorBoundary>
         </main>
     </div>
     <div

@@ -6,7 +6,7 @@
 src/main/                   Electron 窗口、独立 profile、文件保存、对话框和 IPC
 src/preload/                只暴露 mhV2 白名单接口
 src/renderer/app/           Vue 入口、Hash 路由、桌面布局、类型
-src/renderer/components/    弹窗、图标、数字单位，以及 popover / drag-sort / section-nav 组合式函数
+src/renderer/components/    弹窗、图标、数字单位、页面错误边界，以及 popover / drag-sort / section-nav 组合式函数
 src/renderer/features/      角色与设置；后续按业务模块扩展
 src/renderer/game-data/     按主题独立维护的梦幻游戏资料，供页面和领域规则引用
 src/renderer/domain/        从基线迁入的领域规则，ES 模块工厂
@@ -46,6 +46,16 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 
 文件保存使用临时文件加 rename；导入、清空、schema 变化前复制旧文件。磁盘已有版本高于保存数据时拒绝降级覆盖。第一阶段数据版本为 6，独立于应用 `0.2.0-alpha.1` 的版本号。
 
+## 错误处理分层
+
+三层，从内到外，职责不重叠：
+
+- **页面级**：`components/ErrorBoundary.vue` 捕获工作区子树在初始化、渲染、事件回调与生命周期里的异常，先上报、再终止冒泡，并把失败页面换成替代界面。它返回 `false` 后全局处理器收不到同一个错误，所以上报写在边界里（`app/error-reporting.ts`）。
+- **应用级**：`app/main.ts` 的 `app.config.errorHandler` 与 `unhandledrejection` 覆盖边界之外的部分——应用外壳、侧栏，以及没有被边界接住的异步拒绝，只写日志、不改界面。
+- **进程级**：渲染进程经 `window.mhV2.logError` 把文本交给主进程，追加到 `%APPDATA%/mh-tool-v2/logs/main.log`（单文件 1 MB 滚动，保留 3 份）。设置页与启动失败急救面板都能打开该目录。
+
+领域层抛错不走这条链：它由页面接住并显示在表单里，属于正常业务失败，不是渲染缺陷（见 `PAGE_GUIDE.md` 第 4 节）。
+
 ## 桌面入口与构建
 
 - main/preload 保持 CJS，直接由 Electron 加载；Vite 只构建 renderer。
@@ -57,7 +67,7 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 
 ## 界面与样式
 
-视觉基座、焦点规则、组件契约（`BaseModal`、`BaseSelect`、`BaseDate`、`BaseNumber`、`useDragSort`、`useSectionNav`）、页面布局与样式分层，全部见 [界面与样式规范](UI_GUIDE.md)。本文只负责分层、状态、构建与静态检查。
+视觉基座、焦点规则、组件契约（`BaseModal`、`BaseSelect`、`BaseDate`、`BaseNumber`、`useDragSort`、`useSectionNav`、`ErrorBoundary`）、页面布局与样式分层，全部见 [界面与样式规范](UI_GUIDE.md)。本文只负责分层、状态、构建与静态检查。
 
 ## 静态检查
 
