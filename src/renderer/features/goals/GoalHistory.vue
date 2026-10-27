@@ -189,9 +189,7 @@ async function removeLog() {
                     >
                         {{ labels[entry.change.kind] || '调整' }}
                     </span>
-                    <span class="record-note" :title="entry.note || ''">
-                        {{ entry.note || '—' }}
-                    </span>
+                    <span class="record-note" :title="entry.note || ''">{{ entry.note }}</span>
                 </li>
             </ul>
         </template>
@@ -203,7 +201,7 @@ async function removeLog() {
                         {{ signed(log.delta) }}
                         <small>{{ goal.unit }}</small>
                     </span>
-                    <span class="record-note" :title="log.note || ''">{{ log.note || '—' }}</span>
+                    <span class="record-note" :title="log.note || ''">{{ log.note }}</span>
                     <span class="record-actions">
                         <button
                             class="btn compact"
