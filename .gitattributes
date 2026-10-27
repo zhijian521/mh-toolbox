@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# Preserve the archived V1 bytes and the initial snapshot recorded in migration/baseline.json.
+migration/baseline/** -text
+migration/initial-baseline/** -text

@@ -1,34 +1,35 @@
 name: Checks
 on:
-  push:
-  pull_request:
+    push:
+    pull_request:
 jobs:
-  test:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run check
-      - run: npm test
-      - run: npm run test:electron
-  v2:
-    runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: v2
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: v2/package-lock.json
-      - run: npm ci
-      - run: npm run check
-      # test:electron 读取 dist/renderer 构建产物，必须先 build。
-      - run: npm run build
-      - run: npm run test:electron
+    legacy:
+        runs-on: windows-latest
+        defaults:
+            run:
+                working-directory: migration/baseline
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+                  cache-dependency-path: migration/baseline/package-lock.json
+            - run: npm ci
+            - run: npm run check
+            - run: npm test
+            - run: npm run test:electron
+    v2:
+        runs-on: windows-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+            - run: npm ci
+            - run: npm run check
+            # test:electron 读取 dist/renderer 构建产物，必须先 build。
+            - run: npm run build
+            - run: npm run test:electron

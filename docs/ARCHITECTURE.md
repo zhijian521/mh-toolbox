@@ -1,217 +1,115 @@
-# 架构与扩展指南
+# V2 架构与边界
 
-## 技术栈
+## 目录与职责
 
-- **Electron 38**（主进程 + 渲染进程，contextIsolation 隔离）
-- **原生 HTML/CSS/JS**：无框架、无构建步骤，脚本按依赖顺序通过 `<script>` 直载（`file://` 零配置可跑）
-- **本地 JSON 存储**：`%APPDATA%/梦幻养老助手/data.json`，原子写（临时文件 + rename）
-- **内置字体**：霞鹜文楷屏幕版（OFL 1.1），许可随包分发（`src/renderer/assets/fonts/OFL.txt`）
-
-## 目录结构
-
-```
-mh-tool/
-├─ build/                        # 打包资源（应用图标）
-├─ dist/                         # 打包输出（gitignore）
-├─ docs/
-│  ├─ STYLE_GUIDE.md             # 界面风格规范（Token/组件/反模式）
-│  ├─ ARCHITECTURE.md            # 本文档
-│  ├─ CHANGELOG.md               # 更新日志
-│  └─ screenshots/               # --screenshot 生成的界面预览
-├─ src/
-│  ├─ main/                      # 主进程
-│  │  ├─ main.js                 # 窗口生命周期与模块装配
-│  │  ├─ ipc.js                  # 全部 ipcMain 处理器（数据/备份/窗口）
-│  │  ├─ equipment-ocr.js        # 图片验证、预处理、识别进程生命周期
-│  │  ├─ equipment-ocr-worker.js # 独立进程内的本地 PaddleOCR / ONNX 模型
-│  │  ├─ screenshot.js           # --smoke / --screenshot 开发辅助
-│  └─ dev.js                  # --dev 开发模式热更新监听
-│  ├─ preload/preload.js         # contextBridge API 白名单
-│  └─ renderer/
-│     ├─ index.html              # 唯一页面（脚本顺序即依赖顺序）
-│     ├─ styles.css              # 全局样式（按节分区，见规范）
-│     ├─ equipment.css           # 完整装备栏与结构化编辑器样式
-│     ├─ assets/
-│     │  ├─ fonts/               # 霞鹜文楷 + OFL 许可
-│     │  └─ images/online-record/  # 快速记录物品图标（59 个）
-│     └─ js/
-│        ├─ core/                # 无 UI 依赖的基础层
-│        │  ├─ util.js           # U：日期/金额/转义等纯函数
-│        │  ├─ data.js           # D：根状态、常量与基础查询
-│        │  ├─ storage.js        # D：串行提交、失败回滚与持久化
-│        │  ├─ growth.js         # D：共用养成指标定义、读取与单项草稿构造
-│        │  ├─ characters.js     # D：角色、养成与变更快照
-│        │  ├─ schools.js        # D：官网门派技能静态模板
-│        │  ├─ statistics.js     # D：收益与账号统计
-│        │  ├─ ledger.js         # D：账本、库存与装备关联
-│        │  ├─ export.js         # D：CSV 编码与转义
-│        │  ├─ goals.js          # D：目标与进度历史
-│        │  ├─ migration.js      # D：备份校验与版本迁移
-│        │  ├─ equipment.js      # D：三套装备方案、玉魄、引用与迁移
-│        │  ├─ equipment-fields.js # D：部位字段规则、属性校验与旧文本适配
-│        │  ├─ equipment-import.js # D：OCR 文字解析与批量建档
-│        │  ├─ online.js         # D：在线记录、参数快照、跨日点卡结算
-│        │  ├─ ui.js             # UI：Toast/弹窗/表单生成器/SVG 图标库/下拉与日历组件
-│        │  ├─ ui-cards.js       # UI：卡片拖动、键盘排序与保存状态
-│        │  ├─ ui-growth.js      # UI：数字/单位与养成变化呈现
-│        │  ├─ ui-history.js     # UI：弹窗记录日期范围、分页和焦点
-│        │  └─ ui-equipment.js   # UI：手动录入和 OCR 核对共用装备编辑器
-│        ├─ layout/
-│        │  ├─ titlebar.js       # 自绘标题栏（拖拽/最大化/关闭）
-│        │  │  └─ dev.js            # 开发模式客户端（热替换/状态快照恢复）
-│        │  └─ app.js            # 路由、导航、顶栏、启动引导
-│        └─ views/               # 各页面（挂载到全局 Views 命名空间）
+```text
+src/main/                   Electron 窗口、独立 profile、文件保存、对话框和 IPC
+src/preload/                只暴露 mhV2 白名单接口
+src/renderer/app/           Vue 入口、Hash 路由、桌面布局、类型
+src/renderer/components/    弹窗、图标、数字单位组件
+src/renderer/features/      角色与设置；后续按业务模块扩展
+src/renderer/game-data/     按主题独立维护的梦幻游戏资料，供页面和领域规则引用
+src/renderer/domain/        从基线迁入的领域规则，ES 模块工厂
+src/renderer/stores/        Pinia 应用状态、完成或回滚后的界面快照
+src/renderer/services/      桌面接口及普通数据转换
+src/renderer/assets/        独立字体、许可和样式；只保留设计基座
+migration/baseline/         原 V1 完整工程，作为迁移参考
+migration/initial-baseline/ 不可变初始文本快照
+migration/baseline.json     初始快照的采集信息与文件哈希
+tests/domain/               从基线复制的领域回归用例
+tests/isolation.test.mjs    profile、磁盘失败、导出边界与基线完整性
+tests/app.electron.cjs      Electron 真实窗口与 IPC 集成流程
+scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单文件脚本
 ```
 
-## 渲染进程分层规则
+## 游戏资料集中维护原则
 
-1. `core` 不得引用 `layout` / `views`；`layout` 不得引用 `views` 的内部细节（只按 `Views.xx` 调用）。
-2. 页面一律实现为 `Views.<pageId> = function () { ... }`，往 `#view` 渲染并自行绑定事件。
-3. 跨页面共享的状态放 `D.state`；跨页面共享的交互放 `UI`（弹窗/Toast/表单）。
-4. 全局命名空间仅四个：`U`（工具）、`D`（数据）、`UI`（组件）、`Views`（页面）。
+涉及梦幻西游的静态资料统一放在 `src/renderer/game-data/`，按主题拆成独立文件，不散落在 Vue 页面、状态仓库或业务函数中，也不把所有资料堆进一个大文件。
 
-### 记账模块导航
+- 门派列表维护在 `schools.js`；各门派的师门技能维护在 `school-skills.js`。
+- 辅助技能、人物修炼和召唤兽修炼项目维护在 `character-progress.js`。
+- 后续新增或调整装备部位、宝石、特技、游戏等级限制、消耗表等资料时，在同一目录按主题建文件，并将触及的旧资料移入对应文件，禁止再新增散落的游戏资料常量。
+- 页面和领域层通过导入引用同一份资料；默认项从资料导出，不在页面重复写死。计算、校验和保存逻辑仍放在领域层。
+- 资料定义视为只读；领域实例或编辑表单需要修改时先复制，避免修改全局模板、影响其他角色或实例。
+- 提供清晰的字段名称和来源说明；调整资料时记录来源、核对时间和变化内容，保留未知、未记录和用户自定义值。目录整理不代表重新核实或更新游戏数值，不凭空补充资料。
+- 用户填写的角色、技能等级、装备档案等运行数据继续由独立 profile 的 `data.json` 保存，不能写回此静态资料目录；不可变迁移基线也不随资料整理修改。
 
-- 菜单栏底部的侧栏面板图标控制 200px / 64px 两种宽度，通过 `Views.setSidebarCollapsed` 更新布局，不重建正文或变更业务状态；`mh.sidebarCollapsed` 在本机 localStorage 保存偏好，启动时立即恢复。菜单选中使用淡朱砂底色与深红图文，收起时保持为居中方形。
-- 主菜单使用原生按钮，提供菜单名称、悬停提示和当前模块标记；重建菜单后按相同路由恢复焦点。设置页面的内部路由为 `backup`，显示名称统一为「设置」，使用独立调节图标。
+当前先落实角色模块的资料拆分；尚未迁移的领域模块在后续功能迁移或资料调整时按上述原则归拢。
 
-- 侧栏「收益」对应 `Views.quick`，「账号」对应 `Views.account`，均默认进入快速记录。
-- `transactions` 和 `accountRecords` 是模块内的完整列表，分别声明 `parent: 'quick'` 与 `parent: 'account'`；侧栏不单独渲染这些页面，选中状态跟随父模块。
-- 快速页在 `Views._pages` 中通过 `records` 指定列表路由；顶栏据此显示「查看记录」与本模块记账按钮，列表显示「返回快速记录」。
-- 总览顶栏仅保留角色筛选；分区入口打开对应的快速记录页。两个列表的筛选状态独立保留，跨页面切换保留收益计时。
-- 总览两区时间范围放在 `Views._dashboardRanges`，收益默认本日、账号默认本月；账号首页范围放在 `Views._accountRange`，默认本月。三处共用 `UI.dateRange`，快捷项在前、起止日历在后，切换页面、角色和保存后保留范围。
+## 状态与事务
 
-## IPC API（preload 暴露为 window.mh）
+`createDomain({ gateway, preferences })` 每次产生独立领域实例。原规则改为显式模块安装，不向 window 写入 D/U/Views/UI，不依赖脚本顺序或当前版本源码。第一阶段保留领域 JavaScript，Vue 组件、IPC 契约和应用状态使用 TypeScript；领域类型将随模块继续收紧。
 
-| 方法 | 说明 |
-|---|---|
-| `loadData()` / `saveData(data, options)` | 读写本地数据文件 |
-| `exportData(data)` / `importData()` | 备份导出 / 导入（覆盖式） |
-| `exportJson(data, defaultName)` | 通用 JSON 导出（物品单价等） |
-| `exportCsv(text, defaultName)` | 导出 UTF-8 BOM CSV，调用系统保存对话框 |
-| `info()` | 版本、数据文件路径、平台 |
-| `winMin()` / `winMax()` / `winClose()` / `isMaximized()` | 自绘标题栏窗口控制 |
-| `onWinState(cb)` | 订阅最大化状态变化 |
-| `onDevReload(cb)` / `onDevCss(cb)` | 开发模式热更新通道（仅 `--dev` 时主进程会发送） |
-| `equipmentClipboard()` | 读取剪贴板截图，返回 PNG data URL 或空字符串 |
-| `recognizeEquipment(image, id)` / `cancelEquipmentOcr(id)` | 本地识别单张图片 / 取消当前窗口的对应请求 |
-| `onEquipmentOcrProgress(cb)` | 订阅 `{id, progress}`，返回取消订阅函数 |
+领域实例持有唯一可写业务状态，位于 Vue 代理之外。Pinia 的 `data` 为已完成操作的普通快照，只供界面读取。`execute()` 调用领域方法，在成功或回滚后发布快照。组件不直接修改快照，完整编辑和快捷编辑均有独立草稿。
 
-## 数据模型（D.state）
+所有写入经领域的串行 commit 队列。事务内读取最新状态，修改后落盘，失败恢复整个内存快照。角色资料、养成历史、排序及关联删除保持现有规则。IPC 传递普通对象，避免 Vue 代理无法结构化克隆。
 
-| 集合 | 字段要点 |
-|---|---|
-| `characters` | id, name, level, school, server, sortOrder；progress（schoolSkills[]、auxiliarySkills[]：name/level；training、petTraining；qianyuanPills、potentialFruits、note）；growthHistory[]（id/date/createdAt/source/sourceName/note/changes[]）；equipmentSets[3]（name、slots：部位→装备 ID）、activeEquipmentSet、viewedEquipmentSet、pendingEquipmentSlots、soulJade（unlocked、attribute、level） |
-| `transactions` | id, ledger(earnings/account), recordType(money/item), characterId, date, kind, currency(cash/reserve/rmb), amount, category, minutes, note, fee, channel；物品包含 itemName/quantity/unitPrice/status/saleId；结算包含 itemRecordId/saleQuantity；装备关联包含 equipmentId/gearAction |
-| `sessions` | id, characterId, mode(range/duration/legacy), source(timer/manual/legacy), date, startAt/endAt（本地时间对应的时间戳）, minutes, accounts, cardPrice, cost（万）, note, createdAt |
-| `activeSession` | 未结束的 id, characterId, startAt, accounts, cardPrice, createdAt；开始即落盘，普通重启等待用户恢复 |
-| `goals` | id, characterId（`all` 或角色 ID）, sortOrder, type(money/gear/progress), title, target, tracking（null 或 category/key）, current, unit, status, deadline, doneAt, baseProgress, logs[]（id/date/delta/note） |
-| `equipment` | id, characterId, slot, name, level, status；details（version: 1，结构化属性/强化/元信息）；兼容文本 attributes/special/gems，玉魄保留 jade 快照；截图录入含 ocrText（识别原文） |
-| `gearLogs` | id, equipmentId, characterId, date, action, amount, note |
-| `itemPrices` | 物品 id → 单价（**单位: 梦幻币**，与网页版单价文件互通） |
-| `quickSettings` | accounts(在线角色数), cardPrice(梦幻币/点) |
+文件保存使用临时文件加 rename；导入、清空、schema 变化前复制旧文件。磁盘已有版本高于保存数据时拒绝降级覆盖。第一阶段数据版本为 6，独立于应用 `0.2.0-alpha.1` 的版本号。
 
-角色养成历史由 `applyCharacter` 在串行提交内比较最新档案生成，与档案一起持久化和失败回滚；普通编辑与养成保存共用此入口。`changes[]` 保存分区、项目名称、前后值、单位及类型（提升/调低/补录/清空/新增/移除/调整），技能按名称比较，重排不产生记录。首次建档不生成变更，昵称、服务器和长期备注不参与比较。编辑表单的日期与本次说明通过独立参数传入，不写入当前养成值；旧复制记录的来源及名称快照继续归一化并展示。历史归角色所有，随备份深拷贝保留、随角色删除，装备/记账操作不写入养成历史。
+## 桌面入口与构建
 
-`views/character-history.js` 负责只读日期时间线，`views/goal-history.js` 负责目标养成与手动进度表格。两者通过 `UI.historyList` 共用日期范围、每页 12 条的分页、空态和焦点恢复，角色按变更事件分页，目标按记录行分页；筛选局限在弹窗，不修改全局角色筛选。目标删除手动记录后保留日期和页码，并在页数减少时修正边界。`UI.numberHtml` 统一数字与单位，`UI.growthHistoryValueHtml` / `ValuesHtml` / `KindHtml` 统一前后值、变更类型及增量，新增与移除保留独立语义。
+- main/preload 保持 CJS，直接由 Electron 加载；Vite 只构建 renderer。
+- 开发从固定本机地址 `http://127.0.0.1:5174` 加载；生产加载 `dist/renderer/index.html`。构建使用相对资源地址，路由使用 hash。
+- `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`。IPC 校验调用者为当前主窗口的主 frame。
+- V2 主工程位于仓库根目录，脚本仅监听自身源码。所有输出均位于根目录的 `dist/` 和 `release/`。
+- 打包使用本工程已安装的 Electron 分发目录，避免打包时重复下载另一份运行时。
+- `.github/workflows/ci.yml` 中的 V2 job 在根目录依次执行 `npm ci`、`npm run check`、`npm run build`、`npm run test:electron`；V1 的 legacy job 在 `migration/baseline/` 执行原有检查。
 
-养成指标位于 `core/growth.js` 的 `D.growthMetrics`，统一分类、分组、标签、单位和技能/修炼/数量类型，`D.goalMetrics` 下拉从此派生。`D.growthValue` 共用数值读取，`D.characterValueChanges` 只构造单项草稿、不修改原档案、不自行提交；角色快捷编辑与目标批量更新在各自的串行事务内调用它，再由 `applyCharacter` 一次保存档案和历史。目标允许补建缺失技能，角色快捷编辑拒绝恢复已删除技能。历史生成与目标历史筛选共用指标元数据，沿用已有中文快照格式，无需变更数据版本；修改分组或标签时须兼容已有历史。
+## 界面
 
-> 金额约定：游戏币流水和物品参考单价用「万」，人民币流水用「元」；itemPrices 用原始「梦幻币」。双账本与结算细则见 [LEDGERS.md](LEDGERS.md)。数据版本为 schemaVersion: 6。
+第一阶段以基线风格规范为依据，保留宣纸底、朱砂选中、赭金数值、黛青修炼和内置文楷。使用 Vue 模板渲染，不拼接业务 HTML、不使用 v-html。
 
-共享账本列表和筛选位于 `views/records.js`，收益表单位于 `transactions.js`，账号快速记录、快捷表单预设和账号表单位于 `account.js`；金额、库存与装备关联在 `core/ledger.js`，统计在 `statistics.js`，CSV 编码在 `export.js`。
+`BaseModal` 负责背景 inert、键盘焦点循环、焦点返回、保存中禁止关闭，以及原弹窗中央的未保存确认。默认宽度 470px，`medium` 档 760px 用于角色新增/编辑，`wide` 档 880px 用于养成记录。完整编辑使用 fieldset 锁定草稿。列表以角色 ID 为 key，更新不重建整页。
 
-目标领域位于 `core/goals.js`，卡片与筛选位于 `views/goals.js`，编辑、批量养成与手动进度弹窗位于 `views/goal-modals.js`。`characterId: 'all'` 动态涵盖全部角色，单角色筛选仍展示全体目标；目标页和总览共用 `D.goalsFor` 与纯读取的 `D.goalSummary`，不缩小全体目标的计算范围。跟随目标的 `target` 是每个角色的门槛，`tracking` 指向辅助/师门技能、人物/召唤兽修炼、等级、乾元丹或潜能果；进度逐个封顶再汇总，未知值保持 null，只有存在成员且全部达标才完成，调低、清空或新增角色会重新判断。状态与当前值从档案即时派生，存储的 `status/current/logs` 仅用于手动累计模式。`D.saveGoalGrowth` 在同一提交中调用 `applyCharacter` 更新指定项目并生成角色养成记录，任一校验或落盘失败全部回滚；养成目标历史筛选原始角色记录，删除目标不删除档案及养成记录。存钱和装备目标沿用手动流水及完成/恢复操作。
+输入与文本域获得焦点时为赭金描边加 1px 淡金外晕，不使用额外外框；按钮、链接与折叠标题仍用 1px 赭金虚线轮廓。下拉与日期触发器复用输入的焦点外观，不叠加虚线轮廓。
 
-`D.orderedGoals` 与 `D.orderedCharacters` 共用 `D.orderedCards`，按 sortOrder、创建时间排列，新卡片放在列表首位，编辑不重排；总览目标沿用相同顺序。两类排序保存均在提交队列内调用 `D.moveCard`，按相邻 ID 和 before/after 定位；自动排序模式拖动时先按可见 ID 顺序排列对应位置，再移动目标，隐藏目标保留相对顺序。落盘失败整体回滚，排序随备份及重启保留。`normalizeCardOrder` 在读取或导入时将旧置顶按原显示顺序转换为单一 sortOrder，并移除旧 pinned 字段，归一化不修改输入且幂等。
+下拉与日期输入已迁移为自有组件：`BaseSelect` 负责下拉（可选搜索、方向键与首尾跳转、外点关闭），`BaseDate` 负责日历（月切换、最小/最大日期、今天与清空、方向键与 PageUp/PageDown），两者共用 `components/popover.ts` 的定位与关闭逻辑，弹层 Teleport 到 body 并按视口翻转。关闭键与 Tab 在 window 捕获阶段拦截，早于 `BaseModal` 的 Escape 处理，避免在弹窗内按 Escape 先触发未保存确认。辅助技能建议仍使用浏览器原生 datalist，保留输入自由文本的能力；分区导航滚动跟随与更多键盘细节列入后续组件工作。
 
-角色和目标卡片排序共用 `core/ui-cards.js` 的 `UI.bindCardOrdering`，仅在本次网格绑定手柄拖放、方向键和正文边缘滚动，不重复绑定全局事件；拖放取消或结束清理插入线和滚动帧。`Views.charPersistOrder` / `Views.goalPersistOrder` 通过 `UI.persistCardOrder` 共用防重复、锁定入口、忙碌状态、原禁用状态恢复和错误提示；页面只负责保存接口、成功刷新与焦点恢复，目标另负责自动排序切换及可见 ID。切页后的异步回调不覆盖其他正文。每个角色进度直接展示，页面统一滚动。
+数字输入统一用 `BaseNumber`：外观仍是 `type="number"`（保留数字键盘、`min`/`max`/`step` 与表单语义），但用 CSS 隐藏原生步进箭头，改为悬停或聚焦时在右侧浮现一对极窄的上下箭头按钮（`tabindex="-1"`，不进入 Tab 序列，`aria-label` 为「增加 1」「减少 1」）。组件内部保存用户输入的原始字符串，避免输入中途被数值化打断；空值时仅保留上加、减号禁用，值为 `min` 时减号禁用。改动数字显示格式时只动这一个组件。
 
-角色养成的归一化、验证、保存、排序和关联删除位于 `core/characters.js`，卡片与删除入口位于 `views/characters.js`；完整档案与快捷编辑弹窗位于 `views/character-modals.js`，技能草稿列表及门派切换处理位于 `views/character-skill-editor.js`。未记录值存为 `null`，明确填写的 0 原样保存；人物五项修炼与召唤兽四项修炼独立记录。师门和辅助技能使用可增删、调整顺序的名称/等级列表，技能区达到 580px 时每行两项，否则单列；顺序随档案及备份保存。`D.orderedCharacters` 按统一拖动顺序展示全部角色，使用 `D.saveCharacterOrder` 串行提交并支持失败回滚；编辑已有档案不计算新角色位置。
+养成记录弹窗的筛选区使用固定宽度（角色 180px、日期范围 150px、自定义日期各 165px），不随弹窗宽度拉伸。每条变更压缩为单行网格：日期、角色、组别与项目、变化前后数值、变化类型、说明图标；同一条记录只在首个变更行渲染日期，其余行留空占位以保持列对齐。备注与「复制自」来源合并为行尾图标，悬停或聚焦时以原生提示展示全文，不再单独占行。后续若新增变更字段，并入该行网格而不是再加一行。
 
-卡片顶部操作依次为拖动排序、养成记录、删除、编辑档案，取消置顶与独立排序弹窗。技能、两类修炼和养成数量的整行使用原生按钮的扩展点击区域打开 `Views.charQuickModal`，保留定义列表与原有排版；快捷弹窗复用 `UI.formModal`，支持步进、输入、前后预览、折叠日期说明和未保存关闭确认。`D.characterProgressMetric` 校验并读取单项信息；`D.saveCharacterValue` 在提交队列内读取最新档案，技能按名称定位，仅更新选中项目后调用 `applyCharacter`，共用养成历史、持久化回滚及目标派生逻辑，避免覆盖其他最新项目或重新加入已删除的技能。重建卡片后按角色 ID、分区和项目键恢复焦点及页面滚动。
+拖动排序逻辑集中在 `components/drag-sort.ts` 的 `useDragSort()`，角色卡片与技能行共用：调用方提供当前的键顺序 `keys()` 与落位回调 `onMove()`，组合式函数只维护拖动状态、插入提示（`is-dragging`、`drop-before`、`drop-after`）与正文边缘自动滚动。落位回调同时给出按下标算好的 `from`/`to` 与相对位置 `targetKey`/`position`：按下标移动的列表（技能行）直接 `splice`，按「移动到某项前后」持久化的列表（角色、目标卡片）把 `targetKey` 与 `position` 交给领域方法。`axis` 决定插入提示的判定轴，纵向卡片用 `y`，双列技能行按从左到右的阅读顺序用 `x`；`moveBy()` 把方向键换算成相邻项的前后落位，键盘操作与拖动共用同一套落位计算。拖动入口统一是六点握把图标按钮：角色卡片在顶部操作区最左侧，技能行放在「移除」按钮右侧。
 
-统一编辑器用分区配置显式组织基础信息、师门技能、人物修炼、召唤兽修炼、辅助技能和其他养成，标题下固定导航定位并聚焦分区标题。切换门派后如已有师门技能，须明确选择保留或替换，再允许保存或补齐模板。统一表单只采集一次草稿，通过 `D.saveCharacter` 一次提交全部信息，共用领域校验；保存期间由 `UI.formModal` 锁定全部控件，失败整体回滚、恢复原禁用状态并保留草稿。`UI.openModal` 支持 `returnFocus` 回调，重建页面后按稳定角色 ID 恢复操作焦点；角色异步回调仅在当前仍为角色页时重建卡片，删除则刷新当前页面。
+## 样式分层
 
-在线数据逻辑位于 `core/online.js`，表单、恢复提示和列表位于 `views/online.js`；`quick.js` 负责首页，`quick-timer.js` 负责计时，`quick-items.js` 负责物品目录、速记、单价与设置。每秒 tick 仅计算当前时段，历史统计在页面渲染及筛选变化时刷新，非收益首页不扫描历史。`onlineRecords` 与 `transactions` 都归属收益模块，通过内部页签切换。`D.saveSession` 同步生成每日点卡流水，`D.earningsStats` 按独立在线时长计算净时薪，活动用时不重复累计。
+样式分两层，`src/renderer/assets/styles.css` 只放设计基座，其余跟随各自组件：
 
-装备领域逻辑位于 `core/equipment.js`，在 `data.js` 之后加载。`views/equipment.js` 负责角色装备卡片与浮卡，`equipment-warehouse.js` 负责仓库，`equipment-modals.js` 负责选择、编辑和方案弹窗。装备按 ID 建索引，仓库一次构建当前角色的方案引用索引；装备页不使用全局角色筛选，方案和格子事件限定在各自卡片内，进出仓库保留列表滚动位置。三套方案只引用装备 ID，当前使用和正在查看分别保存；资产 `status` 保留旧在用值兼容历史买卖，界面穿戴状态由方案引用推导。售出、删档和部位/角色变更清理引用，撤销出售只恢复持有。命魂之玉修炼存于角色，阴阳玉魄分别为独立装备资产。装备相关保存使用 `D.commitEquipment`，写入失败整体回滚内存。
+- 基座：`@font-face`、`:root` 变量、`body` 与滚动条、元素级重置与表单基线（含数字框去箭头、占位符与禁用态）、跨页复用的工具类（`.btn`、`.icon-button`、`.text-button`、`.actions`、`.hint`、`.error`、`.empty`、`.page-content`、`.form-grid`、`.footer-hint`、`.popover` 及拖动契约 `.drag-handle`/`.is-dragging`/`.drop-before`/`.drop-after`），以及共用断点里仅关乎基座的两条规则。
+- 组件层：页面与组件的专有类写进该 `.vue` 的 `<style scoped>`。新增类先判断它只服务一个组件，是则直接写在组件内；只有出现在两个以上组件、或属于元素级默认外观时才提到基座。
+- 跨组件命中要显式穿透：scoped 只能命中子组件根节点，所以技能行改写 `BaseNumber` 内部输入框时写 `.skill-row :deep(.number-field) > input`，快捷弹窗改写 `NumberValue` 加粗数值时写 `.quick-context-current :deep(.number-value b)`。其余选择器不得依赖 `:deep()`。
+- 颜色与尺寸仍从 `:root` 变量取值；少量半透明描边与阴影沿用既有字面值，新增字面值前先确认没有对应变量。
+- 弹层（`BaseSelect`、`BaseDate`）用 Teleport 挂到 body，作用域属性随组件节点保留，因此它们的样式仍写在各自组件的 scoped 块里，不需要提到基座。
 
-部位字段与校验集中在 `core/equipment-fields.js`；`core/ui-equipment.js` 为手动新增和截图核对提供同一个编辑器，按部位缓存 DOM 草稿，原生不完整数字也保留并阻止保存。截图核对还按图片缓存完整表单。`views/equipment-properties.js` 为格子、浮卡、详情和仓库生成同一组安全转义的属性行。旧文本只在读取时投影，无法明确映射的内容进入 `legacy`；编辑保存才写入结构化数据，并同步生成旧文本与玉魄快照。版本 5 首次升级写入前备份为 `.before-equipment-fields-时间戳.bak`。完整字段约定见 [EQUIPMENT_FIELDS.md](EQUIPMENT_FIELDS.md)。
+## 静态检查
 
-截图录入的解析和事务保存位于 `core/equipment-import.js`，队列、预览裁剪与可编辑草稿位于 `views/equipment-import.js`。最多 30 张、单张 16 MB / 1600 万像素，仅接受 PNG/JPEG/WebP/BMP。主进程再次校验图片，独立 utilityProcess 使用 sharp 放大原始彩色像素，再用 Guten OCR 的 PP-OCRv4 检测、中文识别模型和 ONNX CPU 推理读取文字。保留半透明背景与彩字，避免整图反色丢失文字；模型直接从随包 npm 资源加载，不走 CDN、不依赖语言包或显卡。识别超时 45 秒、空闲 60 秒释放，取消、关窗与刷新清理当前请求；渲染进程按请求 ID 过滤进度，关闭时退订并取消。空文字返回明确失败，不能显示已识别；图片不写入装备数据，原文保留至档案；缺失值保持空白，玉魄遵循现有校验。稀有装备名误读只在已知部位、等级和名称同时匹配时纠正，其他名称按原文填写。批量保存只补方案空位，同角色完整字段相同的档案复用，不新增财务流水。打包解包生产依赖，使 ESM、ONNX 原生库和模型从真实路径加载，并排除 Windows x64 以外的 ONNX 二进制。
+`npm run check` 依次执行 `format:check`、`lint`、`typecheck` 与领域测试，缺一不可：
 
-## 写入、导入与交互边界
+- 格式交给 Prettier，风格规则一律不进 ESLint，避免两套格式化互相改写。
+- `eslint.config.js` 按运行环境分组：渲染层用浏览器全局，`src/main`、`src/preload` 与 `electron-builder.config.cjs` 是 CJS 加 Node 全局，`scripts`、`tests` 是 Node 且允许 `console`。`tests/*.electron.cjs` 额外补上浏览器全局，因为断言体通过 `executeJavaScript` 在渲染进程求值。
+- Vue 只启用 `flat/essential`；`flat/recommended` 里的缩进、属性换行等规则与 Prettier 冲突，不启用。
+- `migration/**` 整目录忽略：V1 工程与不可变初始快照均不参与 V2 的静态检查或格式化，初始快照由哈希测试单独校验。
+- 领域安装函数签名统一是 `install(D, U, gateway, localStorage)`，多数模块只用到其中一两个参数，未用形参加 `_` 前缀，由 `argsIgnorePattern` 放行；不要为了消警告删掉形参，位置一旦错位就会到运行时才暴露。
 
-- 新 UI 写入调用领域方法或 `D.commit(change, options)`，同步变更函数在队列中读取最新状态。所有提交共用串行队列，写入失败整体恢复快照，后续操作继续执行。不要在队列外修改状态再调用 persist。
-- `D.replaceState` 先校验并归一化，再事务替换；拒绝单价文件、重复 ID 和未来版本。导入、清空和示例覆盖前保存本地副本，写入失败不改变计时状态。
-- 版本 5 新增成交数量和目标历史基础进度。从版本 4 升级前复制 `data.json.before-inventory-时间戳.bak`；保存仍使用完整 JSON 和原子替换。
-- 下拉与日期保留触发按钮和无障碍名称；Esc 优先关闭浮层。弹窗统一关闭回调、焦点限制和返回。自定义表单调用 `UI.watchForm`，未保存确认居中覆盖原弹窗，下层内容临时 inert；原 dialog 切换为带明确标题和说明的 alertdialog，焦点限制在确认操作内。继续编辑或 Esc 恢复原语义、交互与焦点，保存中阻止关闭。
-- `UI.formModal` 提交前调用 `UI.validateNumberInputs` 检查未隐藏、未禁用的原始数字控件，覆盖动态技能行；`badInput`、范围和步长错误在转换为数值前拦截，主动留空和明确的 0 保持不同语义。`UI.watchForm` 将 `badInput` 纳入草稿比较，空值上的错误输入也需要关闭确认。领域层继续验证安全整数，避免绕过 UI 写入非法养成值。
-- CSV 复用 `Views.filteredRecords`，导出全部匹配记录，不受 50 条分页限制，带 BOM、单位与公式防护。
-- `scripts/test.cjs` 自动发现 `.test.cjs` 和 `.electron.cjs`，共享加载器/隔离窗口在 `tests/helpers`；CI 使用 Windows / Node 22 执行语法、领域和真实窗口测试。
+## 类型检查
 
-## 如何新增一个页面
+`tsconfig.json` 的 `checkJs` 仍为 `false`，领域层的 `.js` 逐个纳管：要纳管的文件在首行写 `// @ts-check`，用 JSDoc 标注参数与返回值即可，`vue-tsc --noEmit` 会按注释逐文件校验。目前 16 个模块**已全部纳管**：`characters`、`create-domain`、`data`、`equipment`、`equipment-fields`、`equipment-import`、`export`、`goals`、`growth`、`ledger`、`migration`、`online`、`schools`、`statistics`、`storage`、`util`。
 
-1. `src/renderer/js/views/xxx.js`：实现 `Views.xxx = function () {...}`；
-2. `index.html` 在 `layout/app.js` 之前加 `<script>`；
-3. `layout/app.js` 的 `Views._pages` 注册 `{ id, t, icon, sub }`（图标用 `UI.icon` 已有条目或先在 `core/ui.js` 补）；
-   模块内二级页面增加 `parent`，父模块通过 `records` 指向记录列表，无需新增侧栏菜单。
-4. 样式：按 `STYLE_GUIDE.md` 写入 `styles.css` 对应分区（新页面在文件尾部新增一节）；
-5. 验证：`npm run check`、`npm test`、`npm run test:electron`。UI 截图使用隔离测试窗口，避免覆盖日常数据。
+### 领域契约 `domain-contract.d.ts`
 
-## 如何新增快速记录物品
+13 个模块用 `Object.assign(D, {...})` 把约 140 个成员平铺到同一个对象上，模块之间靠 `this.*` 互调，因此单独给某个模块开 `@ts-check` 会立刻报一片 `Property 'xxx' does not exist on type` 与参数隐式 `any`。解决办法是先有一份契约：`src/renderer/domain/domain-contract.d.ts` 用真正的 `interface Domain`、`interface DomainState` 声明全部成员，各模块的 JSDoc 直接写 `@type {Domain}`、`@param {Domain} D`。
 
-在 `views/quick-items.js` 的 `QUICK_ITEMS` / `QUICK_UNSET` 数组加一行（图标放 `assets/images/online-record/`），无需其他改动。
+- 这个文件必须是**不含 `import`/`export` 的全局声明文件**，否则不是全局作用域。反过来，在 `.d.ts` 里写 JSDoc `@typedef` 当作类型声明是不生效的（`TS2304: Cannot find name 'Domain'`），必须是 `interface`。
+- 每个纳管模块的固定写法：`/** @typedef {Partial<Domain> & ThisType<Domain>} XxxMixin */`，`install` 标 `@param {Domain} D`，`Object.assign(D, /** @type {XxxMixin} */ ({ ... }),)`。
+- `Object.assign` 的实参是普通对象字面量，拿不到上下文类型，**每个方法的参数都要单独写 JSDoc**，否则一片 `TS7006`。
+- JS 文件里不能用 TS 断言 `x as T`（`TS8016`），只能用 `/** @type {T} */ (x)`。默认参数表达式里的 `this` 也拿不到 `@this` 标注（`TS2683`），默认值要挪进函数体。
+- 契约只写形状，不追求完整类型：方法参数多为 `any`，先让成员名与关键返回类型受检，再逐块收紧。`Domain` 里 `any` 的提示在 `eslint.config.js` 中对 `domain/*.d.ts` 关掉了，因为这是全领域层唯一的兜底集中地。
+- 契约与实现的一致性由 `tests/domain/domain-contract.test.mjs` 守卫：它从 `.d.ts` 解析出成员名，与 `Object.keys(createDomain())`、`Object.keys(createDomain().state)` 双向比对，漏声明或残留已删成员都会让测试失败。**新增领域方法时必须同步补契约**，否则要么测试红，要么纳管模块报「属性不存在」。
 
-## 开发与打包
+目前试点的是 `src/renderer/domain/util.js` 与 `src/renderer/domain/export.js`：前者被领域与界面共用，后者是纯数据到文本的转换，都没有外部依赖，改起来不会牵动调用方。后续按同样方式推进有测试保护的模块，不要一次性把 14 个领域模块全开——平铺的 `Object.assign` 混入模型会让 `this` 上的方法互相引用无法推断，一次性开启会产生大量与真实缺陷无关的报错。
 
-```bash
-npm install
-npm run dev        # 开发模式（推荐）：热更新
-npm start          # 普通运行（无热更新）
-npm run smoke      # 冒烟：启动 1.2s 自动关闭
-npm run shots      # 注入示例数据截图到 docs/screenshots（不落盘）
-npm run demo      # 写入完整示例数据到本地（覆盖当前数据）
-npm test           # 记账领域回归测试
-npm run test:electron # 隔离数据的真实 Electron 流程检查
-npm run dist       # 打包安装版 + 便携版到 dist/
-```
+`lib` 已提到 `ES2023`，因为装备词条解析用了 `Array.prototype.findLastIndex`。`target` 同步改为 `ES2023`，与 Electron 38 内置的 Chromium 140 一致。
 
-### 热更新（`npm run dev`）
+#### 用 PowerShell 批量改动的陷阱
 
-- 应用启动命令共用 `scripts/electron.cjs`，将 Electron 的 stdout/stderr 按 UTF-8 解码后交给 Node 输出，避免 Windows GBK 控制台显示中文乱码；保留启动参数、退出码与 Ctrl+C 终止行为，不修改系统代码页。Electron 使用 `windowsHide: false`，避免 Windows 将应用主窗口一起隐藏。
-- `src/renderer` 下 **CSS** 变更 → 免刷新直接替换样式，不丢任何状态；
-- `src/renderer` 下 **JS / HTML** 变更 → 页面自动刷新，并恢复所在页、角色筛选与计时中的快速记录（快照 10 分钟内有效）；
-- `src/main` / `src/preload` 变更 → 终端提示手动重启（`Ctrl+C` 后重新 `npm run dev`），避免自动重启产生游离进程。
-
-- 网络不佳时设置镜像：`ELECTRON_MIRROR` / `ELECTRON_BUILDER_BINARIES_MIRROR`（npmmirror）。
-- 便携版偶发被杀毒软件锁文件：删旧文件重跑 `npx electron-builder --win portable`。
-
-## 提交信息规范
-
-格式：`<type>: <简短描述>` —— type 用英文小写，冒号后跟一个空格，描述简明扼要（建议不超过 50 字），可用中文。
-
-| type | 用途 |
-|---|---|
-| `feat` | 新功能 |
-| `fix` | 缺陷修复 |
-| `docs` | 文档变更 |
-| `style` | 界面 / 样式调整（不影响逻辑） |
-| `refactor` | 重构（既非新功能也非修复） |
-| `perf` | 性能优化 |
-| `test` | 测试相关 |
-| `chore` | 构建、依赖、工具链等杂项 |
-
-补充规则：
-
-- 可选 scope 限定影响范围：`feat(quick): 支持数量累计`、`fix(titlebar): 双击还原失效`
-- 详细说明写在正文（标题空一行之后），一个提交只做一件事
-- 示例：`feat: 新增装备更换记录`、`fix: 修复目标进度重复注入`、`docs: 补充提交信息规范`
-
-## 已知约定
-
-- 游戏币显示走 `U.fmtMoney`（万/亿自动换算）；可能含人民币的金额走 `U.fmtAmount(value, currency)`。
-- `source='quick'` 的物品速记归收益账本（金币直接记实际收入）；自动或手动在线记录通过 `sessionId` 关联 `source='online'` 的每日点卡成本。
-- 界面禁止 emoji 图标；`✕`/`✓` 为约定排版符号。
-- 样式 Token 全部在 `styles.css :root`，改风格先改 `docs/STYLE_GUIDE.md`。
+纳管过程中曾用 `Get-Content -Raw` + `Set-Content` 往返给四个模块批量插入 `// @ts-check`，结果 `vue-tsc` 报出 171 项 `TS1005`/`TS1002`/`TS1128` 等**语法**错误。原因是 PowerShell 5.1 的 `Get-Content` 对无 BOM 的 UTF-8 中文按 GBK 解码，写回时把注释与中文字面量全部损坏。批量改动领域 `.js` 请用编辑工具或 `node` 脚本，不要走 PowerShell 文本往返；一旦写坏用 `git checkout -- <file>` 还原，不要试图修补乱码。

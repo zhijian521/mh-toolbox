@@ -1,77 +1,52 @@
 {
-  "name": "mh-tool",
-  "productName": "梦幻养老助手",
-  "version": "0.1.0",
-  "description": "梦幻西游养老记录日志：收益记录、目标记录、装备更新管理",
-  "main": "src/main/main.js",
-  "author": "zhijian",
-  "license": "MIT",
-  "scripts": {
-    "dev": "node scripts/electron.cjs . --dev",
-    "start": "node scripts/electron.cjs .",
-    "smoke": "node scripts/electron.cjs . --smoke",
-    "shots": "node scripts/electron.cjs . --screenshot",
-    "demo": "node scripts/electron.cjs . --demo",
-    "test": "node scripts/test.cjs domain",
-    "test:electron": "node scripts/test.cjs electron",
-    "dist": "electron-builder --win",
-    "check": "node scripts/test.cjs syntax"
-  },
-  "devDependencies": {
-    "electron": "^38.0.0",
-    "electron-builder": "^26.0.0"
-  },
-  "build": {
-    "appId": "com.zhijian.mhtool",
-    "productName": "梦幻养老助手",
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
+    "name": "mh-tool-v2",
+    "productName": "梦幻养老助手 V2",
+    "version": "0.2.0-alpha.1",
+    "private": true,
+    "type": "module",
+    "main": "src/main/main.cjs",
+    "description": "梦幻养老助手 Vue 重构版，使用独立数据目录",
+    "author": "zhijian",
+    "license": "MIT",
+    "engines": {
+        "node": ">=22.12.0"
     },
-    "files": [
-      "src/**/*",
-      "build/icon.ico",
-      "!node_modules/onnxruntime-node/bin/napi-*/{darwin,linux,android}/**/*",
-      "!node_modules/onnxruntime-node/bin/napi-*/win32/{arm64,ia32}/**/*"
-    ],
-    "asarUnpack": [
-      "node_modules/**/*"
-    ],
-    "win": {
-      "icon": "build/icon.ico",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
+    "scripts": {
+        "dev": "node scripts/dev.mjs",
+        "dev:web": "vite",
+        "build": "vite build",
+        "start": "node scripts/electron.mjs .",
+        "preview": "vite preview --host 127.0.0.1 --port 5175 --strictPort",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "typecheck": "vue-tsc --noEmit",
+        "test": "node --test \"tests/domain/*.test.cjs\" \"tests/domain/*.test.mjs\" \"tests/*.test.mjs\"",
+        "test:electron": "node scripts/test-electron.mjs",
+        "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
+        "verify": "npm run check && npm run build && npm run test:electron",
+        "dist:dir": "npm run build && electron-builder --dir --config electron-builder.config.cjs",
+        "dist": "npm run build && electron-builder --win --config electron-builder.config.cjs",
+        "migration:status": "node scripts/migration-status.mjs"
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "shortcutName": "梦幻养老助手",
-      "artifactName": "梦幻养老助手-安装版-${version}.exe"
-    },
-    "portable": {
-      "artifactName": "梦幻养老助手-便携版-${version}.exe"
+    "devDependencies": {
+        "@eslint/js": "^9.39.5",
+        "@types/node": "^24.0.0",
+        "@vitejs/plugin-vue": "^6.0.10",
+        "electron": "^38.0.0",
+        "electron-builder": "^26.0.0",
+        "eslint": "^9.39.5",
+        "eslint-plugin-vue": "^10.12.0",
+        "globals": "^15.15.0",
+        "pinia": "^3.0.4",
+        "prettier": "3.6.2",
+        "typescript": "~5.9.3",
+        "typescript-eslint": "^8.72.1",
+        "vite": "^7.3.1",
+        "vue": "^3.5.44",
+        "vue-eslint-parser": "^10.4.1",
+        "vue-router": "^4.6.4",
+        "vue-tsc": "^3.1.8"
     }
-  },
-  "overrides": {
-    "@gutenye/ocr-node": { "sharp": "$sharp" },
-    "onnxruntime-node": { "adm-zip": "0.6.1" }
-  },
-  "dependencies": {
-    "@gutenye/ocr-node": "1.4.9",
-    "onnxruntime-node": "1.22.0-rev",
-    "sharp": "0.35.5"
-  }
 }
