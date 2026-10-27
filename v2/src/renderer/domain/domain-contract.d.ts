@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 领域对象 D 的成员契约，供开启 `@ts-check` 的领域模块引用。
  *
  * 为什么需要这个文件：13 个领域模块用 `Object.assign(D, {...})` 把一百多个方法平铺
@@ -195,7 +195,8 @@ interface Domain {
 
     // ---- characters.js：角色档案、技能与养成历史 ----
     characterNumber: (value: any) => number | null;
-    normalizeCharacterProgress: (value: any) => CharacterProgress;
+    /** 不传参数时返回一份全空的养成骨架，供校验逻辑取字段清单。 */
+    normalizeCharacterProgress: (value?: any) => CharacterProgress;
     normalizeCharacterHistory: (value: any) => any[];
     characterGrowthChanges: (previous: any, saved: any) => any[];
     characterGrowthEntry: (previous: any, saved: any, record?: any) => any;
@@ -248,7 +249,7 @@ interface Domain {
     saveGoalOrder: (id: string, changes: any) => Promise<any>;
     goalCharacters: (goal: any) => any[];
     goalsFor: (characterId?: string) => any[];
-    goalMetricOptions: (category: string, characterId: string) => Array<{ v: string; t: string }>;
+    goalMetricOptions: (category: string, characterId?: string) => Array<{ v: string; t: string }>;
     goalCharacterValue: (character: any, tracking: any) => any;
     goalMetricLabel: (tracking: any) => string;
     goalDefaultTitle: (goal: any) => string;
@@ -274,18 +275,19 @@ interface Domain {
     soulAttributes: string[];
     isJade: (slot: string) => boolean;
     /** 由持有数量与状态派生出「在装 / 备用 / 已售」等展示口径。 */
-    equipmentStatus: (eq: any) => string;
+    equipmentStatus: (eq: any, references?: any[]) => string;
     equipmentProfile: (characterId: string) => any;
-    equipmentReferenceIndex: (characterId: string) => any;
+    equipmentReferenceIndex: (characterId: string) => Map<string, any[]>;
     equipmentReferences: (id: string) => any[];
     equipmentById: (id: string) => any;
     clearEquipmentReferences: (id: string) => void;
     assignEquipment: (characterId: string, index: number, slot: string, id: string) => void;
     copyEquipmentSet: (characterId: string, from: number, to: number) => void;
-    saveEquipment: (data: any, id?: string) => Promise<any>;
+    /** 同步落盘：调用方已经在 commitEquipment 事务内，因此不经 Promise。 */
+    saveEquipment: (data: any, id?: string) => any;
     commitEquipment: (change: () => any) => Promise<any>;
-    removeEquipment: (id: string) => Promise<any>;
-    recordEquipmentChange: (id: string, data: any) => void;
+    removeEquipment: (id: string) => void;
+    recordEquipmentChange: (id: string, data: any) => Promise<any>;
     normalizeEquipment: (state: any, original: any) => any;
     _equipmentList?: any[];
     _equipmentSize?: number;

@@ -91,7 +91,7 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 
 ## 类型检查
 
-`tsconfig.json` 的 `checkJs` 仍为 `false`，领域层的 `.js` 逐个纳管：要纳管的文件在首行写 `// @ts-check`，用 JSDoc 标注参数与返回值即可，`vue-tsc --noEmit` 会按注释逐文件校验。目前 12 个模块已纳管（`create-domain`、`data`、`equipment-fields`、`export`、`growth`、`ledger`、`migration`、`online`、`schools`、`statistics`、`storage`、`util`），`characters`、`equipment`、`equipment-import`、`goals` 四个大模块尚未纳管。
+`tsconfig.json` 的 `checkJs` 仍为 `false`，领域层的 `.js` 逐个纳管：要纳管的文件在首行写 `// @ts-check`，用 JSDoc 标注参数与返回值即可，`vue-tsc --noEmit` 会按注释逐文件校验。目前 16 个模块**已全部纳管**：`characters`、`create-domain`、`data`、`equipment`、`equipment-fields`、`equipment-import`、`export`、`goals`、`growth`、`ledger`、`migration`、`online`、`schools`、`statistics`、`storage`、`util`。
 
 ### 领域契约 `domain-contract.d.ts`
 
@@ -107,3 +107,7 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 目前试点的是 `src/renderer/domain/util.js` 与 `src/renderer/domain/export.js`：前者被领域与界面共用，后者是纯数据到文本的转换，都没有外部依赖，改起来不会牵动调用方。后续按同样方式推进有测试保护的模块，不要一次性把 14 个领域模块全开——平铺的 `Object.assign` 混入模型会让 `this` 上的方法互相引用无法推断，一次性开启会产生大量与真实缺陷无关的报错。
 
 `lib` 已提到 `ES2023`，因为装备词条解析用了 `Array.prototype.findLastIndex`。`target` 同步改为 `ES2023`，与 Electron 38 内置的 Chromium 140 一致。
+
+#### 用 PowerShell 批量改动的陷阱
+
+纳管过程中曾用 `Get-Content -Raw` + `Set-Content` 往返给四个模块批量插入 `// @ts-check`，结果 `vue-tsc` 报出 171 项 `TS1005`/`TS1002`/`TS1128` 等**语法**错误。原因是 PowerShell 5.1 的 `Get-Content` 对无 BOM 的 UTF-8 中文按 GBK 解码，写回时把注释与中文字面量全部损坏。批量改动领域 `.js` 请用编辑工具或 `node` 脚本，不要走 PowerShell 文本往返；一旦写坏用 `git checkout -- <file>` 还原，不要试图修补乱码。

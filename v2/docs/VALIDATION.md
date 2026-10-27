@@ -150,7 +150,7 @@ Electron 流程验证了：首次建档、技能模板、明确 0 与未记录�
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 契约文件          | 全局 `interface Domain`/`DomainState`，不含 import/export，`vue-tsc` 可见                                                                           |
 | 纳管模块数        | 12 个：`create-domain`、`data`、`equipment-fields`、`export`、`growth`、`ledger`、`migration`、`online`、`schools`、`statistics`、`storage`、`util` |
-| 未纳管模块        | `characters`、`equipment`、`equipment-import`、`goals` 共四个大模块，留待后续                                                                       |
+| 未纳管模块        | `characters`、`equipment`、`equipment-import`、`goals` 共四个大模块，本轮已全部补齐（见下节）                                                       |
 | 单模块首次开启    | `growth.js` 单文件报 34 项（隐参数 `any` 与成员不存在），补契约后归零                                                                               |
 | 未纳管模块试算    | 四个大模块一次性开启共 339 项错误（`TS7006` 183、`TS2339` 129 等），确认超出一轮范围后回退                                                          |
 | 契约声明修正      | `goalTypes`/`gearActions`/`gearAction`/`moveCard` 四处宽松类型收紧，补 `equipmentStatus`                                                            |
@@ -164,3 +164,26 @@ Electron 流程验证了：首次建档、技能模板、明确 0 与未记录�
 `package.json` 的 `test` 脚本同步补齐 `tests/domain/*.test.mjs`：原写法只匹配 `.cjs`，新加的 `.mjs` 契约测试不会被跑到，属于静默漏测。
 
 四个未纳管模块的错误分布说明「先建契约再纳管」这条路是对的：`TS2339` 的 129 项里，`state` 占 42、`commit` 占 13、`charById` 占 9，都是跨模块 `this` 互调，契约一旦补齐这些就能一次性消掉；剩下的主要是逐方法补 JSDoc 的机械工作量。
+
+## 四个大模块补齐类型纳管
+
+日期：2026-10-27。范围：`characters`、`goals`、`equipment`、`equipment-import` 四个模块开启 `@ts-check`，16 个领域模块全部纳入类型检查。
+
+| 检查                  | 结果                                                                                                                                                                                                                                                                   |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 纳管模块数            | 16 个，领域层覆盖完整                                                                                                                                                                                                                                                  |
+| `characters.js`       | 首测 114 项错误 → 0；补 `CharactersMixin` 与逐方法 JSDoc，`indexed()` 放宽技能/修炼的字符串键下标                                                                                                                                                                      |
+| `goals.js`            | 首测 0 项（契约已就位）→ 0；`goalGrowthHistory` 的局部变量补 `GrowthMetric` 标注                                                                                                                                                                                       |
+| `equipment.js`        | 4 项错误 → 0；`Object.values(...).flatMap` 与 `Map<string, string>` 的隐式 `any` 逐处标注                                                                                                                                                                              |
+| `equipment-import.js` | 0 项 → 0；新增 `EquipmentDraft` 类型，`parseEquipmentText` 的动态字段写入改为显式索引                                                                                                                                                                                  |
+| 契约同步修正          | `normalizeCharacterProgress`、`goalMetricOptions` 参数改可选；`saveEquipment`/`removeEquipment` 返回类型按实现收敛为同步；`equipmentStatus` 补 `references` 可选参数；`equipmentReferenceIndex` 收紧为 `Map<string, any[]>`；`recordEquipmentChange` 改 `Promise<any>` |
+| 试算与实际差距        | 上一轮试算的 339 项含 PowerShell 读写往返造成的编码损坏（`TS1005`/`TS1002` 等语法错误）；改用编辑工具直接改写后，实际问题量约 118 项                                                                                                                                   |
+| 类型检查              | `vue-tsc --noEmit` 0 错误                                                                                                                                                                                                                                              |
+| ESLint                | 0 错误 11 警告（与纳管前一致）                                                                                                                                                                                                                                         |
+| 领域测试              | 86 项通过 0 失败                                                                                                                                                                                                                                                       |
+| Vite 生产构建         | 通过，CSS 28.99 kB、JS 229.41 kB                                                                                                                                                                                                                                       |
+| Electron 集成流程     | 通过，`tests/app.electron.cjs` 全流程 PASS                                                                                                                                                                                                                             |
+
+`equipment.js` 暴露了两处契约与实现不符：`saveEquipment` 在实现里是同步返回（调用方已在 `commitEquipment` 事务内），`removeEquipment` 同样同步，而契约原先声明为 `Promise`。契约按实现收敛，避免用 `Promise` 掩盖真实调用方式。
+
+`characterNumber()` 这类把「未记录」与「明确填写的 0」分开的函数，签名保持 `(value: any) => number | null`：宽松入参是它的职责，收紧反而会在调用侧堆 `as` 断言。
