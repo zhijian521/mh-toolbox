@@ -31,6 +31,24 @@
 ## 2026-10-27 目录调整
 
 - V2 从 `v2/` 提升到仓库根目录，后续安装、开发、检查和构建均在根目录运行。
-- 原根目录的完整 V1 工程归档到 `migration/baseline/`，保留原有源码、资源、文档、测试及本机依赖和构建产物。
+- 原根目录的完整 V1 工程归档到 `migration/baseline/`，保留原有源码、资源、文档与测试；本机依赖与构建产物同批搬入，随后按需清理（见下节）。
 - 初始文本快照移到 `migration/initial-baseline/`，初始采集信息与文件哈希保持不变；状态脚本继续对比归档 V1 与初始基线。
 - CI 分别在根目录检查 V2、在 `migration/baseline/` 检查 V1。目录调整不涉及业务规则、数据 schema 或应用数据目录的变更。
+
+## 2026-10-27 归档依赖与构建产物清理
+
+迁移提交 `51ea939` 之后清理本机冗余目录，共释放约 1.28 GB：
+
+| 已删除                             | 规模           | 性质                                                    |
+| ---------------------------------- | -------------- | ------------------------------------------------------- |
+| `migration/baseline/node_modules`  | 8553 文件 698M | 归档 V1 的依赖，被 `migration/baseline/.gitignore` 忽略 |
+| `migration/baseline/dist`          | 81 文件 554M   | 归档 V1 的打包产物，同样被忽略                          |
+| `dist/`                            | 26M            | V2 前端构建产物，被根 `.gitignore` 忽略                 |
+| `.runtime/probe.cjs`、空目录 `v2/` | 2K             | 历史临时探针与迁移残留                                  |
+
+全部位于忽略范围内，删除不改变任何已跟踪文件：`migration/status` 的文本比对与 `migration/baseline.json` 的初始哈希校验均不受影响，归档仍保留源码、资源、文档、测试与锁文件。
+
+重建方式：
+
+- 归档 V1 依赖：在 `migration/baseline/` 执行 `npm ci` 即可按归档内的 `package-lock.json` 复原（Node 22，锁文件随归档保留、本次未改动）；其构建产物由该目录的 `npm run dist` / `npm run shots` 重新生成。
+- V2 产物：根目录 `npm run build` 重建 `dist/renderer`；`npm start`、`npm run test:electron` 与 `npm run dist*` 都依赖它，删除后需先 build。
