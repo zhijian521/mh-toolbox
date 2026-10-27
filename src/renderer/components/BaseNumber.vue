@@ -7,8 +7,16 @@ const props = withDefaults(
         modelValue?: number | string | null;
         min?: number;
         max?: number;
+        /**
+         * 步长：同时决定原生校验与右侧上下箭头。
+         *
+         * 必须能改。原先把 `step="1"` 写死在输入框上，金额这类允许小数的字段
+         * （如 250.5 万）会被浏览器判成 step 不匹配，`requestSubmit` 直接不触发
+         * 提交事件，表单看起来「点了没反应」。
+         */
+        step?: number;
     }>(),
-    { modelValue: '', min: 0, max: Number.MAX_SAFE_INTEGER },
+    { modelValue: '', min: 0, max: Number.MAX_SAFE_INTEGER, step: 1 },
 );
 const emit = defineEmits<{ 'update:modelValue': [value: number | ''] }>();
 const text = ref(props.modelValue == null ? '' : String(props.modelValue));
@@ -36,12 +44,15 @@ function onInput(event: Event) {
     const value = Number(raw);
     emit('update:modelValue', Number.isFinite(value) ? value : '');
 }
-function step(offset: number) {
+/** 上下箭头走一步；函数名不叫 step，避免和同名 prop 在模板里撞车。 */
+function nudge(offset: number) {
     const value = numeric();
     if (value === null && offset < 0) return;
     const next = Math.min(props.max, Math.max(props.min, (value ?? props.min) + offset));
-    text.value = String(next);
-    emit('update:modelValue', next);
+    // 0.1 这类步长会累积浮点误差（0.1 + 0.2 = 0.30000000000000004），按步长收一次。
+    const rounded = Number(next.toFixed(6));
+    text.value = String(rounded);
+    emit('update:modelValue', rounded);
 }
 const low = computed(() => {
     const value = numeric();
@@ -60,7 +71,7 @@ const high = computed(() => {
             :value="text"
             :min="min"
             :max="max"
-            step="1"
+            :step="step"
             @input="onInput"
         />
         <span class="number-steps">
@@ -68,9 +79,9 @@ const high = computed(() => {
                 type="button"
                 class="number-step"
                 tabindex="-1"
-                aria-label="增加 1"
+                :aria-label="'增加 ' + step"
                 :disabled="high"
-                @click="step(1)"
+                @click="nudge(step)"
             >
                 <AppIcon name="chevron-up" :size="11" />
             </button>
@@ -78,9 +89,9 @@ const high = computed(() => {
                 type="button"
                 class="number-step"
                 tabindex="-1"
-                aria-label="减少 1"
+                :aria-label="'减少 ' + step"
                 :disabled="low"
-                @click="step(-1)"
+                @click="nudge(-step)"
             >
                 <AppIcon name="chevron-down" :size="11" />
             </button>

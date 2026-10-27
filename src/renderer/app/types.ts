@@ -41,7 +41,7 @@ export interface Character {
     [key: string]: unknown;
 }
 /**
- * 尚未迁移模块（收益、账号、目标、装备、在线）的记录形状。
+ * 尚未迁移模块（收益、账号、装备、在线）的记录形状。
  *
  * 这些页面还没搬过来，字段名在领域层已稳定但界面尚未消费，因此只声明渲染层
  * 实际用到的外键，其余键留给 `unknown`——比整块 `any` 安全：读错字段名会报错，
@@ -52,12 +52,71 @@ export interface RecordEntry {
     characterId?: string;
     [key: string]: unknown;
 }
+/** 目标跟随的养成项目；`key` 只在技能与修炼分类下非空。 */
+export interface GoalTracking {
+    category: string;
+    key: string;
+}
+/** 手动累计目标的一条进度记录。`delta` 正数增加、负数减少。 */
+export interface GoalLog {
+    id: string;
+    date: string;
+    delta: number;
+    note: string;
+    createdAt: number;
+}
+export type GoalType = 'money' | 'gear' | 'progress';
+export interface Goal {
+    id: string;
+    title: string;
+    /** `'all'` 表示全部角色（含后续新增）。 */
+    characterId: string;
+    type: GoalType;
+    target: number;
+    unit: string;
+    tracking: GoalTracking | null;
+    deadline: string;
+    note: string;
+    current: number;
+    baseProgress: number;
+    status: 'active' | 'done';
+    doneAt?: string;
+    logs: GoalLog[];
+    sortOrder: number;
+    createdAt: number;
+}
+/** 跟随档案的目标里，单个角色当前进度。`value` 为 null 表示该角色未记录此项。 */
+export interface GoalMember {
+    id: string;
+    name: string;
+    value: number | null;
+    done: boolean;
+    remaining: number | null;
+}
+/**
+ * 目标汇总。手动目标是 `current / target`，跟随档案的目标是「达标人数 / 成员数」，
+ * 因此成员相关字段只在后者存在。
+ */
+export interface GoalSummary {
+    members?: GoalMember[];
+    achieved?: number;
+    unknown?: number;
+    current: number;
+    target: number;
+    status: 'active' | 'done';
+    pct: number;
+}
+/** 目标列表的一行：领域快照 + 汇总，供筛选与排序共用。 */
+export interface GoalEntry {
+    goal: Goal;
+    summary: GoalSummary;
+}
 export interface AppData {
     schemaVersion: number;
     characters: Character[];
     transactions: RecordEntry[];
     equipment: RecordEntry[];
-    goals: RecordEntry[];
+    goals: Goal[];
     sessions: RecordEntry[];
     gearLogs: RecordEntry[];
     activeSession: RecordEntry | null;
@@ -77,6 +136,18 @@ export interface RemovalSummary {
 export interface TrainingField {
     key: string;
     label: string;
+}
+/**
+ * 养成分类定义。`kind` 决定目标能填什么：`skills` / `training` 需要再选具体项目，
+ * `level` / `quantity` 只有单项数值。
+ */
+export interface GrowthCategory {
+    v: string;
+    t: string;
+    group: string;
+    kind: string;
+    unit: string;
+    fields?: TrainingField[];
 }
 /** 领域方法读取到的单指标口径。 */
 export interface ProgressMetric {
@@ -174,6 +245,7 @@ export interface Domain {
     petTraining: TrainingField[];
     // 角色档案与养成
     charById(id: string): Character | undefined;
+    charName(id: string): string;
     characterNumber(value: unknown): number | null;
     characterProgressMetric(
         character: Character | undefined,
@@ -197,6 +269,46 @@ export interface Domain {
         changes: { targetId: string; position: 'before' | 'after' },
     ): Promise<unknown>;
     removeCharacter(id: string): Promise<unknown>;
+    // 目标与目标养成
+    goalTypes: Array<{ v: string; t: string }>;
+    goalMetrics: Array<{ v: string; t: string; unit: string }>;
+    goalTypeText(value: string): string;
+    growthCategory(category: string): GrowthCategory | undefined;
+    orderedGoals(goals?: Goal[]): Goal[];
+    goalsFor(characterId?: string): Goal[];
+    goalCharacters(goal: Goal): Character[];
+    goalSummary(goal: Goal): GoalSummary;
+    goalDefaultTitle(goal: {
+        characterId: string;
+        type: string;
+        target: number;
+        unit?: string;
+        tracking?: GoalTracking | null;
+    }): string;
+    goalMetricLabel(tracking: GoalTracking): string;
+    goalMetricOptions(category: string, characterId?: string): Array<{ v: string; t: string }>;
+    goalGrowthHistory(
+        goal: Goal,
+        range?: { from?: string; to?: string },
+    ): Array<GrowthEntry & { change: GrowthChange }>;
+    saveGoal(input: unknown, id?: string): Promise<Goal>;
+    saveGoalGrowth(
+        id: string,
+        values: Record<string, number | string | null>,
+        record?: GrowthRecord,
+    ): Promise<number>;
+    saveGoalProgress(
+        id: string,
+        input: { date: string; delta: number; note?: string },
+        logId?: string,
+    ): Promise<GoalLog>;
+    removeGoalProgress(id: string, logId: string): Promise<unknown>;
+    setGoalStatus(id: string, status: 'active' | 'done'): Promise<unknown>;
+    removeGoal(id: string): Promise<unknown>;
+    saveGoalOrder(
+        id: string,
+        changes: { targetId: string; position: 'before' | 'after' },
+    ): Promise<unknown>;
 }
 declare global {
     interface Window {

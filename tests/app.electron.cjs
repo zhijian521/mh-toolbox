@@ -430,6 +430,192 @@ app.on('browser-window-created', (_event, win) => {
                 '删除角色完成',
             );
             assert.equal(disk().characters.length, 1);
+
+            // ---- 目标页：跟随档案 → 批量更新 → 达成 → 养成记录 ----
+            await read(() => document.querySelector('a[href="#/goals"]').click());
+            await until(
+                () => document.querySelector('.page-header h1')?.textContent === '目标',
+                '目标页面',
+            );
+            assert.equal(await read(() => document.querySelectorAll('.goal-card').length), 0);
+            await click('新建第一个目标');
+            await until(() => !!document.querySelector('#goal-form'), '新建目标表单');
+            await submit('#goal-form');
+            await until(() => document.querySelectorAll('.goal-card').length === 1, '目标创建');
+            const goalCard = () =>
+                read(() => {
+                    const card = document.querySelector('.goal-card');
+                    if (!card) return null;
+                    const text = (selector) =>
+                        card.querySelector(selector)?.textContent.replace(/\s+/g, ' ').trim() || '';
+                    return {
+                        title: text('.goal-title'),
+                        meta: text('.goal-meta'),
+                        nums: text('.goal-nums'),
+                        members: [...card.querySelectorAll('.goal-member')].map((row) =>
+                            row.textContent.replace(/\s+/g, ' ').trim(),
+                        ),
+                        pct: card.querySelector('.progress').getAttribute('aria-valuenow'),
+                        done: card.classList.contains('done'),
+                    };
+                });
+            let goal = await goalCard();
+            assert.equal(goal.title, '全部角色 · 强身术达到 120级');
+            assert.ok(goal.meta.includes('养成目标'), goal.meta);
+            assert.ok(goal.meta.includes('全部角色'), goal.meta);
+            assert.ok(goal.meta.includes('跟随角色档案'), goal.meta);
+            assert.equal(goal.pct, '0');
+            assert.ok(goal.members[0].includes('待补录'), goal.members[0]);
+            assert.equal(disk().goals[0].tracking.key, '强身术');
+            assert.equal(disk().goals[0].tracking.category, 'auxiliarySkills');
+
+            await click('更新养成');
+            await until(() => !!document.querySelector('#goal-growth-form'), '更新养成表单');
+            await field('#goal-growth-form input[type="number"]', '120');
+            await submit('#goal-growth-form');
+            await until(() => !document.querySelector('#goal-growth-form'), '保存养成进度');
+            const filled = disk().characters[0].progress.auxiliarySkills.find(
+                (skill) => skill.name === '强身术',
+            );
+            assert.equal(filled.level, 120);
+            assert.equal(disk().goals.length, 1);
+            assert.equal(disk().goals[0].logs.length, 0, '跟随档案的目标不产生自己的流水');
+            await read(() => document.querySelector('[data-status="done"]').click());
+            await until(
+                () => document.querySelector('.goal-card')?.classList.contains('done'),
+                '目标自动达成',
+            );
+            goal = await goalCard();
+            assert.equal(goal.pct, '100');
+            assert.ok(goal.meta.includes('已全部达标'), goal.meta);
+            assert.ok(goal.members[0].includes('已达标'), goal.members[0]);
+            await click('养成记录');
+            await until(() => !!document.querySelector('.record-row'), '养成记录弹窗');
+            assert.equal(await read(() => document.querySelectorAll('.record-row').length), 1);
+            assert.ok(
+                await read(() =>
+                    document.querySelector('.record-row').textContent.includes('强身术'),
+                ),
+            );
+            await click('关闭');
+            await until(() => !document.querySelector('.modal'), '关闭养成记录');
+
+            // ---- 手动累计目标：记进度、编辑、删除记录、改目标数值 ----
+            await read(() => document.querySelector('[data-status="active"]').click());
+            await click('＋ 新建目标');
+            await until(() => !!document.querySelector('#goal-form'), '新建存钱目标');
+            await choose('目标类型', '存钱目标');
+            await field('[name="target"]', '1000');
+            await submit('#goal-form');
+            await until(() => document.querySelectorAll('.goal-card').length === 1, '存钱目标创建');
+            goal = await goalCard();
+            assert.equal(goal.title, '全部角色 · 存钱目标达到 1000万');
+            assert.ok(goal.meta.includes('共同累计'), goal.meta);
+            assert.equal(disk().goals[1].tracking, null);
+
+            await click('＋ 记进度');
+            await until(() => !!document.querySelector('#goal-progress-form'), '记进度表单');
+            await field('[name="delta"]', '250.5');
+            await submit('#goal-progress-form');
+            await until(() => !document.querySelector('#goal-progress-form'), '保存进度');
+            await until(
+                () =>
+                    document
+                        .querySelector('.goal-card .progress')
+                        ?.getAttribute('aria-valuenow') === '25',
+                '进度 25%',
+            );
+            assert.equal(disk().goals[1].logs.length, 1);
+
+            await click('进度历史');
+            await until(() => !!document.querySelector('.record-row.manual'), '进度历史');
+            await click('编辑');
+            await until(() => !document.querySelector('.record-row.manual'), '收起进度历史');
+            await until(() => !!document.querySelector('#goal-progress-form'), '编辑进度表单');
+            await field('[name="delta"]', '500');
+            await submit('#goal-progress-form');
+            await until(
+                () =>
+                    document
+                        .querySelector('.goal-card .progress')
+                        ?.getAttribute('aria-valuenow') === '50',
+                '进度 50%',
+            );
+
+            await click('进度历史');
+            await until(() => !!document.querySelector('.record-row.manual'), '再次打开进度历史');
+            await click('删除');
+            await until(() => !!document.querySelector('.delete-confirm'), '删除记录确认');
+            await click('确认删除');
+            await until(() => !document.querySelector('.record-row.manual'), '删除记录完成');
+            assert.equal(disk().goals[1].logs.length, 0);
+            assert.equal(
+                await read(() =>
+                    document.querySelector('.goal-card .progress').getAttribute('aria-valuenow'),
+                ),
+                '0',
+            );
+            await click('关闭');
+            await until(() => !document.querySelector('.modal'), '关闭进度历史');
+
+            await read(() => document.querySelector('button[aria-label="编辑目标"]').click());
+            await until(() => !!document.querySelector('#goal-form'), '编辑目标表单');
+            await field('[name="target"]', '2000');
+            await submit('#goal-form');
+            await until(
+                () => document.querySelector('.goal-title')?.textContent.includes('2000'),
+                '标题随目标数值更新',
+            );
+
+            // ---- 完成 / 恢复 / 筛选 / 删除 ----
+            await click('标记完成');
+            await until(() => !document.querySelector('.goal-card'), '完成后离开进行中列表');
+            await read(() => document.querySelector('[data-status="done"]').click());
+            await until(
+                () => document.querySelector('.goal-card')?.classList.contains('done'),
+                '已完成筛选',
+            );
+            assert.equal(
+                await read(() =>
+                    document.querySelector('.goal-card .progress').getAttribute('aria-valuenow'),
+                ),
+                '100',
+            );
+            await click('恢复进行');
+            // 已完成列表里还剩跟随档案的那个目标，恢复进行只移走手动目标本身。
+            await until(
+                () => document.querySelectorAll('.goal-card').length === 1,
+                '恢复后离开已完成列表',
+            );
+
+            await read(() => document.querySelector('[data-status="all"]').click());
+            await until(() => document.querySelectorAll('.goal-card').length === 2, '全部目标');
+            await field('[aria-label="搜索目标、角色或备注"]', '不存在的目标');
+            await until(
+                () => !!document.querySelector('.empty h2')?.textContent.includes('筛选'),
+                '搜索无结果',
+            );
+            await click('清除筛选');
+            await until(() => document.querySelectorAll('.goal-card').length === 2, '清除筛选');
+
+            await read(() => document.querySelectorAll('button[aria-label="删除目标"]')[0].click());
+            await until(
+                () => document.querySelector('.modal h2')?.textContent === '删除目标',
+                '删除目标确认',
+            );
+            await click('确认删除');
+            await until(() => document.querySelectorAll('.goal-card').length === 1, '删除目标完成');
+            await read(() => document.querySelectorAll('button[aria-label="删除目标"]')[0].click());
+            await until(() => !!document.querySelector('.modal'), '删除最后一个目标');
+            await click('确认删除');
+            await until(
+                () =>
+                    !document.querySelector('.goal-card') &&
+                    !!document.querySelector('.empty h2')?.textContent.includes('小目标'),
+                '目标清空',
+            );
+            assert.equal(disk().goals.length, 0);
+
             await read(() => document.querySelector('a[href="#/settings"]').click());
             await until(() => !!document.querySelector('.settings-page'), '设置页面');
             fs.writeFileSync(
@@ -477,7 +663,7 @@ app.on('browser-window-created', (_event, win) => {
             assert.deepEqual(errors, []);
             clearTimeout(watchdog);
             console.log(
-                'PASS Electron: isolation, character CRUD, drafts, rollback, school change, history, ordering, restart, import/export/wipe',
+                'PASS Electron: isolation, character CRUD, drafts, rollback, school change, history, ordering, restart, goals, import/export/wipe',
             );
             app.exit(0);
         } catch (error) {
