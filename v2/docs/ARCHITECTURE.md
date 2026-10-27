@@ -58,4 +58,4 @@ tests/app.electron.cjs      Electron 真实窗口与 IPC 集成流程
 
 `BaseModal` 负责背景 inert、键盘焦点循环、焦点返回、保存中禁止关闭，以及原弹窗中央的未保存确认。完整编辑使用 fieldset 锁定草稿。列表以角色 ID 为 key，更新不重建整页。
 
-下拉、辅助技能建议与日期输入目前使用浏览器原生控件，尚未迁移当前版本的自定义下拉/日历外观。交互语义和日期数据保持兼容，这项视觉差异列入后续组件工作。
+下拉与日期输入已迁移为自有组件：`BaseSelect` 负责下拉（可选搜索、方向键与首尾跳转、外点关闭），`BaseDate` 负责日历（月切换、最小/最大日期、今天与清空、方向键与 PageUp/PageDown），两者共用 `components/popover.ts` 的定位与关闭逻辑，弹层 Teleport 到 body 并按视口翻转。关闭键与 Tab 在 window 捕获阶段拦截，早于 `BaseModal` 的 Escape 处理，避免在弹窗内按 Escape 先触发未保存确认。辅助技能建议仍使用浏览器原生 datalist，保留输入自由文本的能力；分区导航滚动跟随与更多键盘细节列入后续组件工作。

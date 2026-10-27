@@ -28,9 +28,9 @@ const read = (fn, ...args) =>
         '(' + fn.toString() + ')(...' + JSON.stringify(args) + ')',
         true,
     );
-async function until(fn, label) {
+async function until(fn, label, ...args) {
     for (let index = 0; index < 300; index++) {
-        if (await read(fn)) return;
+        if (await read(fn, ...args)) return;
         await new Promise((resolve) => setTimeout(resolve, 20));
     }
     throw new Error('等待失败：' + label);
@@ -57,6 +57,32 @@ const field = (selector, value) =>
     );
 const submit = (selector) =>
     read((selector) => document.querySelector(selector).requestSubmit(), selector);
+const openSelect = (label) =>
+    read((label) => {
+        const trigger = document.querySelector('[role="combobox"][aria-label="' + label + '"]');
+        if (!trigger) throw new Error('下拉不存在：' + label);
+        trigger.click();
+    }, label);
+const pickOption = (text) =>
+    read((text) => {
+        const item = [...document.querySelectorAll('.xitem')].find(
+            (element) => element.textContent.trim() === text,
+        );
+        if (!item) throw new Error('选项不存在：' + text);
+        item.click();
+    }, text);
+const choose = async (label, text) => {
+    await openSelect(label);
+    await until(
+        (text) =>
+            [...document.querySelectorAll('.xitem')].some(
+                (element) => element.textContent.trim() === text,
+            ),
+        '展开选项：' + label,
+        text,
+    );
+    await pickOption(text);
+};
 let file;
 const disk = () => JSON.parse(fs.readFileSync(file, 'utf8'));
 
@@ -138,7 +164,7 @@ app.on('browser-window-created', (_event, win) => {
 
             await read(() => document.querySelector('button[aria-label="编辑档案"]').click());
             await until(() => !!document.querySelector('#character-form'), '转门派');
-            await field('[name="school"]', '普陀山');
+            await choose('门派', '普陀山');
             await until(() => !!document.querySelector('.school-choice'), '技能处理选择');
             await submit('#character-form');
             await until(() => !!document.querySelector('.form-error'), '未确认不保存');

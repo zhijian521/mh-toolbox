@@ -5,7 +5,9 @@ import { plain } from '../../services/desktop';
 import { U } from '../../domain/util.js';
 import { defaultSchool } from '../../game-data/schools.js';
 import type { Character } from '../../app/types';
+import BaseDate from '../../components/BaseDate.vue';
 import BaseModal from '../../components/BaseModal.vue';
+import BaseSelect from '../../components/BaseSelect.vue';
 import SkillEditor from './SkillEditor.vue';
 const props = defineProps<{ character?: Character }>();
 const emit = defineEmits<{ close: []; saved: [id: string] }>();
@@ -67,6 +69,11 @@ async function save() {
         navigateSection('basic');
         return;
     }
+    if (props.character && !draft.changeDate) {
+        error.value = '请选择变更日期';
+        navigateSection('growth');
+        return;
+    }
     try {
         const result = (await app.execute((domain) =>
             domain.saveCharacter(
@@ -87,6 +94,13 @@ async function save() {
         error.value = failure instanceof Error ? failure.message : String(failure);
     }
 }
+const schoolOptions = computed(() => [
+    { value: '', label: '未记录' },
+    ...(rules.schools as string[]).map((school) => ({ value: school, label: school })),
+    ...(draft.school && !rules.schools.includes(draft.school)
+        ? [{ value: draft.school, label: draft.school }]
+        : []),
+]);
 const trainingGroups = [
     {
         key: 'training' as const,
@@ -159,17 +173,12 @@ const trainingGroups = [
                         </label>
                         <label>
                             门派
-                            <select v-model="draft.school" name="school">
-                                <option value="">未记录</option>
-                                <option v-for="school in rules.schools" :key="school">
-                                    {{ school }}
-                                </option>
-                                <option
-                                    v-if="draft.school && !rules.schools.includes(draft.school)"
-                                >
-                                    {{ draft.school }}
-                                </option>
-                            </select>
+                            <BaseSelect
+                                v-model="draft.school"
+                                label="门派"
+                                :options="schoolOptions"
+                                searchable
+                            />
                         </label>
                         <label>
                             服务器
@@ -224,31 +233,33 @@ const trainingGroups = [
                     </div>
                     <SkillEditor v-model="draft.progress.schoolSkills" />
                 </section>
-                <section
-                    v-for="group in trainingGroups"
-                    :key="group.key"
-                    :ref="
-                        (element) => {
-                            if (element) sectionElements.set(group.key, element as HTMLElement);
-                        }
-                    "
-                    class="edit-section"
-                >
-                    <h3 tabindex="-1">{{ group.title }}</h3>
-                    <div class="form-grid">
-                        <label v-for="field in group.fields" :key="field.key">
-                            {{ field.label }}
-                            <input
-                                v-model="draft.progress[group.key][field.key]"
-                                type="number"
-                                min="0"
-                                step="1"
-                                :max="Number.MAX_SAFE_INTEGER"
-                                placeholder="未记录"
-                            />
-                        </label>
-                    </div>
-                </section>
+                <div class="training-grid">
+                    <section
+                        v-for="group in trainingGroups"
+                        :key="group.key"
+                        :ref="
+                            (element) => {
+                                if (element) sectionElements.set(group.key, element as HTMLElement);
+                            }
+                        "
+                        class="edit-section"
+                    >
+                        <h3 tabindex="-1">{{ group.title }}</h3>
+                        <div class="form-grid stack">
+                            <label v-for="field in group.fields" :key="field.key">
+                                {{ field.label }}
+                                <input
+                                    v-model="draft.progress[group.key][field.key]"
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    :max="Number.MAX_SAFE_INTEGER"
+                                    placeholder="未记录"
+                                />
+                            </label>
+                        </div>
+                    </section>
+                </div>
                 <section
                     :ref="
                         (element) => {
@@ -308,10 +319,9 @@ const trainingGroups = [
                         <template v-if="character">
                             <label>
                                 变更日期
-                                <input
+                                <BaseDate
                                     v-model="draft.changeDate"
-                                    type="date"
-                                    required
+                                    label="变更日期"
                                     :max="U.today()"
                                 />
                             </label>

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import BaseDate from '../../components/BaseDate.vue';
 import BaseModal from '../../components/BaseModal.vue';
+import BaseSelect from '../../components/BaseSelect.vue';
 import NumberValue from '../../components/NumberValue.vue';
 import { useApplication } from '../../stores/application';
 import { U } from '../../domain/util.js';
@@ -33,42 +35,38 @@ const labels: Record<string, string> = {
     decrease: '调低',
     changed: '调整',
 };
+const characterOptions = computed(() => [
+    { value: 'all', label: '全部角色' },
+    ...app.characters.map((character) => ({ value: character.id, label: character.name })),
+]);
+const presetOptions = [
+    { value: 'all', label: '全部' },
+    { value: 'today', label: '本日' },
+    { value: 'week', label: '本周' },
+    { value: 'month', label: '本月' },
+    { value: 'year', label: '本年' },
+    { value: 'custom', label: '自定义' },
+];
 </script>
 <template>
     <BaseModal title="养成记录" wide @close="emit('close')">
         <div class="history-filters">
             <label>
                 角色
-                <select v-model="selected" aria-label="筛选角色">
-                    <option value="all">全部角色</option>
-                    <option
-                        v-for="character in app.characters"
-                        :key="character.id"
-                        :value="character.id"
-                    >
-                        {{ character.name }}
-                    </option>
-                </select>
+                <BaseSelect v-model="selected" label="筛选角色" :options="characterOptions" />
             </label>
             <label>
                 日期范围
-                <select v-model="preset">
-                    <option value="all">全部</option>
-                    <option value="today">本日</option>
-                    <option value="week">本周</option>
-                    <option value="month">本月</option>
-                    <option value="year">本年</option>
-                    <option value="custom">自定义</option>
-                </select>
+                <BaseSelect v-model="preset" label="日期范围" :options="presetOptions" />
             </label>
             <template v-if="preset === 'custom'">
                 <label>
                     开始日期
-                    <input v-model="from" type="date" />
+                    <BaseDate v-model="from" label="开始日期" :max="to || U.today()" />
                 </label>
                 <label>
                     结束日期
-                    <input v-model="to" type="date" :min="from" />
+                    <BaseDate v-model="to" label="结束日期" :min="from" :max="U.today()" />
                 </label>
             </template>
         </div>

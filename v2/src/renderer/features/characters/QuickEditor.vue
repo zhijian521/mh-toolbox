@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import BaseDate from '../../components/BaseDate.vue';
 import BaseModal from '../../components/BaseModal.vue';
 import NumberValue from '../../components/NumberValue.vue';
 import { useApplication } from '../../stores/application';
@@ -29,6 +30,11 @@ function step(offset: number) {
 }
 async function save() {
     if (app.busy) return;
+    error.value = '';
+    if (!date.value) {
+        error.value = '请选择变更日期';
+        return;
+    }
     try {
         await app.execute((domain) =>
             domain.saveCharacterValue(props.id, props.category, props.metricKey, value.value, {
@@ -47,23 +53,27 @@ async function save() {
     <BaseModal :title="metric.label" :busy="app.busy" :dirty="dirty" @close="emit('close')">
         <form id="quick-form" @submit.prevent="save">
             <fieldset :disabled="app.busy">
-                <p class="hint">{{ character.name }} · {{ metric.group }}</p>
-                <p>
-                    当前：
-                    <NumberValue :value="metric.value" :unit="metric.unit" />
+                <p class="quick-context">
+                    <span>{{ character.name }}</span>
+                    <span class="quick-context-separator" aria-hidden="true">·</span>
+                    <span>{{ metric.group }}</span>
+                    <span class="quick-context-separator" aria-hidden="true">·</span>
+                    <span class="quick-context-current">
+                        当前
+                        <NumberValue :value="metric.value" :unit="metric.unit" />
+                    </span>
                 </p>
-                <label>
-                    调整数值
-                    <div class="stepper">
-                        <button
-                            type="button"
-                            class="btn"
-                            aria-label="减少 1"
-                            :disabled="parsed == null || parsed === 0"
-                            @click="step(-1)"
-                        >
-                            −
-                        </button>
+                <div class="stepper">
+                    <button
+                        type="button"
+                        class="btn"
+                        aria-label="减少 1"
+                        :disabled="parsed == null || parsed === 0"
+                        @click="step(-1)"
+                    >
+                        −
+                    </button>
+                    <div class="stepper-input">
                         <input
                             v-model="value"
                             name="value"
@@ -80,30 +90,30 @@ async function save() {
                                 }
                             "
                         />
-                        <span>{{ metric.unit }}</span>
-                        <button
-                            type="button"
-                            class="btn"
-                            aria-label="增加 1"
-                            :disabled="parsed === Number.MAX_SAFE_INTEGER"
-                            @click="step(1)"
-                        >
-                            ＋
-                        </button>
+                        <span class="stepper-unit" aria-hidden="true">{{ metric.unit }}</span>
                     </div>
-                </label>
+                    <button
+                        type="button"
+                        class="btn"
+                        aria-label="增加 1"
+                        :disabled="parsed === Number.MAX_SAFE_INTEGER"
+                        @click="step(1)"
+                    >
+                        ＋
+                    </button>
+                </div>
                 <p class="quick-preview">
-                    修改后：
+                    <span class="quick-preview-label">修改后：</span>
                     <NumberValue :value="metric.value" :unit="metric.unit" />
-                    <span>→</span>
+                    <span class="quick-preview-arrow">→</span>
                     <NumberValue :value="parsed" :unit="metric.unit" />
                 </p>
                 <details>
                     <summary>补充信息</summary>
-                    <div class="form-grid">
+                    <div class="form-grid stack">
                         <label>
                             变更日期
-                            <input v-model="date" type="date" :max="U.today()" required />
+                            <BaseDate v-model="date" label="变更日期" :max="U.today()" />
                         </label>
                         <label>
                             本次说明
