@@ -92,12 +92,9 @@ button:disabled {
 }
 button:focus-visible,
 a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
 summary:focus-visible {
-    outline: 2px solid var(--gold);
-    outline-offset: 2px;
+    outline: 1px dashed var(--gold);
+    outline-offset: 1px;
 }
 h1,
 h2,
@@ -158,6 +155,16 @@ textarea {
     width: 100%;
     font-size: 13.5px;
     color: var(--ink);
+    outline: none;
+    transition:
+        border-color 120ms ease,
+        box-shadow 120ms ease;
+}
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 1px #a67c2e40;
 }
 textarea {
     resize: vertical;
@@ -838,6 +845,9 @@ details[open] summary {
     overflow: hidden;
     outline: none;
 }
+.modal.medium {
+    width: min(760px, 100%);
+}
 .modal.wide {
     width: min(880px, 100%);
 }
@@ -1224,6 +1234,12 @@ details[open] summary {
     border-color: var(--gold);
     box-shadow: inset 0 0 0 1px #a67c2e33;
 }
+.select-trigger:focus-visible,
+.date-trigger:focus-visible {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 1px #a67c2e40;
+}
 .select-trigger:disabled,
 .date-trigger:disabled {
     opacity: 0.65;
@@ -1433,8 +1449,11 @@ details[open] summary {
     .skill-rows {
         grid-template-columns: 1fr;
     }
+    .modal.medium {
+        width: min(700px, 100%);
+    }
     .modal.wide {
-        width: 780px;
+        width: min(780px, 100%);
     }
     .settings-page {
         grid-template-columns: 1fr;

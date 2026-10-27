@@ -5,10 +5,11 @@ const props = withDefaults(
     defineProps<{
         title: string;
         wide?: boolean;
+        medium?: boolean;
         busy?: boolean;
         dirty?: boolean;
     }>(),
-    { wide: false, busy: false, dirty: false },
+    { wide: false, medium: false, busy: false, dirty: false },
 );
 const emit = defineEmits<{ close: [] }>();
 const overlay = ref<HTMLElement>(),
@@ -89,7 +90,7 @@ onBeforeUnmount(() => {
             <section
                 ref="panel"
                 class="modal"
-                :class="{ wide }"
+                :class="{ wide, medium }"
                 :role="confirming ? undefined : 'dialog'"
                 :aria-modal="confirming ? undefined : true"
                 :aria-labelledby="confirming ? undefined : 'modal-title'"

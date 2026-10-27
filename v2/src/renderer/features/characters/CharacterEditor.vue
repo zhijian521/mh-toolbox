@@ -117,7 +117,7 @@ const trainingGroups = [
 <template>
     <BaseModal
         :title="character ? '编辑角色档案' : '添加角色'"
-        wide
+        medium
         :busy="app.busy"
         :dirty="dirty"
         @close="emit('close')"
