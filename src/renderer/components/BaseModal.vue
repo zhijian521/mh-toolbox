@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppIcon from './AppIcon.vue';
 import { tabbable } from './focus';
+import { closeLayer, isTopLayer, onLayerChange, openLayer } from './modal-layer';
 const props = withDefaults(
     defineProps<{
         title: string;
@@ -17,7 +18,11 @@ const overlay = ref<HTMLElement>(),
     panel = ref<HTMLElement>(),
     discard = ref<HTMLElement>();
 const confirming = ref(false);
+/** 是否是最上层弹窗：叠层时只有它响应 Escape、Tab 与遮罩点击，其余整块 inert。 */
+const top = ref(true);
 let previous: HTMLElement | null, editingFocus: HTMLElement | null;
+let layer = 0,
+    offLayer = () => {};
 /** 弹窗内的可聚焦元素；未挂载时返回空列表。判定规则见 `focus.ts`。 */
 function focusable(root?: HTMLElement) {
     return root ? tabbable(root) : [];
@@ -39,6 +44,8 @@ async function continueEditing() {
     editingFocus?.focus({ preventScroll: true });
 }
 function onKeydown(event: KeyboardEvent) {
+    // 叠层时外层也会收到这个捕获阶段的 keydown，必须让给最上面那层。
+    if (!isTopLayer(layer)) return;
     if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -63,7 +70,11 @@ function onKeydown(event: KeyboardEvent) {
 }
 onMounted(async () => {
     previous = document.activeElement as HTMLElement;
-    document.getElementById('app-shell')?.setAttribute('inert', '');
+    layer = openLayer();
+    top.value = isTopLayer(layer);
+    offLayer = onLayerChange(() => {
+        top.value = isTopLayer(layer);
+    });
     document.addEventListener('keydown', onKeydown, true);
     await nextTick();
     const initial = panel.value?.querySelector<HTMLElement>(
@@ -72,7 +83,8 @@ onMounted(async () => {
     (initial || focusable(panel.value)[0] || panel.value)?.focus();
 });
 onBeforeUnmount(() => {
-    document.getElementById('app-shell')?.removeAttribute('inert');
+    offLayer();
+    closeLayer(layer);
     document.removeEventListener('keydown', onKeydown, true);
     if (previous?.isConnected) previous.focus({ preventScroll: true });
 });
@@ -87,6 +99,7 @@ onBeforeUnmount(() => {
                 :role="confirming ? undefined : 'dialog'"
                 :aria-modal="confirming ? undefined : true"
                 :aria-labelledby="confirming ? undefined : 'modal-title'"
+                :inert="top ? undefined : true"
                 tabindex="-1"
             >
                 <div class="modal-content" :inert="confirming || undefined">

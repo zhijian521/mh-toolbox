@@ -18,6 +18,14 @@ Tab 序列的判定集中在 `components/focus.ts`：`BaseModal` 的焦点循环
 
 负责背景 inert、键盘焦点循环、焦点返回、保存中禁止关闭，以及原弹窗中央的未保存确认。默认宽度 470px，`medium` 档 760px 用于角色新增/编辑，`wide` 档 880px 用于养成记录这类记录列表。完整编辑使用 fieldset 锁定草稿。列表以实体 ID 为 key，更新不重建整页。焦点循环的可聚焦判定来自 `focus.ts`，与弹层共用，不要在这里另写一份选择器。
 
+**叠层**：弹窗可以再开一层（记录列表上开删除确认）。层级由 `components/modal-layer.ts` 统一维护——
+
+- `Escape` 与 `Tab` 只有最上层响应。两个实例都在 document 捕获阶段监听，不判层的话，先注册的外层会先关掉自己，内层反而留在原地。
+- 背景 `inert` 由最外层设置、最外层移除。每层各设一次的话，内层关闭会把外层的 inert 一并清掉，背景提前恢复可交互。
+- 非最上层的面板整块 `inert`，焦点与读屏都不会落到被盖住的内容上。
+
+所以「弹窗里再弹窗」现在是安全的，不需要把确认做成内联确认条。确认类弹窗把 `autofocus` 放在「取消」上：初始焦点不落在危险按钮上，误按回车不会删除数据。
+
 ### BaseSelect 与 BaseDate
 
 `BaseSelect` 负责下拉（可选搜索、方向键与首尾跳转、外点关闭），`BaseDate` 负责日历（月切换、最小/最大日期、今天与清空、方向键与 PageUp/PageDown），两者共用 `components/popover.ts` 的定位与关闭逻辑，弹层 Teleport 到 body 并按视口翻转。关闭键与 Tab 在 window 捕获阶段拦截，早于 `BaseModal` 的 Escape 处理，避免在弹窗内按 Escape 先触发未保存确认。

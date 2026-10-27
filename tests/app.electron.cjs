@@ -573,9 +573,26 @@ app.on('browser-window-created', (_event, win) => {
             await click('进度历史');
             await until(() => !!document.querySelector('.record-row.manual'), '再次打开进度历史');
             await click('删除');
-            await until(() => !!document.querySelector('.delete-confirm'), '删除记录确认');
+            // 确认是独立的第二层弹窗，不是列表里的内联确认条。
+            await until(
+                () =>
+                    [...document.querySelectorAll('.modal h2')].some(
+                        (title) => title.textContent === '删除进度记录',
+                    ),
+                '删除记录确认',
+            );
+            assert.equal(
+                await read(() => document.querySelectorAll('.modal').length),
+                2,
+                '确认弹窗叠在进度历史之上',
+            );
             await click('确认删除');
             await until(() => !document.querySelector('.record-row.manual'), '删除记录完成');
+            assert.equal(
+                await read(() => document.querySelectorAll('.modal').length),
+                1,
+                '确认弹窗关闭后回到进度历史',
+            );
             assert.equal(disk().goals[1].logs.length, 0);
             assert.equal(
                 await read(() =>
@@ -788,7 +805,32 @@ app.on('browser-window-created', (_event, win) => {
             await choose('收支方向筛选', '收入 / 卖出');
             await until(() => document.querySelectorAll('.record-row').length === 1, '只看收入');
             await click('删除');
-            await until(() => !!document.querySelector('.delete-confirm'), '删除确认条');
+            await until(
+                () =>
+                    [...document.querySelectorAll('.modal h2')].some(
+                        (title) => title.textContent === '删除记录',
+                    ),
+                '删除确认弹窗',
+            );
+            assert.equal(
+                await read(() => document.querySelectorAll('.modal').length),
+                2,
+                '确认弹窗叠在记录列表之上',
+            );
+            // 叠层时 Escape 只能关最上面那层，不能连记录列表一起关掉。
+            await read(() =>
+                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })),
+            );
+            await until(
+                () => document.querySelectorAll('.modal').length === 1,
+                'Escape 只关确认弹窗',
+            );
+            assert.ok(
+                await read(() => !!document.querySelector('.record-head')),
+                'Escape 后记录列表仍在',
+            );
+            await click('删除');
+            await until(() => document.querySelectorAll('.modal').length === 2, '再次打开确认弹窗');
             await click('确认删除');
             await until(() => !document.querySelector('.record-row'), '筛选结果已清空');
             assert.equal(disk().transactions.filter((item) => item.ledger === 'account').length, 2);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { Goal, GoalLog } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import { U } from '../../domain/util.js';
@@ -16,8 +16,8 @@ import NumberValue from '../../components/NumberValue.vue';
  * 只读，删除要去角色的养成记录里做。手动累计的目标才有自己的进度流水，可以
  * 就地编辑与删除——改一笔只影响那一笔，累计值由领域层重算。
  *
- * 删除确认放在列表顶部而不是再开一层弹窗：弹窗内再弹窗时，两层都在 document
- * 捕获阶段监听 Escape，外层会先关掉自己，确认框反而留在原地。
+ * 删除走第二层弹窗：`modal-layer` 保证了 Escape 与 Tab 只由最上层响应，确认框
+ * 叠在记录列表上时不会连外层一起关掉。
  */
 const props = defineProps<{ goal: Goal }>();
 const emit = defineEmits<{ close: []; 'edit-log': [logId: string] }>();
@@ -29,6 +29,7 @@ const preset = ref('all'),
     page = ref(1),
     pendingDelete = ref<string | null>(null),
     error = ref('');
+const listEl = ref<HTMLElement>();
 const range = computed(() =>
     preset.value === 'custom' ? { from: from.value, to: to.value } : U.rangeFor(preset.value),
 );
@@ -84,6 +85,9 @@ async function removeLog() {
         await app.execute((domain) => domain.removeGoalProgress(props.goal.id, id));
         pendingDelete.value = null;
         app.notify('进度记录已删除');
+        // 被删那行的按钮已经不在，焦点落回列表首项而不是文档开头。
+        await nextTick();
+        listEl.value?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
     } catch (failure) {
         error.value = failure instanceof Error ? failure.message : String(failure);
     }
@@ -126,22 +130,7 @@ async function removeLog() {
                 </label>
             </template>
         </div>
-        <section v-if="pendingLog" class="delete-confirm" role="alert">
-            <span>
-                删除 {{ pendingLog.date }} 的
-                <b>{{ signed(pendingLog.delta) }}{{ goal.unit }}</b>
-                这条进度？累计进度会重新计算。
-            </span>
-            <div class="actions">
-                <button class="btn compact" :disabled="app.busy" @click="pendingDelete = null">
-                    取消
-                </button>
-                <button class="btn compact danger" :disabled="app.busy" @click="removeLog">
-                    {{ app.busy ? '删除中…' : '确认删除' }}
-                </button>
-            </div>
-        </section>
-        <p v-if="error" class="error" role="alert">{{ error }}</p>
+        <p v-if="error && !pendingLog" class="error" role="alert">{{ error }}</p>
         <p class="hint history-count">共 {{ total }} {{ automatic ? '次变更' : '条记录' }}</p>
         <div v-if="!total" class="empty compact-empty">
             <template v-if="automatic">
@@ -185,7 +174,7 @@ async function removeLog() {
             </ul>
         </template>
         <template v-else>
-            <ul class="record-list">
+            <ul ref="listEl" class="record-list">
                 <li v-for="log in visibleLogs" :key="log.id" class="record-row manual">
                     <time class="record-date" :datetime="log.date">{{ log.date }}</time>
                     <span class="record-delta" :class="{ positive: log.delta > 0 }">
@@ -228,6 +217,27 @@ async function removeLog() {
             <button class="btn" @click="close">关闭</button>
         </template>
     </BaseModal>
+    <BaseModal
+        v-if="pendingLog"
+        title="删除进度记录"
+        :busy="app.busy"
+        @close="pendingDelete = null"
+    >
+        <p>
+            删除 {{ pendingLog.date }} 的
+            <b>{{ signed(pendingLog.delta) }}{{ goal.unit }}</b>
+            这条进度吗？
+        </p>
+        <p>累计进度会重新计算，且无法恢复；目标本身不受影响。</p>
+        <p v-if="error" class="error" role="alert">{{ error }}</p>
+        <template #footer="{ close }">
+            <!-- 危险操作默认焦点落在「取消」，回车不会误删。 -->
+            <button class="btn" autofocus :disabled="app.busy" @click="close">取消</button>
+            <button class="btn danger" :disabled="app.busy" @click="removeLog">
+                {{ app.busy ? '删除中…' : '确认删除' }}
+            </button>
+        </template>
+    </BaseModal>
 </template>
 
 <style scoped>
@@ -250,19 +260,6 @@ async function removeLog() {
 }
 .history-filters .filter-date {
     width: 165px;
-}
-.delete-confirm {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-top: 12px;
-    padding: 9px 11px;
-    border: 1px solid #b33a3a40;
-    border-radius: 4px;
-    background: #b33a3a0a;
-    font-size: 12.5px;
 }
 .history-count {
     margin: 15px 0 6px;

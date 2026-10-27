@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import type { Transaction } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import { U } from '../../domain/util.js';
@@ -11,9 +11,9 @@ import BaseSelect from '../../components/BaseSelect.vue';
 /**
  * 账号的全部记录。
  *
- * 筛选只影响展示与汇总口径（汇总跟着筛选走，和列表里看到的笔数一致），
- * 删除确认做成列表内的确认条而不是再开一层弹窗——两层 BaseModal 都会在
- * document 捕获阶段抢 Escape，叠在一起时外层先响应，确认框反而留在原地。
+ * 筛选只影响展示与汇总口径（汇总跟着筛选走，和列表里看到的笔数一致）。
+ * 删除走第二层弹窗：`modal-layer` 会让 Escape 与 Tab 只由最上层响应、背景 inert
+ * 只由最外层负责，所以确认框可以安全地叠在列表之上，不必退化成内联确认条。
  */
 const emit = defineEmits<{ close: []; edit: [tx: Transaction]; add: [] }>();
 const app = useApplication();
@@ -23,6 +23,7 @@ const filters = reactive({ kind: '', currency: '', category: '', from: '', to: '
 const page = ref(1);
 const pendingDelete = ref<Transaction | null>(null);
 const deleteError = ref('');
+const listEl = ref<HTMLElement>();
 
 const all = computed<Transaction[]>(() => {
     void app.data;
@@ -124,6 +125,9 @@ async function remove() {
         await app.execute((domain) => domain.commit(() => domain.removeTransaction(tx.id)));
         pendingDelete.value = null;
         app.notify('记录已删除');
+        // 被删的那行连同它的按钮一起消失，弹窗原来的焦点目标已断开，落回列表首项。
+        await nextTick();
+        listEl.value?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
     } catch (failure) {
         deleteError.value = failure instanceof Error ? failure.message : String(failure);
     }
@@ -193,22 +197,7 @@ async function remove() {
                 <span class="hint">收入 / 支出 · {{ stats.cash.count }} 笔</span>
             </span>
         </div>
-        <section v-if="pendingDelete" class="delete-confirm" role="alert">
-            <span>
-                删除 {{ pendingDelete.date }} 的
-                <b>{{ pendingDelete.note || pendingDelete.category }}</b>
-                （{{ signedAmount(pendingDelete) }}）？删除后汇总会重新计算。
-            </span>
-            <div class="actions">
-                <button class="btn compact" :disabled="app.busy" @click="pendingDelete = null">
-                    取消
-                </button>
-                <button class="btn compact danger" :disabled="app.busy" @click="remove">
-                    {{ app.busy ? '删除中…' : '确认删除' }}
-                </button>
-            </div>
-        </section>
-        <p v-if="deleteError" class="error" role="alert">{{ deleteError }}</p>
+        <p v-if="deleteError && !pendingDelete" class="error" role="alert">{{ deleteError }}</p>
         <div v-if="!list.length" class="empty compact-empty">
             <AppIcon name="book" :size="32" />
             <p v-if="filtered">没有符合筛选条件的记录。</p>
@@ -224,7 +213,7 @@ async function remove() {
                 <span class="num">实收 / 实付</span>
                 <span class="ops"></span>
             </div>
-            <ul class="record-list">
+            <ul ref="listEl" class="record-list">
                 <li v-for="tx in visible" :key="tx.id" class="record-row">
                     <span class="cell-date">
                         {{ tx.date }}
@@ -277,6 +266,26 @@ async function remove() {
             </div>
             <button class="btn" @click="emit('add')">＋ 记一笔</button>
             <button class="btn" @click="close">关闭</button>
+        </template>
+    </BaseModal>
+    <BaseModal v-if="pendingDelete" title="删除记录" :busy="app.busy" @close="pendingDelete = null">
+        <p>
+            确定删除 {{ pendingDelete.date }} 的「{{
+                pendingDelete.note || pendingDelete.category
+            }}」吗？
+        </p>
+        <p>
+            金额
+            <b>{{ signedAmount(pendingDelete) }}</b>
+            ，删除后汇总与笔数会重新计算，且无法恢复。
+        </p>
+        <p v-if="deleteError" class="error" role="alert">{{ deleteError }}</p>
+        <template #footer="{ close }">
+            <!-- 危险操作默认焦点落在「取消」，回车不会误删。 -->
+            <button class="btn" autofocus :disabled="app.busy" @click="close">取消</button>
+            <button class="btn danger" :disabled="app.busy" @click="remove">
+                {{ app.busy ? '删除中…' : '确认删除' }}
+            </button>
         </template>
     </BaseModal>
 </template>
@@ -339,19 +348,6 @@ async function remove() {
 .summary-sep {
     margin: 0 3px;
     color: var(--line-2);
-}
-.delete-confirm {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-top: 12px;
-    padding: 9px 11px;
-    border: 1px solid #b33a3a40;
-    border-radius: 4px;
-    background: #b33a3a0a;
-    font-size: 12.5px;
 }
 .compact-empty {
     min-height: 160px;
