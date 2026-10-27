@@ -19,18 +19,28 @@ const quick = ref<{ id: string; category: string; key: string } | null>(null);
 const historyId = ref<string | null>(null),
     deleting = ref<Character | null>(null),
     deleteError = ref('');
-const relatedCount = computed(() =>
-    deleting.value && app.data
-        ? ['transactions', 'sessions', 'goals', 'equipment'].reduce(
-              (sum, key) =>
-                  sum +
-                  (app.data![key] as any[]).filter(
-                      (item) => item.characterId === deleting.value!.id,
-                  ).length,
-              0,
-          )
-        : 0,
-);
+// Mirrors domain.removeCharacter: owned records plus equipment logs (including logs of this
+// character's equipment) and the active session are all dropped with the character.
+const relatedCount = computed(() => {
+    const target = deleting.value;
+    if (!target || !app.data) return 0;
+    const data = app.data as any;
+    const owned = ['transactions', 'sessions', 'goals', 'equipment'].reduce(
+        (sum, key) =>
+            sum + (data[key] as any[]).filter((item) => item.characterId === target.id).length,
+        0,
+    );
+    const equipmentIds = new Set(
+        (data.equipment as any[])
+            .filter((item) => item.characterId === target.id)
+            .map((item) => item.id),
+    );
+    const logs = (data.gearLogs as any[]).filter(
+        (log) => log.characterId === target.id || equipmentIds.has(log.equipmentId),
+    ).length;
+    const active = data.activeSession?.characterId === target.id ? 1 : 0;
+    return owned + logs + active;
+});
 async function saved(id: string) {
     editing.value = null;
     await nextTick();
@@ -142,7 +152,7 @@ function keyboardMove(id: string, offset: number) {
         <p>
             技能养成档案、养成变更记录及名下
             {{ relatedCount }}
-            条相关记录（收益、在线、账号账本、目标、装备）会一并删除，且无法恢复。
+            条相关记录（收益、在线、账号账本、目标、装备）与装备变更日志会一并删除，且无法恢复。
         </p>
         <p v-if="deleteError" class="error" role="alert">{{ deleteError }}</p>
         <template #footer="{ close }">
@@ -153,3 +163,4 @@ function keyboardMove(id: string, offset: number) {
         </template>
     </BaseModal>
 </template>
+

@@ -24,6 +24,11 @@ const entries = computed(() => {
     return app.rules().characterGrowthHistory(selected.value, range.value);
 });
 const pages = computed(() => Math.max(1, Math.ceil(entries.value.length / 12)));
+// Deleting records (or another window's write) can shrink the result set below the current page,
+// which would otherwise leave `page` past the end and render an empty list with a "3 / 1" label.
+watch(pages, (total) => {
+    if (page.value > total) page.value = total;
+});
 const visible = computed(() => entries.value.slice((page.value - 1) * 12, page.value * 12));
 watch([selected, preset, from, to], () => {
     page.value = 1;
@@ -146,3 +151,4 @@ function contextOf(entry: GrowthEntry) {
         </template>
     </BaseModal>
 </template>
+
