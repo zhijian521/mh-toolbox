@@ -41,7 +41,7 @@ export interface Character {
     [key: string]: unknown;
 }
 /**
- * 尚未迁移模块（收益、账号、装备、在线）的记录形状。
+ * 尚未迁移模块（收益、装备、在线）的记录形状。
  *
  * 这些页面还没搬过来，字段名在领域层已稳定但界面尚未消费，因此只声明渲染层
  * 实际用到的外键，其余键留给 `unknown`——比整块 `any` 安全：读错字段名会报错，
@@ -51,6 +51,48 @@ export interface RecordEntry {
     id: string;
     characterId?: string;
     [key: string]: unknown;
+}
+/**
+ * 账本记录。账号与收益共用 `state.transactions`，靠 `ledger` 区分：
+ * `account` 是人民币 / 梦幻币收支，`earnings` 是游戏内日常收益与物品。
+ * 物品与在线相关字段只有收益用得上，这里先声明成可选，迁移收益页时再收紧。
+ */
+export interface Transaction {
+    id: string;
+    characterId: string;
+    ledger: 'account' | 'earnings';
+    recordType: 'money' | 'item';
+    kind: 'income' | 'expense';
+    currency: 'rmb' | 'cash' | 'reserve';
+    category: string;
+    channel: string;
+    date: string;
+    amount: number;
+    fee: number;
+    note: string;
+    createdAt: number;
+    minutes?: number;
+    status?: string;
+    equipmentId?: string;
+    gearAction?: string;
+    itemName?: string;
+    quantity?: number;
+    unitPrice?: number;
+    saleQuantity?: number;
+    itemRecordId?: string;
+    sessionId?: string;
+    saleId?: string;
+}
+/**
+ * 账本汇总。收入已扣手续费、支出已加手续费，`count` 是参与汇总的笔数。
+ * `cash` 会把旧的储备金记录一起算进来，与领域 `accountStats` 一致。
+ */
+export interface AccountStats {
+    income: number;
+    expense: number;
+    net: number;
+    fees: number;
+    count: number;
 }
 /** 目标跟随的养成项目；`key` 只在技能与修炼分类下非空。 */
 export interface GoalTracking {
@@ -114,7 +156,7 @@ export interface GoalEntry {
 export interface AppData {
     schemaVersion: number;
     characters: Character[];
-    transactions: RecordEntry[];
+    transactions: Transaction[];
     equipment: RecordEntry[];
     goals: Goal[];
     sessions: RecordEntry[];
@@ -237,6 +279,13 @@ export interface Domain {
     persist(options?: { backupReason?: string }): Promise<unknown>;
     replaceState(data: unknown, reason?: string): Promise<unknown>;
     validateBackup(data: unknown): void;
+    /**
+     * 串行事务：修改后整份快照落盘，失败回滚。
+     *
+     * 大多数领域方法自己包了 commit，界面直接调用即可；少数同步方法只改内存
+     * （`removeTransaction` 就是），必须由调用方用 commit 包一层，否则改完不落盘。
+     */
+    commit(change: () => unknown, options?: unknown): Promise<unknown>;
     // 资料与列表
     schools: string[];
     schoolSkillNames: Record<string, string[]>;
@@ -309,6 +358,14 @@ export interface Domain {
         id: string,
         changes: { targetId: string; position: 'before' | 'after' },
     ): Promise<unknown>;
+    // 账号与收益账本
+    accountCats: string[];
+    channels: string[];
+    accounts(list?: Transaction[]): Transaction[];
+    txIn(characterId: string, from: string, to: string, ledger?: string): Transaction[];
+    accountStats(txs: Transaction[], currency: string): AccountStats;
+    saveTransaction(input: unknown, id?: string): Promise<Transaction>;
+    removeTransaction(id: string): Promise<unknown>;
 }
 declare global {
     interface Window {

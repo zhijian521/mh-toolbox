@@ -2,6 +2,7 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import { createRouter, createWebHashHistory } from 'vue-router';
 import App from './App.vue';
+import AccountsPage from '../features/accounts/AccountsPage.vue';
 import CharactersPage from '../features/characters/CharactersPage.vue';
 import GoalsPage from '../features/goals/GoalsPage.vue';
 import SettingsPage from '../features/settings/SettingsPage.vue';
@@ -21,6 +22,7 @@ const router = createRouter({
                 component: PendingPage,
                 props: { title, icon },
             })),
+        { path: '/accounts', component: AccountsPage },
         { path: '/characters', component: CharactersPage },
         { path: '/goals', component: GoalsPage },
         { path: '/settings', component: SettingsPage },
