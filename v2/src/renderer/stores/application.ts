@@ -37,7 +37,7 @@ export const useApplication = defineStore('application', () => {
         startupError.value = '';
         try {
             const gateway = desktop();
-            domain = createDomain({ gateway }) as unknown as Domain;
+            domain = createDomain({ gateway, preferences: localStorage }) as unknown as Domain;
             await domain.init();
             data.value = plain(domain.state);
             info.value = await gateway.info();
@@ -57,7 +57,9 @@ export const useApplication = defineStore('application', () => {
             return plain(await operation(rules()));
         } finally {
             // Publish only settled snapshots. Rollback replaces domain.state and is published too.
-            data.value = plain(rules().state);
+            // The domain may never have been created when startup failed, so publishing is skipped
+            // there instead of throwing out of `finally` and leaving the pending counter stuck.
+            if (domain) data.value = plain(domain.state);
             pending.value--;
         }
     }
