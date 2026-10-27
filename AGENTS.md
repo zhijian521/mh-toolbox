@@ -6,17 +6,18 @@
 
 以下是本机实测确认过的现象。除测试子进程那条是间歇性的、需先试后降级外，其余都按固定做法处理，**不要换一种写法重试**——重试只会浪费时间。
 
-| 现象                                           | 事实                                                         | 正确做法                                                                                                                                       |
-| ---------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `node --test` 偶发 `spawn EPERM`               | 沙箱对带管道 stdio 的子进程有间歇限制，**不是必然失败**      | **先直接跑 `npm test`**。2026-10-27 实测 92 项全过，`node --test <单文件>` 同样可用；只有确实报 EPERM 时才改写成探针脚本，放 `%TEMP%` 不进仓库 |
-| `npx prettier --write <新建文件>` 报 `EPERM`   | 子进程无法写入由 write 工具刚创建的文件                      | 格式化改用 `--check` 定位，用 `edit` 工具按 Prettier 风格手改；或一次性申请更宽权限后统一跑一次                                                |
-| `node -e "...writeFileSync"` 报 `EPERM`        | 同上，子进程写不了工作区                                     | 用 `edit`/`write` 工具改文件，**永远不要用 node/PowerShell 脚本改仓库文件**                                                                    |
-| `Rename-Item` / `Remove-Item` 报"访问被拒绝"   | 子进程无权限操作工作区文件                                   | 不要绕过。留下说明，让用户或更宽权限会话处理                                                                                                   |
-| `npm run build` 报 esbuild `spawn EPERM`       | Vite 需要子进程                                              | 需要真实构建时一次性申请权限，不要反复试                                                                                                       |
-| `npx electron` 报 `Cannot find module`         | 环境变量 `ELECTRON_RUN_AS_NODE=1`，Electron 被当成 Node 运行 | 先 `Remove-Item Env:ELECTRON_RUN_AS_NODE`，再调用 `node_modules\electron\dist\electron.exe`                                                    |
-| Electron 脚本 `require('electron')` 返回字符串 | 在 Electron 外部解析到的是 npm 包的路径导出                  | 脚本必须**由 Electron 自己执行**，此时 `require('electron')` 才是内置模块                                                                      |
-| Electron GUI 应用 `console.log` 无输出         | GUI 子系统不接 stdout                                        | 验证脚本的结果**写文件**，不要指望终端输出                                                                                                     |
-| `Get-Content` 读中文源码变乱码                 | PowerShell 5.1 按 GBK 解码无 BOM 的 UTF-8                    | **读文件一律用 `read` 工具**，搜内容用 `grep` 工具，不要用 `Get-Content`/`Select-String` 读中文文件                                            |
+| 现象                                           | 事实                                                                                   | 正确做法                                                                                                                                       |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `node --test` 偶发 `spawn EPERM`               | 沙箱对带管道 stdio 的子进程有间歇限制，**不是必然失败**                                | **先直接跑 `npm test`**。2026-10-27 实测 92 项全过，`node --test <单文件>` 同样可用；只有确实报 EPERM 时才改写成探针脚本，放 `%TEMP%` 不进仓库 |
+| `npx prettier --write <新建文件>` 报 `EPERM`   | 子进程无法写入由 write 工具刚创建的文件                                                | 格式化改用 `--check` 定位，用 `edit` 工具按 Prettier 风格手改；或一次性申请更宽权限后统一跑一次                                                |
+| `node -e "...writeFileSync"` 报 `EPERM`        | 同上，子进程写不了工作区                                                               | 用 `edit`/`write` 工具改文件，**永远不要用 node/PowerShell 脚本改仓库文件**                                                                    |
+| `Rename-Item` / `Remove-Item` 报"访问被拒绝"   | 子进程无权限操作工作区文件                                                             | 不要绕过。留下说明，让用户或更宽权限会话处理                                                                                                   |
+| `npm run build` 报 esbuild `spawn EPERM`       | Vite 需要子进程                                                                        | 需要真实构建时一次性申请权限，不要反复试                                                                                                       |
+| `npx electron` 报 `Cannot find module`         | 环境变量 `ELECTRON_RUN_AS_NODE=1`，Electron 被当成 Node 运行                           | 先 `Remove-Item Env:ELECTRON_RUN_AS_NODE`，再调用 `node_modules\electron\dist\electron.exe`                                                    |
+| Electron 脚本 `require('electron')` 返回字符串 | 在 Electron 外部解析到的是 npm 包的路径导出                                            | 脚本必须**由 Electron 自己执行**，此时 `require('electron')` 才是内置模块                                                                      |
+| Electron GUI 应用 `console.log` 无输出         | GUI 子系统不接 stdout                                                                  | 验证脚本的结果**写文件**，不要指望终端输出                                                                                                     |
+| `Get-Content` 读中文源码变乱码                 | PowerShell 5.1 按 GBK 解码无 BOM 的 UTF-8                                              | **读文件一律用 `read` 工具**，搜内容用 `grep` 工具，不要用 `Get-Content`/`Select-String` 读中文文件                                            |
+| `npm run test:electron` 报 GPU / renderer 崩溃 | 本机会话里 Chromium GPU 进程反复崩溃（`exit_code=-1073741819`），窗口加载 `ERR_FAILED` | 改用 `node_modules/electron/dist/electron.exe --no-sandbox --disable-gpu tests/app.electron.cjs`，用例本身是通过的                             |
 
 > 用 PowerShell `Get-Content -Raw` + `Set-Content` 往返改源码曾经把 6 个领域模块的注释和中文全部写坏，产生 171 条假的语法错误。**禁止用于源码编辑。**
 

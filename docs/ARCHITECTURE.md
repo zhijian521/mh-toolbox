@@ -6,7 +6,7 @@
 src/main/                   Electron 窗口、独立 profile、文件保存、对话框和 IPC
 src/preload/                只暴露 mhV2 白名单接口
 src/renderer/app/           Vue 入口、Hash 路由、桌面布局、类型
-src/renderer/components/    弹窗、图标、数字单位组件
+src/renderer/components/    弹窗、图标、数字单位，以及 popover / drag-sort / section-nav 组合式函数
 src/renderer/features/      角色与设置；后续按业务模块扩展
 src/renderer/game-data/     按主题独立维护的梦幻游戏资料，供页面和领域规则引用
 src/renderer/domain/        从基线迁入的领域规则，ES 模块工厂
@@ -55,31 +55,9 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 - 打包使用本工程已安装的 Electron 分发目录，避免打包时重复下载另一份运行时。
 - `.github/workflows/ci.yml` 中的 V2 job 在根目录依次执行 `npm ci`、`npm run check`、`npm run build`、`npm run test:electron`；V1 的 legacy job 在 `migration/baseline/` 执行原有检查。
 
-## 界面
+## 界面与样式
 
-第一阶段以基线风格规范为依据，保留宣纸底、朱砂选中、赭金数值、黛青修炼和内置文楷。使用 Vue 模板渲染，不拼接业务 HTML、不使用 v-html。
-
-`BaseModal` 负责背景 inert、键盘焦点循环、焦点返回、保存中禁止关闭，以及原弹窗中央的未保存确认。默认宽度 470px，`medium` 档 760px 用于角色新增/编辑，`wide` 档 880px 用于养成记录。完整编辑使用 fieldset 锁定草稿。列表以角色 ID 为 key，更新不重建整页。
-
-输入与文本域获得焦点时为赭金描边加 1px 淡金外晕，不使用额外外框；按钮、链接与折叠标题仍用 1px 赭金虚线轮廓。下拉与日期触发器复用输入的焦点外观，不叠加虚线轮廓。
-
-下拉与日期输入已迁移为自有组件：`BaseSelect` 负责下拉（可选搜索、方向键与首尾跳转、外点关闭），`BaseDate` 负责日历（月切换、最小/最大日期、今天与清空、方向键与 PageUp/PageDown），两者共用 `components/popover.ts` 的定位与关闭逻辑，弹层 Teleport 到 body 并按视口翻转。关闭键与 Tab 在 window 捕获阶段拦截，早于 `BaseModal` 的 Escape 处理，避免在弹窗内按 Escape 先触发未保存确认。辅助技能建议仍使用浏览器原生 datalist，保留输入自由文本的能力；分区导航滚动跟随与更多键盘细节列入后续组件工作。
-
-数字输入统一用 `BaseNumber`：外观仍是 `type="number"`（保留数字键盘、`min`/`max`/`step` 与表单语义），但用 CSS 隐藏原生步进箭头，改为悬停或聚焦时在右侧浮现一对极窄的上下箭头按钮（`tabindex="-1"`，不进入 Tab 序列，`aria-label` 为「增加 1」「减少 1」）。组件内部保存用户输入的原始字符串，避免输入中途被数值化打断；空值时仅保留上加、减号禁用，值为 `min` 时减号禁用。改动数字显示格式时只动这一个组件。
-
-养成记录弹窗的筛选区使用固定宽度（角色 180px、日期范围 150px、自定义日期各 165px），不随弹窗宽度拉伸。每条变更压缩为单行网格：日期、角色、组别与项目、变化前后数值、变化类型、说明图标；同一条记录只在首个变更行渲染日期，其余行留空占位以保持列对齐。备注与「复制自」来源合并为行尾图标，悬停或聚焦时以原生提示展示全文，不再单独占行。后续若新增变更字段，并入该行网格而不是再加一行。
-
-拖动排序逻辑集中在 `components/drag-sort.ts` 的 `useDragSort()`，角色卡片与技能行共用：调用方提供当前的键顺序 `keys()` 与落位回调 `onMove()`，组合式函数只维护拖动状态、插入提示（`is-dragging`、`drop-before`、`drop-after`）与正文边缘自动滚动。落位回调同时给出按下标算好的 `from`/`to` 与相对位置 `targetKey`/`position`：按下标移动的列表（技能行）直接 `splice`，按「移动到某项前后」持久化的列表（角色、目标卡片）把 `targetKey` 与 `position` 交给领域方法。`axis` 决定插入提示的判定轴，纵向卡片用 `y`，双列技能行按从左到右的阅读顺序用 `x`；`moveBy()` 把方向键换算成相邻项的前后落位，键盘操作与拖动共用同一套落位计算。拖动入口统一是六点握把图标按钮：角色卡片在顶部操作区最左侧，技能行放在「移除」按钮右侧。
-
-## 样式分层
-
-样式分两层，`src/renderer/assets/styles.css` 只放设计基座，其余跟随各自组件：
-
-- 基座：`@font-face`、`:root` 变量、`body` 与滚动条、元素级重置与表单基线（含数字框去箭头、占位符与禁用态）、跨页复用的工具类（`.btn`、`.icon-button`、`.text-button`、`.actions`、`.hint`、`.error`、`.empty`、`.page-content`、`.form-grid`、`.footer-hint`、`.popover` 及拖动契约 `.drag-handle`/`.is-dragging`/`.drop-before`/`.drop-after`），以及共用断点里仅关乎基座的两条规则。
-- 组件层：页面与组件的专有类写进该 `.vue` 的 `<style scoped>`。新增类先判断它只服务一个组件，是则直接写在组件内；只有出现在两个以上组件、或属于元素级默认外观时才提到基座。
-- 跨组件命中要显式穿透：scoped 只能命中子组件根节点，所以技能行改写 `BaseNumber` 内部输入框时写 `.skill-row :deep(.number-field) > input`，快捷弹窗改写 `NumberValue` 加粗数值时写 `.quick-context-current :deep(.number-value b)`。其余选择器不得依赖 `:deep()`。
-- 颜色与尺寸仍从 `:root` 变量取值；少量半透明描边与阴影沿用既有字面值，新增字面值前先确认没有对应变量。
-- 弹层（`BaseSelect`、`BaseDate`）用 Teleport 挂到 body，作用域属性随组件节点保留，因此它们的样式仍写在各自组件的 scoped 块里，不需要提到基座。
+视觉基座、焦点规则、组件契约（`BaseModal`、`BaseSelect`、`BaseDate`、`BaseNumber`、`useDragSort`、`useSectionNav`）、页面布局与样式分层，全部见 [界面与样式规范](UI_GUIDE.md)。本文只负责分层、状态、构建与静态检查。
 
 ## 静态检查
 
@@ -95,6 +73,8 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 
 `tsconfig.json` 的 `checkJs` 仍为 `false`，领域层的 `.js` 逐个纳管：要纳管的文件在首行写 `// @ts-check`，用 JSDoc 标注参数与返回值即可，`vue-tsc --noEmit` 会按注释逐文件校验。目前 16 个模块**已全部纳管**：`characters`、`create-domain`、`data`、`equipment`、`equipment-fields`、`equipment-import`、`export`、`goals`、`growth`、`ledger`、`migration`、`online`、`schools`、`statistics`、`storage`、`util`。
 
+渲染层另有一份窄化的类型定义 `src/renderer/app/types.ts`：`Domain` 接口只声明界面实际调用的方法，`AppData` 的集合用 `RecordEntry` 而不是 `any[]`，因此页面里拼错成员名会直接报错。完整领域成员仍以契约文件为准，两者分工见下节。
+
 ### 领域契约 `domain-contract.d.ts`
 
 13 个模块用 `Object.assign(D, {...})` 把约 140 个成员平铺到同一个对象上，模块之间靠 `this.*` 互调，因此单独给某个模块开 `@ts-check` 会立刻报一片 `Property 'xxx' does not exist on type` 与参数隐式 `any`。解决办法是先有一份契约：`src/renderer/domain/domain-contract.d.ts` 用真正的 `interface Domain`、`interface DomainState` 声明全部成员，各模块的 JSDoc 直接写 `@type {Domain}`、`@param {Domain} D`。
@@ -106,7 +86,7 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 - 契约只写形状，不追求完整类型：方法参数多为 `any`，先让成员名与关键返回类型受检，再逐块收紧。`Domain` 里 `any` 的提示在 `eslint.config.js` 中对 `domain/*.d.ts` 关掉了，因为这是全领域层唯一的兜底集中地。
 - 契约与实现的一致性由 `tests/domain/domain-contract.test.mjs` 守卫：它从 `.d.ts` 解析出成员名，与 `Object.keys(createDomain())`、`Object.keys(createDomain().state)` 双向比对，漏声明或残留已删成员都会让测试失败。**新增领域方法时必须同步补契约**，否则要么测试红，要么纳管模块报「属性不存在」。
 
-目前试点的是 `src/renderer/domain/util.js` 与 `src/renderer/domain/export.js`：前者被领域与界面共用，后者是纯数据到文本的转换，都没有外部依赖，改起来不会牵动调用方。后续按同样方式推进有测试保护的模块，不要一次性把 14 个领域模块全开——平铺的 `Object.assign` 混入模型会让 `this` 上的方法互相引用无法推断，一次性开启会产生大量与真实缺陷无关的报错。
+纳管顺序的教训：先有契约再开 `@ts-check`，一次只推一个模块。平铺的 `Object.assign` 混入模型会让 `this` 上的方法互相引用无法推断，多个未纳管模块一起开会产出大量与真实缺陷无关的报错，掩盖真正的问题。
 
 `lib` 已提到 `ES2023`，因为装备词条解析用了 `Array.prototype.findLastIndex`。`target` 同步改为 `ES2023`，与 Electron 38 内置的 Chromium 140 一致。
 

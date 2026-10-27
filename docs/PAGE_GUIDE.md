@@ -52,6 +52,8 @@
 
 ## 7. 样式
 
+组件契约与焦点规则的完整说明在 `docs/UI_GUIDE.md`；这里只列动手时最容易漏的几条。
+
 - 基座类只能来自 `assets/styles.css`：`.btn`、`.icon-button`、`.text-button`、`.actions`、`.hint`、`.error`、`.empty`、`.page-content`、`.form-grid`、`.footer-hint`、`.popover`、`.danger`、`.positive`、`.drag-handle` 及拖动契约类。
 - 专有样式写进该组件的 `<style scoped>`；只有出现在两个以上组件、或属于元素级默认外观时才提到基座。
 - `:deep()` 只用于命中子组件内部节点，且要写明理由；其余选择器不得依赖它。
@@ -72,7 +74,7 @@
 
 ## 10. 反模式
 
-- 在组件里重写领域规则。现存的 `CharactersPage.vue` 删除计数与 `characters.js` 的 `removeCharacter` 是平行实现，属于待修项，不要照着学。
+- 在组件里重写领域规则。例如删除确认的记录数量要调 `characterRemovalSummary`，不要自己遍历 `state` 数一遍。
 - 用 `v-html` 或拼 HTML 字符串渲染业务内容。
 - 在组件里直接修改 `app.data` 或领域 `state`。
 - 在页面写死游戏资料，或复制一份门派、技能名单。
