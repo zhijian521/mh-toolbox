@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppIcon from './AppIcon.vue';
+import { tabbable } from './focus';
 const props = withDefaults(
     defineProps<{
         title: string;
@@ -17,17 +18,9 @@ const overlay = ref<HTMLElement>(),
     discard = ref<HTMLElement>();
 const confirming = ref(false);
 let previous: HTMLElement | null, editingFocus: HTMLElement | null;
+/** 弹窗内的可聚焦元素；未挂载时返回空列表。判定规则见 `focus.ts`。 */
 function focusable(root?: HTMLElement) {
-    return [
-        ...(root?.querySelectorAll<HTMLElement>(
-            'button,input,select,textarea,a[href],[tabindex="0"]',
-        ) || []),
-    ].filter(
-        (element) =>
-            !element.matches(':disabled') &&
-            !element.closest('[inert]') &&
-            element.getClientRects().length,
-    );
+    return root ? tabbable(root) : [];
 }
 async function requestClose() {
     if (props.busy) return;

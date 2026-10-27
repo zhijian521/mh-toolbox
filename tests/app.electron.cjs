@@ -160,6 +160,46 @@ app.on('browser-window-created', (_event, win) => {
 
             await read(() => document.querySelector('button[aria-label="编辑档案"]').click());
             await until(() => !!document.querySelector('#character-form'), '转门派');
+            // Tab 收起下拉并继续前进一格：焦点落在触发器后面那个控件上，不经过触发器本身。
+            await openSelect('门派');
+            await until(() => !!document.querySelector('.select-popover'), '门派下拉');
+            await read(() =>
+                (document.activeElement || document.body).dispatchEvent(
+                    new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
+                ),
+            );
+            await until(() => !document.querySelector('.select-popover'), 'Tab 收起下拉');
+            assert.equal(
+                await read(() => document.activeElement.getAttribute('name')),
+                'server',
+                'Tab 应落触发器后面的服务器输入，而不是退回触发器',
+            );
+            // Shift+Tab 反向一格：回到触发器前面的等级输入。
+            await openSelect('门派');
+            await until(() => !!document.querySelector('.select-popover'), '门派下拉再次打开');
+            await read(() =>
+                (document.activeElement || document.body).dispatchEvent(
+                    new KeyboardEvent('keydown', {
+                        key: 'Tab',
+                        shiftKey: true,
+                        bubbles: true,
+                        cancelable: true,
+                    }),
+                ),
+            );
+            await until(() => !document.querySelector('.select-popover'), 'Shift+Tab 收起下拉');
+            const backward = await read(() => {
+                const element = document.activeElement;
+                return {
+                    name: element?.getAttribute('name'),
+                    html: element?.outerHTML.slice(0, 120),
+                };
+            });
+            assert.equal(
+                backward.name,
+                'level',
+                'Shift+Tab 应落触发器前面的等级输入，实际：' + backward.html,
+            );
             await choose('门派', '普陀山');
             await until(() => !!document.querySelector('.school-choice'), '技能处理选择');
             await submit('#character-form');

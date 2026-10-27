@@ -256,3 +256,22 @@ CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都�
 | 恢复     | 点「返回角色页」后替代界面消失、hash 回到 `#/characters`          |
 
 因为那次验证依赖临时路由，不能常驻，改由 `tests/renderer-boundary.test.mjs` 守住三处接线：`RouterView` 处在 `ErrorBoundary` 之内、边界返回 `false` 之前先上报、失败状态按 `route.path` 复位。断言只看结构不比对文案。
+
+## 弹层 Tab 语义：收起并前进一格
+
+日期：2026-10-27。范围：`BaseSelect` / `BaseDate` 的键盘操作，不涉及页面功能。
+
+| 检查              | 结果                        |
+| ----------------- | --------------------------- |
+| 格式化            | `prettier --check .` 通过   |
+| ESLint            | 0 错误 0 警告               |
+| 类型检查          | `vue-tsc --noEmit` 0 错误   |
+| 领域与隔离测试    | 95 项通过 0 失败            |
+| Vite 生产构建     | 通过                        |
+| Electron 集成流程 | PASS，新增前后两向 Tab 断言 |
+
+原实现按 Tab 时先 `close(false)` 再把焦点还给触发器，且没有 `preventDefault`：一次按键里焦点被移动两次（读屏会先念触发器再被带走），之后浏览器还要从「正在卸载的节点」算下一格，落点取决于卸载时机。现在改为 `preventDefault` + 收起 + 从触发器位置取相邻可聚焦元素，一次按键只移动一次焦点。
+
+实现过程中查出一个更底层的问题：可聚焦判定原来在两处各写一份，选择器直接写 `button`，把 `tabindex="-1"` 的 `BaseNumber` 加减箭头也算进了 Tab 序列——集成测试第一次跑就停在减号按钮上（`Shift+Tab 应落触发器前面的等级输入，实际：<button class="number-step" ...>`）。现在判定收敛到 `components/focus.ts`，`BaseModal` 的焦点循环与弹层的 Tab 接力共用，并显式排除 `tabIndex < 0`。
+
+断言写在 `tests/app.electron.cjs` 的角色编辑流程里（弹窗内，同时覆盖 `BaseModal` 的交互）：门派下拉中按 Tab 落到「服务器」输入，Shift+Tab 落到「等级」输入。
