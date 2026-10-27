@@ -1091,8 +1091,7 @@ details[open] summary {
     flex-wrap: wrap;
     gap: 4px;
     margin-bottom: 4px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
     color: var(--muted);
     font-size: 13px;
     text-align: center;
@@ -1166,8 +1165,8 @@ details[open] summary {
         92px minmax(84px, 0.6fr) minmax(150px, 1.3fr)
         minmax(160px, 1fr) 84px 20px;
     align-items: center;
-    gap: 12px;
-    padding: 7px 0;
+    gap: 14px;
+    padding: 11px 0;
     border-bottom: 1px solid var(--line);
 }
 .history-date {
