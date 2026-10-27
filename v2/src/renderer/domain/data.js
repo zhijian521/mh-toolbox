@@ -1,3 +1,4 @@
+// @ts-check
 import { schools } from '../game-data/schools.js';
 import {
     characterTraining,
@@ -6,9 +7,18 @@ import {
 } from '../game-data/character-progress.js';
 
 // Migrated from the immutable v1 baseline; see migration/baseline.json.
+
+/**
+ * 这里只构造状态与常量，其余一百多个方法由各模块 install 混入同一个对象，
+ * 所以返回值要经 unknown 中转成完整的 Domain。对象字面量本身拿不到 Domain
+ * 的上下文类型，因此每个方法都单独标注 this 与参数。
+ * @param {Preferences} localStorage
+ * @returns {Domain}
+ */
 export function createData(localStorage) {
     /* 数据层：状态、常量、持久化 */
-    return {
+    /** @type {Domain} */
+    const data = /** @type {any} */ ({
         schemaVersion: 6,
         state: {
             schemaVersion: 6,
@@ -22,6 +32,11 @@ export function createData(localStorage) {
         },
         charFilter: localStorage.getItem('mh.charFilter') || 'all',
 
+        /**
+         * @this {Domain}
+         * @param {any[]} items
+         * @returns {any[]}
+         */
         orderedCards(items) {
             return items
                 .slice()
@@ -33,12 +48,22 @@ export function createData(localStorage) {
                 );
         },
 
-        /** 在最新集合中按相邻卡片定位；筛选隐藏的项目保留相对顺序。 */
+        /**
+         * 在最新集合中按相邻卡片定位；筛选隐藏的项目保留相对顺序。
+         * @this {Domain}
+         * @param {any[]} items
+         * @param {string} id
+         * @param {any} changes
+         */
         moveCard(items, id, changes) {
             const item = items.find((entry) => entry.id === id),
                 target = items.find((entry) => entry.id === changes.targetId);
             if (!item) throw new Error('排序项目不存在，请刷新后重试');
-            if (!target || target.id === id || !['before', 'after'].includes(changes.position))
+            if (
+                !target ||
+                target.id === id ||
+                !['before', 'after'].includes(/** @type {string} */ (changes.position))
+            )
                 throw new Error('请选择有效的排序位置');
             let ordered = this.orderedCards(items);
             if (changes.visibleIds !== undefined) {
@@ -51,10 +76,11 @@ export function createData(localStorage) {
                     ids.some((key) => !items.some((entry) => entry.id === key))
                 )
                     throw new Error('卡片列表已变更，请重试');
+                /** @type {Map<string, number>} */
                 const positions = new Map(ids.map((key, index) => [key, index]));
                 const visible = ordered
                     .filter((entry) => positions.has(entry.id))
-                    .sort((a, b) => positions.get(a.id) - positions.get(b.id));
+                    .sort((a, b) => Number(positions.get(a.id)) - Number(positions.get(b.id)));
                 let index = 0;
                 ordered = ordered.map((entry) =>
                     positions.has(entry.id) ? visible[index++] : entry,
@@ -133,25 +159,30 @@ export function createData(localStorage) {
             { v: 'other', t: '其他', dir: 0 },
         ],
 
+        /** @this {Domain} @param {string} v */
         setCharFilter(v) {
             this.charFilter = v;
             localStorage.setItem('mh.charFilter', v);
         },
 
+        /** @this {Domain} */
         chars() {
             return this.state.characters;
         },
+        /** @this {Domain} @param {string} id */
         charById(id) {
             return this.state.characters.find(function (c) {
                 return c.id === id;
             });
         },
+        /** @this {Domain} @param {string} id */
         charName(id) {
             const c = this.charById(id);
             return c ? c.name : '未知角色';
         },
 
         /* 按全局角色筛选（不筛选日期） */
+        /** @this {Domain} @param {any[]} list @returns {any[]} */
         scope(list) {
             if (this.charFilter === 'all') return list;
             const f = this.charFilter;
@@ -160,16 +191,32 @@ export function createData(localStorage) {
             });
         },
 
+        /** @this {Domain} @param {any[]} [list] @returns {any[]} */
         earnings(list) {
             return (list || this.state.transactions).filter((t) => t.ledger === 'earnings');
         },
+        /** @this {Domain} @param {any[]} [list] @returns {any[]} */
         accounts(list) {
             return (list || this.state.transactions).filter((t) => t.ledger === 'account');
         },
+        /**
+         * @this {Domain}
+         * @param {any} t
+         * @param {number} [quantity]
+         * @returns {number}
+         */
         itemValue(t, quantity = t.quantity) {
             return Math.round((Number(quantity) || 0) * (Number(t.unitPrice) || 0) * 100) / 100;
         },
 
+        /**
+         * @this {Domain}
+         * @param {string} charId
+         * @param {string} from
+         * @param {string} to
+         * @param {string} [ledger]
+         * @returns {any[]}
+         */
         txIn(charId, from, to, ledger) {
             return this.state.transactions.filter(function (t) {
                 if (t.ledger !== (ledger || 'earnings')) return false;
@@ -180,6 +227,7 @@ export function createData(localStorage) {
             });
         },
 
+        /** @this {Domain} @param {string} v */
         goalTypeText(v) {
             const it = this.goalTypes.find(function (x) {
                 return x.v === v;
@@ -187,6 +235,7 @@ export function createData(localStorage) {
             return it ? it.t : '目标';
         },
 
+        /** @this {Domain} @param {string} v */
         gearAction(v) {
             return (
                 this.gearActions.find(function (x) {
@@ -195,15 +244,18 @@ export function createData(localStorage) {
             );
         },
 
+        /** @this {Domain} @param {string} id */
         itemPrice(id) {
             return Number(this.state.itemPrices && this.state.itemPrices[id]) || 0;
         },
 
+        /** @this {Domain} @param {string} id @param {number} price */
         setItemPrice(id, price) {
             if (!this.state.itemPrices) this.state.itemPrices = {};
             this.state.itemPrices[id] = price;
         },
 
+        /** @this {Domain} @param {string} eqId @returns {any[]} */
         gearLogsOf(eqId) {
             return this.state.gearLogs
                 .slice()
@@ -215,5 +267,7 @@ export function createData(localStorage) {
                     return b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0);
                 });
         },
-    };
+    });
+
+    return data;
 }

@@ -91,6 +91,14 @@ export default tseslint.config(
             globals: { ...globals.browser },
         },
     },
+    // 领域契约声明文件：这里是整个领域层 any 的唯一集中地，故意写成宽松的兜底类型。
+    // 收紧某个分组时，改这一处即可让所有模块同时受益，因此不再逐行提示 any。
+    {
+        files: ['src/renderer/domain/*.d.ts'],
+        rules: {
+            '@typescript-eslint/no-explicit-any': 'off',
+        },
+    },
     // 只取 essential：recommended 里的排版类规则会和 Prettier 打架。
     ...pluginVue.configs['flat/essential'],
     {
