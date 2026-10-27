@@ -158,7 +158,7 @@ function onKeydown(event: KeyboardEvent) {
                     <button
                         type="button"
                         class="btn compact"
-                        :disabled="!!max && U.today() > max"
+                        :disabled="(!!max && U.today() > max) || (!!min && U.today() < min)"
                         @click="pick(U.today())"
                     >
                         今天
@@ -166,7 +166,7 @@ function onKeydown(event: KeyboardEvent) {
                     <button
                         type="button"
                         class="btn compact"
-                        :disabled="!!min || !modelValue"
+                        :disabled="!modelValue"
                         @click="clear"
                     >
                         清空
@@ -176,3 +176,148 @@ function onKeydown(event: KeyboardEvent) {
         </Teleport>
     </div>
 </template>
+
+<style scoped>
+.date-field {
+    display: block;
+    min-width: 0;
+}
+.date-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 34px;
+    padding: 7px 9px;
+    border: 1px solid var(--line-2);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 13.5px;
+    font-family: inherit;
+    text-align: left;
+    transition: border-color 120ms ease;
+}
+.date-trigger:hover:not(:disabled) {
+    border-color: var(--gold);
+}
+.date-trigger[aria-expanded='true'] {
+    border-color: var(--gold);
+    box-shadow: inset 0 0 0 1px #a67c2e33;
+}
+.date-trigger:focus-visible {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 1px #a67c2e40;
+}
+.date-trigger:disabled {
+    opacity: 0.65;
+}
+.date-trigger svg {
+    flex: none;
+    color: var(--muted);
+}
+.date-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.date-trigger.placeholder .date-value {
+    color: #9a917e;
+}
+.date-popover {
+    width: 246px;
+    padding: 10px;
+}
+.xcal-head {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+.xcal-title {
+    flex: 1;
+    text-align: center;
+    color: var(--ink);
+    font-size: 13.5px;
+    letter-spacing: 1px;
+}
+.xcal-nav {
+    display: flex;
+    padding: 3px 6px;
+    border: 0;
+    border-radius: 3px;
+    background: none;
+    color: var(--muted);
+    font-family: inherit;
+}
+.xcal-nav:hover {
+    background: var(--paper-2);
+    color: var(--ink);
+}
+.xcal-week,
+.xcal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+.xcal-week span {
+    padding: 3px 0;
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--muted);
+}
+.xday {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    border: 0;
+    border-radius: 3px;
+    background: none;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-variant-numeric: tabular-nums;
+}
+.xday:hover:not(:disabled) {
+    background: var(--paper-2);
+}
+.xday.dim {
+    color: #9a917e;
+    opacity: 0.55;
+}
+.xday:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+.xday.today::after {
+    content: '';
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--gold);
+    transform: translateX(-50%);
+}
+.xday.on {
+    background: var(--red);
+    color: #f7f2e7;
+    font-weight: 700;
+}
+.xday.on:hover:not(:disabled) {
+    background: #9c3131;
+}
+.xday.on.today::after {
+    background: #f7f2e7;
+}
+.xcal-quick {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+</style>
