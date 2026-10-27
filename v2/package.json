@@ -20,9 +20,10 @@
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "typecheck": "vue-tsc --noEmit",
-        "test": "node --test tests/domain/*.test.cjs tests/*.test.mjs",
-        "test:electron": "node scripts/electron.mjs tests/app.electron.cjs",
-        "check": "npm run typecheck && npm test",
+        "test": "node --test \"tests/domain/*.test.cjs\" \"tests/*.test.mjs\"",
+        "test:electron": "node scripts/test-electron.mjs",
+        "check": "npm run format:check && npm run typecheck && npm test",
+        "verify": "npm run check && npm run build && npm run test:electron",
         "dist:dir": "npm run build && electron-builder --dir --config electron-builder.config.cjs",
         "dist": "npm run build && electron-builder --win --config electron-builder.config.cjs",
         "migration:status": "node scripts/migration-status.mjs"

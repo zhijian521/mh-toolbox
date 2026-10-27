@@ -63,25 +63,21 @@ const openSelect = (label) =>
         if (!trigger) throw new Error('下拉不存在：' + label);
         trigger.click();
     }, label);
-const pickOption = (text) =>
-    read((text) => {
-        const item = [...document.querySelectorAll('.xitem')].find(
-            (element) => element.textContent.trim() === text,
-        );
-        if (!item) throw new Error('选项不存在：' + text);
-        item.click();
-    }, text);
+// 查找与点击放在同一次执行里：分成两次会在弹层重渲染的间隙里拿不到节点。
 const choose = async (label, text) => {
     await openSelect(label);
     await until(
-        (text) =>
-            [...document.querySelectorAll('.xitem')].some(
+        (text) => {
+            const item = [...document.querySelectorAll('.popover .xitem')].find(
                 (element) => element.textContent.trim() === text,
-            ),
-        '展开选项：' + label,
+            );
+            if (!item) return false;
+            item.click();
+            return true;
+        },
+        '选择选项：' + label + ' / ' + text,
         text,
     );
-    await pickOption(text);
 };
 let file;
 const disk = () => JSON.parse(fs.readFileSync(file, 'utf8'));
