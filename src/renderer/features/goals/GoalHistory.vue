@@ -6,6 +6,7 @@ import { U } from '../../domain/util.js';
 import BaseDate from '../../components/BaseDate.vue';
 import BaseModal from '../../components/BaseModal.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
+import GrowthKind from '../../components/GrowthKind.vue';
 import NumberValue from '../../components/NumberValue.vue';
 
 /**
@@ -72,15 +73,6 @@ watch([preset, from, to], () => {
 const visibleChanges = computed(() => changes.value.slice((page.value - 1) * 12, page.value * 12));
 const visibleLogs = computed(() => logs.value.slice((page.value - 1) * 12, page.value * 12));
 const pendingLog = computed(() => logs.value.find((log) => log.id === pendingDelete.value));
-const labels: Record<string, string> = {
-    increase: '提升',
-    decrease: '调低',
-    changed: '调整',
-    added: '新增',
-    removed: '移除',
-    recorded: '补录',
-    cleared: '清空',
-};
 function signed(value: number) {
     return value > 0 ? '+' + value : String(value);
 }
@@ -183,12 +175,11 @@ async function removeLog() {
                             :unit="typeof entry.change.to === 'number' ? entry.change.unit : ''"
                         />
                     </span>
-                    <span
-                        class="record-kind"
-                        :class="{ positive: entry.change.kind === 'increase' }"
-                    >
-                        {{ labels[entry.change.kind] || '调整' }}
-                    </span>
+                    <GrowthKind
+                        :kind="entry.change.kind"
+                        :from="entry.change.from"
+                        :to="entry.change.to"
+                    />
                     <span class="record-note" :title="entry.note || ''">{{ entry.note }}</span>
                 </li>
             </ul>
@@ -345,15 +336,6 @@ async function removeLog() {
     font-size: 11px;
     color: var(--muted);
 }
-.record-kind {
-    color: var(--muted);
-    font-size: 12px;
-    text-align: right;
-    white-space: nowrap;
-}
-.record-kind.positive {
-    color: var(--green);
-}
 .record-note {
     color: var(--muted);
     font-size: 12.5px;
@@ -378,9 +360,6 @@ async function removeLog() {
         grid-template-columns: 1fr;
         gap: 5px;
         padding: 9px 0;
-    }
-    .record-kind {
-        text-align: left;
     }
     .record-row.manual {
         grid-template-columns: 1fr auto;

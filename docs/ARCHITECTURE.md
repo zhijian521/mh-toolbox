@@ -6,7 +6,7 @@
 src/main/                   Electron 窗口、独立 profile、文件保存、对话框和 IPC
 src/preload/                只暴露 mhV2 白名单接口
 src/renderer/app/           Vue 入口、Hash 路由、桌面布局、类型
-src/renderer/components/    弹窗、图标、数字单位、页面错误边界，可聚焦判定 focus.ts，以及 popover / drag-sort / section-nav 组合式函数
+src/renderer/components/    弹窗、图标、数字单位、变更类型、页面错误边界，可聚焦判定 focus.ts，以及 popover / drag-sort / section-nav 组合式函数
 src/renderer/features/      角色与设置；后续按业务模块扩展
 src/renderer/game-data/     按主题独立维护的梦幻游戏资料，供页面和领域规则引用
 src/renderer/domain/        从基线迁入的领域规则，ES 模块工厂

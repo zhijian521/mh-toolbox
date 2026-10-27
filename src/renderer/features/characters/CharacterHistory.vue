@@ -5,6 +5,7 @@ import AppIcon from '../../components/AppIcon.vue';
 import BaseDate from '../../components/BaseDate.vue';
 import BaseModal from '../../components/BaseModal.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
+import GrowthKind from '../../components/GrowthKind.vue';
 import NumberValue from '../../components/NumberValue.vue';
 import { useApplication } from '../../stores/application';
 import { U } from '../../domain/util.js';
@@ -33,15 +34,6 @@ const visible = computed(() => entries.value.slice((page.value - 1) * 12, page.v
 watch([selected, preset, from, to], () => {
     page.value = 1;
 });
-const labels: Record<string, string> = {
-    added: '新增',
-    removed: '移除',
-    recorded: '补录',
-    cleared: '清空',
-    increase: '提升',
-    decrease: '调低',
-    changed: '调整',
-};
 const characterOptions = computed(() => [
     { value: 'all', label: '全部角色' },
     ...app.characters.map((character) => ({ value: character.id, label: character.name })),
@@ -121,12 +113,7 @@ function contextOf(entry: GrowthEntry) {
                             :unit="typeof change.to === 'number' ? change.unit : ''"
                         />
                     </span>
-                    <span class="history-kind" :class="{ positive: change.kind === 'increase' }">
-                        {{ labels[change.kind] || '调整' }}
-                        <b v-if="change.kind === 'increase'">
-                            +{{ Number(change.to) - Number(change.from) }}
-                        </b>
-                    </span>
+                    <GrowthKind :kind="change.kind" :from="change.from" :to="change.to" />
                     <span v-if="index === 0 && contextOf(entry)" class="history-context">
                         <span
                             :title="contextOf(entry)"
@@ -230,15 +217,6 @@ function contextOf(entry: GrowthEntry) {
     gap: 5px;
     white-space: nowrap;
 }
-.history-kind {
-    font-size: 12px;
-    color: var(--muted);
-    text-align: right;
-    white-space: nowrap;
-}
-.history-kind.positive {
-    color: var(--green);
-}
 .history-context {
     display: inline-flex;
     align-items: center;
@@ -272,9 +250,6 @@ function contextOf(entry: GrowthEntry) {
     }
     .history-date[aria-hidden='true'] {
         display: none;
-    }
-    .history-kind {
-        text-align: left;
     }
 }
 </style>
