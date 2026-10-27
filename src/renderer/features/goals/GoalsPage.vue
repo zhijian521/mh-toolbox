@@ -21,8 +21,7 @@ import GoalHistory from './GoalHistory.vue';
  * 养成值算出达成人数，存钱与装备目标靠手记流水累计。汇总口径全部来自领域层
  * `goalSummary`，页面不重算——两侧各算一遍，迟早会出现卡片与记录对不上的情况。
  *
- * 筛选只影响展示，不写回数据；拖动排序只在「自定义排序」下开放，其他排序里顺序
- * 由规则决定，拖了也不会生效。
+ * 筛选只影响展示，不写回数据；卡片顺序即自定义顺序，拖动与方向键随时可改。
  */
 const app = useApplication();
 const rules = app.rules();
@@ -32,7 +31,6 @@ const filters = reactive({
     status: 'active' as 'active' | 'done' | 'all',
     type: '',
     character: 'all',
-    sort: 'manual' as 'manual' | 'deadline' | 'progress' | 'newest',
     keyword: '',
 });
 const editing = ref<{ goal?: Goal } | null>(null);
@@ -52,11 +50,12 @@ const counts = computed(() => {
     const active = scoped.value.filter((entry) => entry.summary.status === 'active').length;
     return { active, done: scoped.value.length - active, all: scoped.value.length };
 });
-const statusOptions = [
-    { value: 'active', label: '进行中' },
-    { value: 'done', label: '已完成' },
-    { value: 'all', label: '全部' },
-] as const;
+/** 计数放在选项文案里，切换前就能看到各状态各有多少条（计数不受状态筛选影响）。 */
+const statusOptions = computed(() => [
+    { value: 'active', label: `进行中 ${counts.value.active}` },
+    { value: 'done', label: `已完成 ${counts.value.done}` },
+    { value: 'all', label: `全部 ${counts.value.all}` },
+]);
 const typeOptions = computed(() => [
     { value: '', label: '全部类型' },
     ...rules.goalTypes.map((item) => ({ value: item.v, label: item.t })),
@@ -65,35 +64,16 @@ const characterOptions = computed(() => [
     { value: 'all', label: '全部角色' },
     ...app.characters.map((character) => ({ value: character.id, label: character.name })),
 ]);
-const sortOptions: Array<{ value: string; label: string }> = [
-    { value: 'manual', label: '自定义排序' },
-    { value: 'deadline', label: '到期优先' },
-    { value: 'progress', label: '进度优先' },
-    { value: 'newest', label: '最近创建' },
-];
 
+/** 状态、类型、角色与关键词都只做筛选；顺序始终是领域给出的自定义顺序。 */
 const entries = computed(() => {
     const keyword = filters.keyword.trim().toLocaleLowerCase();
-    const list = scoped.value.filter(({ goal, summary }) => {
+    return scoped.value.filter(({ goal, summary }) => {
         if (filters.status !== 'all' && summary.status !== filters.status) return false;
         if (filters.type && goal.type !== filters.type) return false;
         if (!keyword) return true;
         const names = rules.goalCharacters(goal).map((character) => character.name);
         return [goal.title, goal.note, ...names].join(' ').toLocaleLowerCase().includes(keyword);
-    });
-    if (filters.sort === 'manual') return list;
-    // 进行中优先，其余按所选规则，同分时新目标在前——与领域默认顺序一致。
-    return [...list].sort((a, b) => {
-        if (a.summary.status !== b.summary.status) return a.summary.status === 'active' ? -1 : 1;
-        if (filters.sort === 'deadline' && a.summary.status === 'active') {
-            const order = (a.goal.deadline || '9999-12-31').localeCompare(
-                b.goal.deadline || '9999-12-31',
-            );
-            if (order) return order;
-        }
-        if (filters.sort === 'progress' && a.summary.pct !== b.summary.pct)
-            return b.summary.pct - a.summary.pct;
-        return (b.goal.createdAt || 0) - (a.goal.createdAt || 0);
     });
 });
 const filtered = computed(
@@ -180,7 +160,7 @@ async function move(id: string, targetId: string, position: 'before' | 'after') 
 const sort = useDragSort({
     keys: () => entries.value.map((entry) => entry.goal.id),
     scroll: () => content.value,
-    enabled: () => !app.busy && filters.sort === 'manual',
+    enabled: () => !app.busy,
     onMove: ({ key, targetKey, position }) => void move(key, targetKey, position),
 });
 </script>
@@ -194,19 +174,10 @@ const sort = useDragSort({
     </PageHeader>
     <div ref="content" class="page-content" @dragend="sort.end()" @drop="sort.end()">
         <div class="goal-filters">
-            <div class="seg" role="group" aria-label="目标状态">
-                <button
-                    v-for="option in statusOptions"
-                    :key="option.value"
-                    class="btn compact"
-                    :class="{ selected: filters.status === option.value }"
-                    :aria-pressed="filters.status === option.value"
-                    :data-status="option.value"
-                    @click="filters.status = option.value"
-                >
-                    {{ option.label }} {{ counts[option.value] }}
-                </button>
-            </div>
+            <label class="filter-field filter-status">
+                状态
+                <BaseSelect v-model="filters.status" label="目标状态" :options="statusOptions" />
+            </label>
             <label class="filter-field filter-type">
                 类型
                 <BaseSelect v-model="filters.type" label="目标类型筛选" :options="typeOptions" />
@@ -218,10 +189,6 @@ const sort = useDragSort({
                     label="适用角色筛选"
                     :options="characterOptions"
                 />
-            </label>
-            <label class="filter-field filter-sort">
-                排序
-                <BaseSelect v-model="filters.sort" label="目标排序" :options="sortOptions" />
             </label>
             <label class="filter-field filter-keyword">
                 搜索
@@ -257,7 +224,6 @@ const sort = useDragSort({
                     :goal="entry.goal"
                     :summary="entry.summary"
                     :scope="scopeText(entry.goal)"
-                    :draggable="filters.sort === 'manual'"
                     :busy="app.busy"
                     @edit="editing = { goal: plain(entry.goal) }"
                     @remove="
@@ -315,28 +281,19 @@ const sort = useDragSort({
     flex-wrap: wrap;
     margin-bottom: 16px;
 }
-.seg {
-    display: flex;
-    gap: 4px;
-}
-.seg .btn.selected {
-    color: var(--red);
-    border-color: #bd8f77;
-    background: #f2e6d5;
-}
 .filter-field {
     flex: none;
     gap: 4px;
     font-size: 12px;
+}
+.filter-status {
+    width: 118px;
 }
 .filter-type {
     width: 118px;
 }
 .filter-character {
     width: 132px;
-}
-.filter-sort {
-    width: 128px;
 }
 .filter-keyword {
     flex: 1;

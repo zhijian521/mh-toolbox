@@ -79,9 +79,24 @@ const choose = async (label, text) => {
         text,
     );
 };
+// 目标状态下拉的选项带计数（如「已完成 1」），按前缀匹配，避免把数量写死在用例里。
+const chooseStatus = async (text) => {
+    await openSelect('目标状态');
+    await until(
+        (text) => {
+            const item = [...document.querySelectorAll('.popover .xitem')].find((element) =>
+                element.textContent.trim().startsWith(text),
+            );
+            if (!item) return false;
+            item.click();
+            return true;
+        },
+        '选择目标状态：' + text,
+        text,
+    );
+};
 let file;
 const disk = () => JSON.parse(fs.readFileSync(file, 'utf8'));
-
 app.on('browser-window-created', (_event, win) => {
     window = win;
     win.hide();
@@ -480,7 +495,7 @@ app.on('browser-window-created', (_event, win) => {
             assert.equal(filled.level, 120);
             assert.equal(disk().goals.length, 1);
             assert.equal(disk().goals[0].logs.length, 0, '跟随档案的目标不产生自己的流水');
-            await read(() => document.querySelector('[data-status="done"]').click());
+            await chooseStatus('已完成');
             await until(
                 () => document.querySelector('.goal-card')?.classList.contains('done'),
                 '目标自动达成',
@@ -501,7 +516,7 @@ app.on('browser-window-created', (_event, win) => {
             await until(() => !document.querySelector('.modal'), '关闭养成记录');
 
             // ---- 手动累计目标：记进度、编辑、删除记录、改目标数值 ----
-            await read(() => document.querySelector('[data-status="active"]').click());
+            await chooseStatus('进行中');
             await click('＋ 新建目标');
             await until(() => !!document.querySelector('#goal-form'), '新建存钱目标');
             await choose('目标类型', '存钱目标');
@@ -570,7 +585,7 @@ app.on('browser-window-created', (_event, win) => {
             // ---- 完成 / 恢复 / 筛选 / 删除 ----
             await click('标记完成');
             await until(() => !document.querySelector('.goal-card'), '完成后离开进行中列表');
-            await read(() => document.querySelector('[data-status="done"]').click());
+            await chooseStatus('已完成');
             await until(
                 () => document.querySelector('.goal-card')?.classList.contains('done'),
                 '已完成筛选',
@@ -588,7 +603,7 @@ app.on('browser-window-created', (_event, win) => {
                 '恢复后离开已完成列表',
             );
 
-            await read(() => document.querySelector('[data-status="all"]').click());
+            await chooseStatus('全部');
             await until(() => document.querySelectorAll('.goal-card').length === 2, '全部目标');
             await field('[aria-label="搜索目标、角色或备注"]', '不存在的目标');
             await until(

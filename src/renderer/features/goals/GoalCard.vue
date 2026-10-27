@@ -17,8 +17,6 @@ const props = defineProps<{
     summary: GoalSummary;
     /** 适用角色文案（全部角色 / 单角色名），由页面统一解析。 */
     scope: string;
-    /** 仅自定义排序时允许拖动，其他排序下顺序由排序规则决定。 */
-    draggable: boolean;
     busy: boolean;
 }>();
 const emit = defineEmits<{
@@ -72,13 +70,9 @@ const unit = computed(() => props.goal.unit || '万');
             <div class="actions goal-tools">
                 <button
                     class="icon-button drag-handle"
-                    :disabled="busy || !draggable"
-                    :draggable="draggable && !busy"
-                    :title="
-                        draggable
-                            ? '拖动排序，或用方向键前后移动'
-                            : '切回「自定义排序」后可拖动排序'
-                    "
+                    :disabled="busy"
+                    :draggable="!busy"
+                    title="拖动排序，或用方向键前后移动"
                     aria-label="拖动排序，或用方向键前后移动"
                     @dragstart="emit('drag', $event)"
                     @keydown.left.prevent="emit('move', -1)"
