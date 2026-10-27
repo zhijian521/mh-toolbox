@@ -716,6 +716,26 @@ app.on('browser-window-created', (_event, win) => {
             assert.equal(tx.amount, 100);
             assert.equal(tx.recordType, 'money');
 
+            // 游戏内买点卡：同一分类，但预设在梦幻币上。
+            await read(() => document.querySelector('[data-shortcut="topup-cash"]').click());
+            await until(() => !!document.querySelector('#account-form'), '购买点卡弹窗');
+            assert.equal(
+                await read(() =>
+                    document.querySelector('[aria-label="记账币种"]').textContent.trim(),
+                ),
+                '梦幻币 · 万',
+                '购买点卡应预设为梦幻币',
+            );
+            assert.equal(
+                await read(() =>
+                    document.querySelector('[aria-label="交易渠道"]').textContent.trim(),
+                ),
+                '游戏内',
+                '购买点卡应预设为游戏内渠道',
+            );
+            await click('取消');
+            await until(() => !document.querySelector('#account-form'), '关闭购买点卡');
+
             // 收入扣手续费：200 - 10 = 190。
             await click('＋ 记一笔');
             await until(() => !!document.querySelector('#account-form'), '记一笔弹窗');

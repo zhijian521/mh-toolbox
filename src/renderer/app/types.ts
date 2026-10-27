@@ -52,6 +52,12 @@ export interface RecordEntry {
     characterId?: string;
     [key: string]: unknown;
 }
+/** 时间范围筛选的状态：预设键与它算出的起止日（手改日期后变成 `custom`）。 */
+export interface DateRangeValue {
+    preset: string;
+    from: string;
+    to: string;
+}
 /**
  * 账本记录。账号与收益共用 `state.transactions`，靠 `ledger` 区分：
  * `account` 是人民币 / 梦幻币收支，`earnings` 是游戏内日常收益与物品。

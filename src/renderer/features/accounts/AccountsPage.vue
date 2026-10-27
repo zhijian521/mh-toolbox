@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
-import type { Transaction } from '../../app/types';
+import type { DateRangeValue, Transaction } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import { plain } from '../../services/desktop';
 import { U } from '../../domain/util.js';
 import AppIcon from '../../components/AppIcon.vue';
-import BaseDate from '../../components/BaseDate.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
+import RangeFilter from '../../components/RangeFilter.vue';
 import PageHeader from '../../components/PageHeader.vue';
 import AccountEditor from './AccountEditor.vue';
 import AccountRecords from './AccountRecords.vue';
@@ -25,33 +25,20 @@ const app = useApplication();
 const rules = app.rules();
 const content = ref<HTMLElement>();
 const addButton = ref<HTMLButtonElement>();
-const preset = ref('month'),
-    character = ref('all'),
-    from = ref(''),
-    to = ref('');
+const character = ref('all');
+/** 快捷按钮与日期区间共用一份状态，默认落在本月。 */
+const range = ref<DateRangeValue>({ preset: 'month', ...U.rangeFor('month') });
 const editing = ref<{ tx?: Transaction; preset?: Record<string, unknown> } | null>(null);
 const recordsOpen = ref(false);
 
-const range = computed(() =>
-    preset.value === 'custom' ? { from: from.value, to: to.value } : U.rangeFor(preset.value),
-);
-const presetOptions = [
-    { value: 'all', label: '全部时间' },
-    { value: 'today', label: '本日' },
-    { value: 'week', label: '本周' },
-    { value: 'month', label: '本月' },
-    { value: 'year', label: '本年' },
-    { value: 'custom', label: '自定义' },
-];
 const characterOptions = computed(() => [
     { value: 'all', label: '全部角色' },
     ...app.characters.map((item) => ({ value: item.id, label: item.name })),
 ]);
 const records = computed<Transaction[]>(() => {
     void app.data;
-    const { from: start, to: end } = range.value;
     return rules
-        .txIn(character.value, start || '', end || '', 'account')
+        .txIn(character.value, range.value.from, range.value.to, 'account')
         .slice()
         .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
 });
@@ -106,9 +93,17 @@ const shortcuts: Array<{
     {
         id: 'topup',
         title: '点卡充值',
-        icon: 'coin',
+        icon: 'card',
         hint: '官方充值 · 人民币',
         preset: { category: '点卡充值', kind: 'expense', currency: 'rmb', channel: '官方充值' },
+    },
+    {
+        // 游戏内用梦幻币买点卡：同样记在「点卡充值」分类下，但走另一本账。
+        id: 'topup-cash',
+        title: '购买点卡',
+        icon: 'card',
+        hint: '游戏内 · 梦幻币',
+        preset: { category: '点卡充值', kind: 'expense', currency: 'cash', channel: '游戏内' },
     },
     {
         id: 'coin-buy',
@@ -185,28 +180,14 @@ async function saved() {
         </div>
         <template v-else>
             <div class="account-filters">
-                <label class="filter-field filter-range">
-                    日期范围
-                    <BaseSelect v-model="preset" label="账号统计时间" :options="presetOptions" />
-                </label>
-                <template v-if="preset === 'custom'">
-                    <label class="filter-field filter-date">
-                        开始日期
-                        <BaseDate v-model="from" label="开始日期" :max="to || U.today()" />
-                    </label>
-                    <label class="filter-field filter-date">
-                        结束日期
-                        <BaseDate v-model="to" label="结束日期" :min="from" :max="U.today()" />
-                    </label>
-                </template>
-                <label class="filter-field filter-character">
-                    角色
+                <RangeFilter v-model="range" label="账号统计时间" />
+                <div class="filter-character">
                     <BaseSelect
                         v-model="character"
                         label="账号角色筛选"
                         :options="characterOptions"
                     />
-                </label>
+                </div>
             </div>
             <div class="account-totals">
                 <article class="card total-card">
@@ -296,15 +277,24 @@ async function saved() {
                             :data-record="tx.id"
                             @click="openRecord(tx)"
                         >
-                            <span class="recent-content">
-                                <span class="recent-title">{{ tx.note || tx.category }}</span>
-                                <span class="recent-meta">
-                                    {{ tx.date }} · {{ rules.charName(tx.characterId) }} ·
-                                    {{ currencyText(tx.currency) }}
+                            <span class="recent-kind">
+                                <span class="badge" :class="tx.kind === 'income' ? 'in' : 'out'">
+                                    {{ tx.kind === 'income' ? '收入' : '支出' }}
                                 </span>
+                                <span class="recent-category">{{ tx.category }}</span>
+                                <span class="recent-note" :title="tx.note">{{ tx.note }}</span>
+                            </span>
+                            <span class="recent-meta">
+                                {{ tx.date }} · {{ rules.charName(tx.characterId) }}
+                            </span>
+                            <span class="recent-meta">
+                                {{ tx.channel }} · {{ currencyText(tx.currency) }}
                             </span>
                             <span class="recent-amount" :class="tx.kind">
                                 {{ signedAmount(tx) }}
+                                <small v-if="tx.fee">
+                                    手续费 {{ U.fmtAmount(tx.fee, tx.currency) }}
+                                </small>
                             </span>
                         </button>
                     </li>
@@ -346,21 +336,10 @@ async function saved() {
 <style scoped>
 .account-filters {
     display: flex;
-    align-items: end;
-    gap: 10px;
+    align-items: center;
+    gap: 12px;
     flex-wrap: wrap;
     margin-bottom: 16px;
-}
-.filter-field {
-    flex: none;
-    gap: 4px;
-    font-size: 12px;
-}
-.filter-range {
-    width: 140px;
-}
-.filter-date {
-    width: 165px;
 }
 .filter-character {
     width: 132px;
@@ -416,9 +395,10 @@ async function saved() {
 .section-card {
     margin-bottom: 14px;
 }
+/* 十个入口固定五列，正好两整行；auto-fill 在宽窗口下会排成 6+4，末行缺角很难看。 */
 .shortcut-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 10px;
     margin-top: 14px;
 }
@@ -481,13 +461,18 @@ async function saved() {
     margin: 10px 0 0;
     list-style: none;
 }
+/*
+ * 最近记录横排：分类、备注、日期与角色、渠道与币种、金额各占一列。
+ * 早先做成「左内容 + 右金额」两栏，一行只有几十个字，中间大片空白；
+ * 铺满整行之后八条记录的信息量接近全部记录弹窗，又不用点进去才能看清。
+ */
 .recent-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 156px 132px 122px;
     align-items: center;
-    justify-content: space-between;
     gap: 14px;
     width: 100%;
-    padding: 9px 8px;
+    padding: 10px 8px;
     border: none;
     border-bottom: 1px solid var(--line);
     border-radius: 4px;
@@ -500,26 +485,44 @@ async function saved() {
 .recent-row:hover {
     background: var(--paper-2);
 }
-.recent-content {
+.recent-kind {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
 }
-.recent-title {
+.recent-category {
+    flex: none;
+    font-size: 13.5px;
+}
+/* 备注紧跟分类，占用剩余宽度并在过长时截断——单独占一列时，没有备注就会留出大片空白。 */
+.recent-note {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13.5px;
+    color: var(--muted);
+    font-size: 12.5px;
 }
 .recent-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: var(--muted);
-    font-size: 11.5px;
+    font-size: 12px;
 }
 .recent-amount {
-    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    justify-self: end;
     font-size: 13.5px;
     font-variant-numeric: tabular-nums;
+}
+.recent-amount small {
+    color: var(--muted);
+    font-size: 11px;
 }
 .recent-amount.income {
     color: var(--green);
@@ -543,10 +546,28 @@ async function saved() {
     color: var(--muted);
     font-size: 12.5px;
 }
+@media (max-width: 980px) {
+    .shortcut-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
 @media (max-width: 750px) {
-    .filter-character,
-    .filter-range {
+    .shortcut-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .filter-character {
         width: 100%;
+    }
+    .recent-row {
+        grid-template-columns: 1fr auto;
+        gap: 4px 12px;
+        padding: 11px 8px;
+    }
+    .recent-meta {
+        display: none;
+    }
+    .recent-note {
+        grid-column: 1 / -1;
     }
 }
 </style>
