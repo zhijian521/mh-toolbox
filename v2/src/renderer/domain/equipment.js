@@ -271,7 +271,9 @@ export default function install(D, U, gateway, localStorage) {
             const eq = Object.assign({}, previous || { id: U.uid(), createdAt: Date.now() }, data, {
                 name: data.name.trim(),
             });
-            if (!['stored', 'sold', 'active'].includes(eq.status))
+            // `standby` is derived by equipmentStatus() rather than typed by the user, but a form
+            // that round-trips that derived value must be able to save it back unchanged.
+            if (!Object.keys(this.equipmentStatuses).includes(eq.status))
                 throw new Error('无效的装备持有状态');
             if (
                 previous &&
