@@ -187,3 +187,23 @@ Electron 流程验证了：首次建档、技能模板、明确 0 与未记录�
 `equipment.js` 暴露了两处契约与实现不符：`saveEquipment` 在实现里是同步返回（调用方已在 `commitEquipment` 事务内），`removeEquipment` 同样同步，而契约原先声明为 `Promise`。契约按实现收敛，避免用 `Promise` 掩盖真实调用方式。
 
 `characterNumber()` 这类把「未记录」与「明确填写的 0」分开的函数，签名保持 `(value: any) => number | null`：宽松入参是它的职责，收紧反而会在调用侧堆 `as` 断言。
+
+## 规范化收尾：P1 重构与 P2 工程化
+
+日期：2026-10-27。范围：删除联动收口、分区导航抽离、渲染层类型收窄、界面文档拆分、CI 与提交校验。
+
+| 检查              | 结果                                                              |
+| ----------------- | ----------------------------------------------------------------- |
+| 格式化            | `prettier --check .` 通过                                         |
+| ESLint            | 0 错误 **0 警告**（收窄 `types.ts` 前为 11 条 `no-explicit-any`） |
+| 类型检查          | `vue-tsc --noEmit` 0 错误                                         |
+| 领域与隔离测试    | 94 项通过 0 失败（新增删除预览 2 项）                             |
+| Vite 生产构建     | 通过，CSS 31.32 kB、JS 241.28 kB                                  |
+| Electron 集成流程 | 通过，`tests/app.electron.cjs` 全流程 PASS                        |
+| 提交信息校验      | 历史 20 条全部通过；反例（无前缀）正确报错并以 1 退出             |
+
+删除预览的验收方式不是比对数字，而是**先读预览、再执行删除，逐项断言「预览值 = 实际减少量」**：`characters.js` 的 `characterRemovalSummary` 与 `removeCharacter` 共用 `ownedEquipmentIds()`，任何一侧将来新增集合而漏在预览里，`tests/domain/characters.test.cjs` 会立即失败。
+
+本机 `npm run test:electron` 在本会话会因 Chromium GPU 进程崩溃（`exit_code=-1073741819`）而无法启动窗口，改用 `node_modules/electron/dist/electron.exe --no-sandbox --disable-gpu tests/app.electron.cjs` 后通过；这属于本机会话限制，不是用例失败，已记入 `AGENTS.md`。
+
+CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都缓存 Electron 二进制，工作流加 `concurrency` 取消被覆盖的运行，并校验本次带来的提交信息前缀（`scripts/check-commits.mjs`）。

@@ -81,6 +81,6 @@
 - 让 `normalize` 抛错，把坏数据变成打不开的档。
 - 为一个组件的专有外观去改基座样式表。
 
-## 提交前缀
+## 提交
 
-`feat`、`fix`、`refactor`、`test`、`docs`、`chore`，一行标题写完做什么，正文只说为什么与影响面。
+前缀限定 `feat`、`fix`、`docs`、`style`、`refactor`、`perf`、`test`、`build`、`ci`、`chore`、`revert`，可带 scope（如 `refactor(角色): ...`）。一行标题写清做了什么，正文只说为什么与影响面。提交前可跑 `npm run lint:commits` 自查，CI 会校验本次带来的全部提交。

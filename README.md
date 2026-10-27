@@ -37,6 +37,14 @@ npm run format:check  # 只检查格式
 
 EditorConfig 定义 V2 的基础编辑规则，Prettier 通过上述命令统一格式，不依赖特定编辑器。迁移基线 `migration/`、依赖锁文件、依赖目录、构建产物和测试输出不参与格式化。
 
+## 环境与提交
+
+Node 版本固定在 `.nvmrc`（22.22.2），CI 按该文件取版本，本地用 `nvm use` 即可对齐。提交信息前缀限定 `feat`、`fix`、`docs`、`style`、`refactor`、`perf`、`test`、`build`、`ci`、`chore`、`revert`，可带 scope。
+
+```powershell
+npm run lint:commits  # 校验最近 20 条提交信息，CI 只校验本次带来的提交
+```
+
 ## 已实现
 
 - 原有宣纸账本色板、霞鹜文楷字体、侧栏收起和窗口控制。

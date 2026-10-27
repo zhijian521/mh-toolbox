@@ -21,6 +21,7 @@
         "format:check": "prettier --check .",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
+        "lint:commits": "git log -20 --no-merges --format=%s | node scripts/check-commits.mjs",
         "typecheck": "vue-tsc --noEmit",
         "test": "node --test \"tests/domain/*.test.cjs\" \"tests/domain/*.test.mjs\" \"tests/*.test.mjs\"",
         "test:electron": "node scripts/test-electron.mjs",
