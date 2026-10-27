@@ -86,7 +86,7 @@ function keyboardMove(id: string, offset: number) {
             </button>
         </template>
     </PageHeader>
-    <div ref="content" class="page-content" @dragend="sort.end()" @drop="sort.drop($event)">
+    <div ref="content" class="page-content" @dragend="sort.end()" @drop="sort.end()">
         <div v-if="!app.characters.length" class="empty">
             <AppIcon name="user" :size="38" />
             <h2>从一个角色开始</h2>
