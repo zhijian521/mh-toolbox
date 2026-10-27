@@ -35,6 +35,11 @@ const current = computed(() => {
     return goal ? rules.goalSummary(goal).current : props.goal.current;
 });
 const unit = computed(() => props.goal.unit || '万');
+/**
+ * 空着提交会写入一条 `delta: 0` 的记录：`Number('') === 0` 能通过领域的有限数校验，
+ * 进度历史里就多出一条「+0」。领域规则保持与 V1 一致，不在那里加校验，改由表单拦住。
+ */
+const ready = computed(() => draft.delta !== '' && draft.delta !== null);
 function captureInput(event: Event) {
     const form = event.currentTarget;
     if (!(form instanceof HTMLElement)) return;
@@ -44,6 +49,11 @@ function captureInput(event: Event) {
 }
 async function save() {
     if (app.busy) return;
+    // 回车提交绕过按钮的禁用态，这里再拦一次。
+    if (!ready.value) {
+        error.value = '请填写进度变化';
+        return;
+    }
     error.value = '';
     try {
         await app.execute((domain) =>
@@ -99,7 +109,7 @@ async function save() {
                 class="btn primary"
                 type="submit"
                 form="goal-progress-form"
-                :disabled="app.busy"
+                :disabled="app.busy || !ready"
             >
                 {{ app.busy ? '保存中…' : editing ? '保存记录' : '记入' }}
             </button>

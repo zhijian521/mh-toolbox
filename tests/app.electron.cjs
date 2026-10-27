@@ -530,6 +530,19 @@ app.on('browser-window-created', (_event, win) => {
 
             await click('＋ 记进度');
             await until(() => !!document.querySelector('#goal-progress-form'), '记进度表单');
+            // 空表单不能提交：Number('') === 0 能通过领域的有限数校验，会落一条 +0 记录。
+            assert.equal(
+                await read(() => document.querySelector('.modal .btn.primary').disabled),
+                true,
+                '进度未填时保存按钮应禁用',
+            );
+            await submit('#goal-progress-form');
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            assert.ok(
+                await read(() => !!document.querySelector('#goal-progress-form')),
+                '空提交后表单仍应打开',
+            );
+            assert.equal(disk().goals[1].logs.length, 0, '空提交不应写入记录');
             await field('[name="delta"]', '250.5');
             await submit('#goal-progress-form');
             await until(() => !document.querySelector('#goal-progress-form'), '保存进度');
@@ -585,6 +598,27 @@ app.on('browser-window-created', (_event, win) => {
             // ---- 完成 / 恢复 / 筛选 / 删除 ----
             await click('标记完成');
             await until(() => !document.querySelector('.goal-card'), '完成后离开进行中列表');
+            // 全部完成时不能只说「没有符合筛选条件」——那时没有任何筛选条件可清。
+            assert.equal(
+                await read(() => document.querySelector('.empty h2')?.textContent),
+                '进行中的目标都完成了',
+                '全部完成时给出切换已完成的出口',
+            );
+            assert.ok(
+                await read(() =>
+                    [...document.querySelectorAll('.empty .btn')].some(
+                        (btn) => btn.textContent.trim() === '查看已完成',
+                    ),
+                ),
+                '全部完成时空状态应有「查看已完成」',
+            );
+            // 卡片离开当前筛选后，焦点不能掉回文档开头。
+            assert.ok(
+                await read(
+                    () => document.activeElement?.textContent?.includes('新建目标') ?? false,
+                ),
+                '目标移出列表后焦点应退回新建按钮',
+            );
             await chooseStatus('已完成');
             await until(
                 () => document.querySelector('.goal-card')?.classList.contains('done'),
@@ -612,6 +646,33 @@ app.on('browser-window-created', (_event, win) => {
             );
             await click('清除筛选');
             await until(() => document.querySelectorAll('.goal-card').length === 2, '清除筛选');
+
+            // 键盘排序：焦点必须留在手柄上，否则连按方向键只能移动一次。
+            const beforeOrder = await read(() =>
+                [...document.querySelectorAll('.goal-card')].map((card) => card.dataset.goalId),
+            );
+            await read(() => {
+                const handle = document.querySelector('.goal-card .drag-handle');
+                handle.focus();
+                handle.dispatchEvent(
+                    new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
+                );
+            });
+            await until(
+                (first) =>
+                    [...document.querySelectorAll('.goal-card')].map(
+                        (card) => card.dataset.goalId,
+                    )[0] !== first,
+                '方向键移动目标',
+                beforeOrder[0],
+            );
+            await new Promise((resolve) => setTimeout(resolve, 150));
+            const focusAfterMove = await read(() => ({
+                onHandle: document.activeElement?.classList.contains('drag-handle') ?? false,
+                goalId: document.activeElement?.closest('.goal-card')?.dataset.goalId ?? '',
+            }));
+            assert.ok(focusAfterMove.onHandle, '方向键排序后焦点应留在拖动手柄上');
+            assert.equal(focusAfterMove.goalId, beforeOrder[0], '焦点应跟着被移动的目标');
 
             await read(() => document.querySelectorAll('button[aria-label="删除目标"]')[0].click());
             await until(

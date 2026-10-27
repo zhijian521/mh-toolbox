@@ -90,13 +90,33 @@ function scopeText(goal: Goal) {
 function resetFilters() {
     Object.assign(filters, { status: 'all', type: '', character: 'all', keyword: '' });
 }
-async function focusGoal(id: string) {
+/**
+ * 保存或状态切换后把焦点交给卡片的编辑按钮。
+ *
+ * 卡片可能已经不在当前筛选里（例如在「进行中」页标记完成），此时退回「新建目标」，
+ * 否则 `?.focus()` 静默失败，焦点掉回文档开头。
+ */
+async function focusCard(id: string) {
     await nextTick();
-    content.value
-        ?.querySelector<HTMLButtonElement>(
+    const target =
+        content.value?.querySelector<HTMLButtonElement>(
             `[data-goal-id="${CSS.escape(id)}"] button[aria-label="编辑目标"]`,
-        )
-        ?.focus({ preventScroll: true });
+        ) ?? addButton.value;
+    target?.focus({ preventScroll: true });
+}
+/**
+ * 拖动与方向键排序后必须把焦点还回手柄。
+ *
+ * 方向键是同一个手柄上的连续操作，焦点一旦移走，第二下就落不到卡片上了；
+ * 交给 `focusCard` 会让键盘用户每移动一次都要重新找回来。
+ */
+async function focusHandle(id: string) {
+    await nextTick();
+    const target =
+        content.value?.querySelector<HTMLButtonElement>(
+            `[data-goal-id="${CSS.escape(id)}"] .drag-handle`,
+        ) ?? addButton.value;
+    target?.focus({ preventScroll: true });
 }
 async function saved(id: string) {
     const isNew = !editing.value?.goal;
@@ -112,14 +132,14 @@ async function saved(id: string) {
                 keyword: '',
             });
     }
-    await focusGoal(id);
+    await focusCard(id);
 }
 async function setStatus(goal: Goal, status: 'active' | 'done') {
     if (app.busy) return;
     try {
         await app.execute((domain) => domain.setGoalStatus(goal.id, status));
         app.notify(status === 'done' ? '目标已达成' : '已恢复进行中');
-        await focusGoal(goal.id);
+        await focusCard(goal.id);
     } catch (error) {
         app.notify(error instanceof Error ? error.message : String(error), true);
     }
@@ -152,7 +172,7 @@ async function move(id: string, targetId: string, position: 'before' | 'after') 
     try {
         await app.execute((domain) => domain.saveGoalOrder(id, { targetId, position }));
         app.notify('目标顺序已保存');
-        await focusGoal(id);
+        await focusHandle(id);
     } catch (error) {
         app.notify(error instanceof Error ? error.message : String(error), true);
     }
@@ -208,8 +228,20 @@ const sort = useDragSort({
         </div>
         <div v-else-if="!entries.length" class="empty">
             <AppIcon name="target" :size="38" />
-            <h2>没有符合筛选条件的目标</h2>
-            <button v-if="filtered" class="btn" @click="resetFilters">清除筛选</button>
+            <!--
+                这里分两种空：有筛选条件却没结果，和「进行中的都做完了」。
+                后者没有任何筛选条件，给「清除筛选」是死路——它会切到全部，
+                用户看不出发生了什么。
+            -->
+            <template v-if="filtered">
+                <h2>没有符合筛选条件的目标</h2>
+                <button class="btn" @click="resetFilters">清除筛选</button>
+            </template>
+            <template v-else>
+                <h2>进行中的目标都完成了</h2>
+                <p>已完成 {{ counts.done }} 个，可以切到「已完成」查看或恢复进行。</p>
+                <button class="btn" @click="filters.status = 'done'">查看已完成</button>
+            </template>
         </div>
         <div v-else class="goal-grid">
             <div

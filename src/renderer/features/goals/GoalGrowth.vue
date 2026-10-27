@@ -35,6 +35,23 @@ const initial = JSON.stringify({ values: { ...values }, date: date.value, note: 
 const dirty = computed(
     () => JSON.stringify({ values: { ...values }, date: date.value, note: note.value }) !== initial,
 );
+/**
+ * 只有真正改了数值才能保存。
+ *
+ * 日期与说明是随变更一起写进养成记录的，单独改它们没有落点；而领域在没有值变化时
+ * 会抛「没有需要更新的进度」。因此禁用条件看值，关窗提醒仍看整张表单（`dirty`）。
+ */
+const valueChanged = computed(() =>
+    ordered.value.some((member) => {
+        const input = values[member.id];
+        const current = member.value;
+        // 清空表示「未记录」，与原本就未记录不同。
+        if (input === '' || input === null || input === undefined) return current !== null;
+        // 从「未记录」变成明确的 0 也是变更，不能按数值相等跳过。
+        if (current === null) return true;
+        return Number(input) !== Number(current);
+    }),
+);
 const metricLabel = computed(() => rules.goalMetricLabel(props.goal.tracking!));
 async function save() {
     if (app.busy) return;
@@ -104,7 +121,7 @@ async function save() {
                 class="btn primary"
                 type="submit"
                 form="goal-growth-form"
-                :disabled="app.busy || !members.length"
+                :disabled="app.busy || !members.length || !valueChanged"
             >
                 {{ app.busy ? '保存中…' : '保存进度' }}
             </button>
