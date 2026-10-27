@@ -283,7 +283,7 @@ const groups = computed(() => [
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: 40px;
-    row-gap: 18px;
+    row-gap: 12px;
     margin-top: 26px;
 }
 .character-sections > section {
