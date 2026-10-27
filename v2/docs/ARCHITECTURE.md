@@ -78,3 +78,21 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 - 跨组件命中要显式穿透：scoped 只能命中子组件根节点，所以技能行改写 `BaseNumber` 内部输入框时写 `.skill-row :deep(.number-field) > input`，快捷弹窗改写 `NumberValue` 加粗数值时写 `.quick-context-current :deep(.number-value b)`。其余选择器不得依赖 `:deep()`。
 - 颜色与尺寸仍从 `:root` 变量取值；少量半透明描边与阴影沿用既有字面值，新增字面值前先确认没有对应变量。
 - 弹层（`BaseSelect`、`BaseDate`）用 Teleport 挂到 body，作用域属性随组件节点保留，因此它们的样式仍写在各自组件的 scoped 块里，不需要提到基座。
+
+## 静态检查
+
+`npm run check` 依次执行 `format:check`、`lint`、`typecheck` 与领域测试，缺一不可：
+
+- 格式交给 Prettier，风格规则一律不进 ESLint，避免两套格式化互相改写。
+- `eslint.config.js` 按运行环境分组：渲染层用浏览器全局，`src/main`、`src/preload` 与 `electron-builder.config.cjs` 是 CJS 加 Node 全局，`scripts`、`tests` 是 Node 且允许 `console`。`tests/*.electron.cjs` 额外补上浏览器全局，因为断言体通过 `executeJavaScript` 在渲染进程求值。
+- Vue 只启用 `flat/essential`；`flat/recommended` 里的缩进、属性换行等规则与 Prettier 冲突，不启用。
+- `migration/baseline/**` 整目录忽略：它是不可变基线副本，既不检查也不修改。
+- 领域安装函数签名统一是 `install(D, U, gateway, localStorage)`，多数模块只用到其中一两个参数，未用形参加 `_` 前缀，由 `argsIgnorePattern` 放行；不要为了消警告删掉形参，位置一旦错位就会到运行时才暴露。
+
+## 类型检查
+
+`tsconfig.json` 的 `checkJs` 仍为 `false`，领域层的 `.js` 尚未逐个纳管。要纳管的文件在首行写 `// @ts-check`，用 JSDoc 标注参数与返回值即可，`vue-tsc --noEmit` 会按注释逐文件校验。
+
+目前试点的是 `src/renderer/domain/util.js` 与 `src/renderer/domain/export.js`：前者被领域与界面共用，后者是纯数据到文本的转换，都没有外部依赖，改起来不会牵动调用方。后续按同样方式推进有测试保护的模块，不要一次性把 14 个领域模块全开——平铺的 `Object.assign` 混入模型会让 `this` 上的方法互相引用无法推断，一次性开启会产生大量与真实缺陷无关的报错。
+
+`lib` 已提到 `ES2023`，因为装备词条解析用了 `Array.prototype.findLastIndex`。`target` 同步改为 `ES2023`，与 Electron 38 内置的 Chromium 140 一致。
