@@ -20,6 +20,7 @@ const paths: Record<string, string> = {
     'window-close': 'M5 5l14 14M5 19 19 5',
     close: 'm6 6 12 12M6 18 18 6',
     'chevron-down': 'm6 9 6 6 6-6',
+    'chevron-up': 'm18 15-6-6-6 6',
     'chevron-left': 'm14 5-7 7 7 7',
     'chevron-right': 'm10 5 7 7-7 7',
     check: 'm4 12 6 6L20 6',

@@ -7,6 +7,7 @@ import { defaultSchool } from '../../game-data/schools.js';
 import type { Character } from '../../app/types';
 import BaseDate from '../../components/BaseDate.vue';
 import BaseModal from '../../components/BaseModal.vue';
+import BaseNumber from '../../components/BaseNumber.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
 import SkillEditor from './SkillEditor.vue';
 const props = defineProps<{ character?: Character }>();
@@ -161,15 +162,7 @@ const trainingGroups = [
                         </label>
                         <label>
                             等级
-                            <input
-                                v-model="draft.level"
-                                name="level"
-                                type="number"
-                                min="0"
-                                step="1"
-                                :max="Number.MAX_SAFE_INTEGER"
-                                placeholder="未记录"
-                            />
+                            <BaseNumber v-model="draft.level" name="level" placeholder="未记录" />
                         </label>
                         <label>
                             门派
@@ -248,12 +241,8 @@ const trainingGroups = [
                         <div class="form-grid stack">
                             <label v-for="field in group.fields" :key="field.key">
                                 {{ field.label }}
-                                <input
+                                <BaseNumber
                                     v-model="draft.progress[group.key][field.key]"
-                                    type="number"
-                                    min="0"
-                                    step="1"
-                                    :max="Number.MAX_SAFE_INTEGER"
                                     placeholder="未记录"
                                 />
                             </label>
@@ -288,23 +277,15 @@ const trainingGroups = [
                     <div class="form-grid">
                         <label>
                             乾元丹个数
-                            <input
+                            <BaseNumber
                                 v-model="draft.progress.qianyuanPills"
-                                type="number"
-                                min="0"
-                                step="1"
-                                :max="Number.MAX_SAFE_INTEGER"
                                 placeholder="未记录"
                             />
                         </label>
                         <label>
                             潜能果个数
-                            <input
+                            <BaseNumber
                                 v-model="draft.progress.potentialFruits"
-                                type="number"
-                                min="0"
-                                step="1"
-                                :max="Number.MAX_SAFE_INTEGER"
                                 placeholder="未记录"
                             />
                         </label>

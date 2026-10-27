@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Skill } from '../../app/types';
+import BaseNumber from '../../components/BaseNumber.vue';
 const skills = defineModel<Skill[]>({ required: true });
 defineProps<{ auxiliary?: boolean; suggestions?: string[] }>();
 const keys = new WeakMap<Skill, number>();
@@ -26,12 +27,8 @@ function move(index: number, offset: number) {
                     placeholder="技能名称"
                     required
                 />
-                <input
+                <BaseNumber
                     v-model="skill.level"
-                    type="number"
-                    min="0"
-                    step="1"
-                    :max="Number.MAX_SAFE_INTEGER"
                     :aria-label="(skill.name || '技能') + '等级'"
                     placeholder="未记录"
                 />

@@ -171,6 +171,13 @@ textarea {
 }
 input[type='number'] {
     font-variant-numeric: tabular-nums;
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
 }
 input::placeholder,
 textarea::placeholder {
@@ -180,6 +187,59 @@ input:disabled,
 textarea:disabled,
 select:disabled {
     opacity: 0.65;
+}
+.number-field {
+    position: relative;
+    min-width: 0;
+}
+.number-field > input {
+    padding-right: 24px;
+}
+.number-steps {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    bottom: 2px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: 19px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 110ms ease;
+}
+.number-field:hover .number-steps,
+.number-field:focus-within .number-steps {
+    pointer-events: auto;
+    opacity: 1;
+}
+.number-step {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: none;
+    color: var(--muted);
+    line-height: 1;
+    transition:
+        background 120ms ease,
+        color 120ms ease;
+}
+.number-step:hover:not(:disabled) {
+    background: var(--panel-3);
+    color: var(--gold);
+}
+.number-step:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+.number-step:focus-visible {
+    outline: 1px dashed var(--gold);
+    outline-offset: -2px;
 }
 summary {
     cursor: pointer;
@@ -947,7 +1007,7 @@ details[open] summary {
 }
 .skill-row {
     display: grid;
-    grid-template-columns: minmax(60px, 1fr) 65px auto;
+    grid-template-columns: minmax(60px, 1fr) 76px auto;
     gap: 6px;
     align-items: center;
     min-width: 0;
@@ -957,6 +1017,9 @@ details[open] summary {
 }
 .skill-row input {
     padding: 6px;
+}
+.skill-row .number-field > input {
+    padding: 6px 22px 6px 6px;
 }
 .school-choice {
     border: 1px solid var(--line-2);
