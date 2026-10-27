@@ -163,3 +163,79 @@ async function wipe() {
         </template>
     </BaseModal>
 </template>
+
+<style scoped>
+.settings-page {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    align-content: start;
+    align-items: start;
+}
+.paper-section {
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--paper);
+    min-width: 0;
+}
+.paper-section h2 {
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.paper-section h2:before {
+    content: '';
+    width: 3px;
+    height: 14px;
+    background: var(--red);
+    flex: none;
+}
+.paper-section p {
+    margin-bottom: 12px;
+}
+.paper-section .actions {
+    margin-top: 18px;
+}
+.data-counts {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 20px;
+}
+.data-counts dt {
+    font-size: 12px;
+    color: var(--muted);
+}
+.data-counts dd {
+    font-size: 27px;
+    color: var(--gold);
+    margin-top: 7px;
+    font-variant-numeric: tabular-nums;
+}
+.info-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+.info-list > div {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 8px;
+}
+.info-list dt {
+    color: var(--muted);
+}
+.data-path {
+    overflow-wrap: anywhere;
+    font-size: 12px;
+}
+@media (max-width: 1150px) {
+    .settings-page {
+        grid-template-columns: 1fr;
+    }
+}
+</style>

@@ -87,3 +87,59 @@ const high = computed(() => {
         </span>
     </div>
 </template>
+
+<style scoped>
+.number-field {
+    position: relative;
+    min-width: 0;
+}
+.number-field > input {
+    padding-right: 24px;
+}
+.number-steps {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    bottom: 2px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: 19px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 110ms ease;
+}
+.number-field:hover .number-steps,
+.number-field:focus-within .number-steps {
+    pointer-events: auto;
+    opacity: 1;
+}
+.number-step {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: none;
+    color: var(--muted);
+    line-height: 1;
+    transition:
+        background 120ms ease,
+        color 120ms ease;
+}
+.number-step:hover:not(:disabled) {
+    background: var(--panel-3);
+    color: var(--gold);
+}
+.number-step:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+.number-step:focus-visible {
+    outline: 1px dashed var(--gold);
+    outline-offset: -2px;
+}
+</style>

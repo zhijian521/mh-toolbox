@@ -138,3 +138,109 @@ onBeforeUnmount(() => {
         </div>
     </Teleport>
 </template>
+
+<style scoped>
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: #2f2a2445;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 30px;
+    z-index: 50;
+}
+.modal {
+    position: relative;
+    width: min(470px, 100%);
+    max-height: calc(100vh - 60px);
+    background: var(--paper);
+    border: 1px solid var(--line-2);
+    border-radius: 5px;
+    box-shadow: 0 5px 24px #2f2a241c;
+    overflow: hidden;
+    outline: none;
+}
+.modal.medium {
+    width: min(760px, 100%);
+}
+.modal.wide {
+    width: min(880px, 100%);
+}
+.modal-content {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 62px);
+}
+.modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    flex: none;
+}
+.modal-head h2 {
+    font-size: 18px;
+}
+.modal-body {
+    padding: 6px 20px 20px;
+    overflow: auto;
+    min-height: 0;
+    scroll-padding-top: 12px;
+}
+.modal-body > p + p {
+    margin-top: 12px;
+}
+.modal-foot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid var(--line);
+    padding: 12px 20px;
+    background: var(--paper-2);
+    flex: none;
+}
+.discard-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 25px;
+    background: #fbf7ecb8;
+}
+.discard-panel {
+    background: var(--paper);
+    border: 1px solid var(--line-2);
+    border-radius: 4px;
+    padding: 24px;
+    max-width: 400px;
+    box-shadow: 0 4px 15px #2f2a2414;
+}
+.discard-panel h3 {
+    font-size: 17px;
+    margin-bottom: 10px;
+}
+.discard-panel .actions {
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+@media (max-width: 1150px) {
+    .modal.medium {
+        width: min(700px, 100%);
+    }
+    .modal.wide {
+        width: min(780px, 100%);
+    }
+}
+@media (max-width: 750px) {
+    .modal-overlay {
+        padding: 15px;
+    }
+    .modal,
+    .modal-content {
+        max-height: calc(100vh - 30px);
+    }
+}
+</style>

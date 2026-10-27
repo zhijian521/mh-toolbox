@@ -65,3 +65,44 @@ async function windowAction(action: 'minimize' | 'maximize' | 'close') {
         </button>
     </div>
 </template>
+
+<style scoped>
+.window-controls {
+    display: flex;
+    align-self: stretch;
+    height: 100%;
+    -webkit-app-region: no-drag;
+}
+.window-control {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    width: 44px;
+    height: 100%;
+    padding: 0;
+    color: var(--ink);
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
+}
+.window-control svg {
+    display: block;
+}
+.window-control:focus-visible {
+    outline-offset: -3px;
+}
+.window-control:hover:not(:disabled) {
+    background: var(--line);
+}
+.window-control:active:not(:disabled) {
+    background: var(--line-2);
+}
+.window-close:hover:not(:disabled),
+.window-close:active:not(:disabled) {
+    background: var(--red);
+    color: var(--paper);
+}
+</style>

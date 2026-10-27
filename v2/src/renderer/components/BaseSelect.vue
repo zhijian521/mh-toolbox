@@ -157,3 +157,113 @@ async function onSearch() {
         </Teleport>
     </div>
 </template>
+
+<style scoped>
+.select-field {
+    display: block;
+    min-width: 0;
+}
+.select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 34px;
+    padding: 7px 9px;
+    border: 1px solid var(--line-2);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 13.5px;
+    font-family: inherit;
+    text-align: left;
+    transition: border-color 120ms ease;
+}
+.select-trigger:hover:not(:disabled) {
+    border-color: var(--gold);
+}
+.select-trigger[aria-expanded='true'] {
+    border-color: var(--gold);
+    box-shadow: inset 0 0 0 1px #a67c2e33;
+}
+.select-trigger:focus-visible {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 1px #a67c2e40;
+}
+.select-trigger:disabled {
+    opacity: 0.65;
+}
+.select-trigger svg {
+    flex: none;
+    color: var(--muted);
+}
+.select-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.select-value.placeholder {
+    color: #9a917e;
+}
+/* 弹层通过 Teleport 挂到 body，作用域属性仍随组件节点保留。 */
+.select-popover {
+    padding: 4px;
+}
+.xmenu-search {
+    width: 100%;
+    margin-bottom: 4px;
+    padding: 6px 8px;
+    font-size: 13px;
+}
+.select-list {
+    max-height: 244px;
+    overflow-y: auto;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+.select-list::-webkit-scrollbar {
+    width: 8px;
+}
+.select-list::-webkit-scrollbar-thumb {
+    background: var(--line-2);
+    border-radius: 4px;
+}
+.xitem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 13.5px;
+    color: var(--ink);
+    outline: none;
+}
+.xitem:hover,
+.xitem:focus-visible {
+    background: var(--paper-2);
+}
+.xitem.active {
+    color: var(--gold);
+}
+.xitem svg {
+    flex: none;
+    color: var(--gold);
+}
+.xitem-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.xitem.empty-item {
+    color: var(--muted);
+    cursor: default;
+}
+.xitem.empty-item:hover {
+    background: none;
+}
+</style>

@@ -203,3 +203,172 @@ const groups = computed(() => [
         </div>
     </article>
 </template>
+
+<style scoped>
+.character-card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 20px;
+    width: 100%;
+    min-width: 420px;
+    max-width: 520px;
+}
+.character-heading {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    justify-content: space-between;
+    min-height: 56px;
+}
+.character-identity {
+    display: flex;
+    gap: 12px;
+    min-width: 0;
+    align-items: center;
+    flex: 1;
+}
+.character-identity > div {
+    min-width: 0;
+    flex: 1;
+}
+.character-identity h2 {
+    font-size: 17px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.character-identity p {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.card-actions {
+    gap: 5px;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+}
+.card-actions .icon-button {
+    width: 29px;
+    height: 29px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--paper-2);
+    color: var(--muted);
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        color 120ms ease;
+}
+.card-actions .icon-button:hover:not(:disabled) {
+    border-color: var(--gold);
+    background: #eee3cb;
+    color: #806027;
+}
+.card-actions .icon-button:active:not(:disabled) {
+    background: #e6d9bc;
+}
+.card-actions .icon-button.danger {
+    color: var(--muted);
+}
+.card-actions .icon-button.danger:hover:not(:disabled) {
+    border-color: #c89483;
+    background: #f2e3d8;
+    color: var(--red);
+}
+.character-sections {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 40px;
+    row-gap: 24px;
+    margin-top: 26px;
+}
+.character-sections > section {
+    min-width: 0;
+}
+.character-sections section:first-child,
+.character-sections section:nth-child(4),
+.growth-section {
+    grid-column: 1/-1;
+}
+.character-sections h3 {
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.character-sections h3:before {
+    content: '';
+    width: 3px;
+    height: 14px;
+    background: var(--red);
+    flex: none;
+}
+.metric-list {
+    display: grid;
+    gap: 2px;
+}
+.character-sections section:first-child .metric-list,
+.character-sections section:nth-child(4) .metric-list {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 40px;
+}
+.metric-list > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 5px;
+    min-width: 0;
+    min-height: 29px;
+}
+.metric-list dt {
+    color: #6b6353;
+    overflow-wrap: anywhere;
+}
+.metric-list dd {
+    flex: none;
+}
+.metric-button {
+    border: 0;
+    border-radius: 3px;
+    background: none;
+    min-height: 27px;
+    padding: 2px 5px;
+    margin-right: -5px;
+    color: var(--gold);
+}
+.metric-button:hover:not(:disabled) {
+    background: var(--paper-2);
+}
+.training .metric-button {
+    color: var(--blue);
+}
+.growth-section .metric-list {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 40px;
+}
+.character-note {
+    margin-top: 10px;
+    font-size: 13px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--muted);
+}
+@media (max-width: 1150px) {
+    .character-card {
+        padding: 16px;
+    }
+    .character-sections {
+        column-gap: 32px;
+    }
+    .character-sections section:first-child .metric-list,
+    .character-sections section:nth-child(4) .metric-list,
+    .growth-section .metric-list {
+        column-gap: 32px;
+    }
+}
+</style>

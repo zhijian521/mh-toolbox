@@ -325,3 +325,75 @@ const trainingGroups = [
         </template>
     </BaseModal>
 </template>
+
+<style scoped>
+.edit-section {
+    margin-bottom: 28px;
+    scroll-margin-top: 12px;
+}
+.edit-section:last-child {
+    margin-bottom: 0;
+}
+.edit-section h3 {
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.edit-section h3:before {
+    content: '';
+    width: 3px;
+    height: 14px;
+    background: var(--red);
+    flex: none;
+}
+.section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    gap: 10px;
+}
+.section-heading h3 {
+    margin-bottom: 0;
+}
+.section-nav {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 0 20px 14px;
+    flex: none;
+}
+.section-nav .btn {
+    background: transparent;
+}
+.training-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 40px;
+    align-items: start;
+}
+.school-choice {
+    border: 1px solid var(--line-2);
+    background: var(--paper-2);
+    padding: 12px;
+    margin-top: 15px;
+    border-radius: 3px;
+}
+.school-choice .actions {
+    margin-top: 10px;
+}
+.form-error {
+    margin-top: 20px;
+    padding: 10px;
+    background: var(--paper-2);
+    border: 1px solid #b33a3a55;
+    border-radius: 3px;
+}
+@media (max-width: 750px) {
+    .training-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>

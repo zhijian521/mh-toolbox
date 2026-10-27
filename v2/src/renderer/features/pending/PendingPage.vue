@@ -14,3 +14,32 @@ defineProps<{ title: string; icon: string }>();
         <p>{{ title }}页面已预留，后续将在这里接入功能。</p>
     </section>
 </template>
+
+<style scoped>
+.page-status {
+    padding: 3px 9px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    color: var(--muted);
+    font-size: 12px;
+    background: var(--paper-2);
+}
+.pending-page {
+    gap: 12px;
+}
+.pending-page-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    margin-bottom: 6px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--gold);
+    background: var(--paper);
+}
+.pending-page p {
+    font-size: 13px;
+}
+</style>

@@ -164,3 +164,22 @@ function keyboardMove(id: string, offset: number) {
     </BaseModal>
 </template>
 
+<style scoped>
+.character-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 20px;
+    align-items: start;
+    justify-content: start;
+}
+.card-wrapper {
+    position: relative;
+    min-width: 420px;
+    max-width: 520px;
+}
+@media (max-width: 750px) {
+    .character-grid {
+        grid-template-columns: minmax(420px, 520px);
+    }
+}
+</style>

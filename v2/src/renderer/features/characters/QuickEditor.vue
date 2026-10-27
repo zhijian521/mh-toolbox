@@ -132,3 +132,74 @@ async function save() {
         </template>
     </BaseModal>
 </template>
+
+<style scoped>
+.stepper {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 160px) 44px;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0;
+}
+.stepper-input {
+    position: relative;
+    min-width: 0;
+}
+.stepper-input input {
+    width: 100%;
+    padding: 7px 30px 7px 12px;
+    font-size: 28px;
+    text-align: center;
+}
+.stepper-unit {
+    position: absolute;
+    top: 50%;
+    right: 11px;
+    color: var(--muted);
+    font-size: 12px;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+.stepper .btn {
+    height: 44px;
+    width: 44px;
+    max-width: 44px;
+    flex: none;
+    font-size: 22px;
+}
+.quick-context {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 4px;
+    padding-bottom: 10px;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+}
+.quick-context-separator {
+    color: var(--line-2);
+}
+.quick-context-current {
+    color: var(--ink);
+}
+.quick-context-current :deep(.number-value b) {
+    color: var(--gold);
+}
+.quick-preview {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 0 12px;
+    color: var(--gold);
+    text-align: center;
+}
+.quick-preview-arrow {
+    margin: 0 6px;
+    color: var(--muted);
+}
+</style>

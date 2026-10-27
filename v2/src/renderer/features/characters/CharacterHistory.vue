@@ -152,3 +152,129 @@ function contextOf(entry: GrowthEntry) {
     </BaseModal>
 </template>
 
+<style scoped>
+.compact-empty {
+    min-height: 180px;
+    padding: 30px;
+}
+.history-filters {
+    display: flex;
+    align-items: end;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.history-filters label {
+    flex: none;
+}
+.history-filters .filter-character {
+    width: 180px;
+}
+.history-filters .filter-range {
+    width: 150px;
+}
+.history-filters .filter-date {
+    width: 165px;
+}
+.history-count {
+    margin: 17px 0 10px;
+}
+.history-entry + .history-entry {
+    margin-top: 2px;
+}
+.history-entry ul {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+.history-entry li {
+    display: grid;
+    grid-template-columns:
+        92px minmax(84px, 0.6fr) minmax(150px, 1.3fr)
+        minmax(160px, 1fr) 84px 20px;
+    align-items: center;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--line);
+}
+.history-date {
+    color: var(--ink);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.history-character {
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.history-label {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.history-label small {
+    color: var(--muted);
+    min-width: 52px;
+    font-size: 11.5px;
+    flex: none;
+}
+.history-values {
+    color: var(--gold);
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    white-space: nowrap;
+}
+.history-kind {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: right;
+    white-space: nowrap;
+}
+.history-kind.positive {
+    color: var(--green);
+}
+.history-context {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+}
+.history-context:focus-visible {
+    outline: 1px dashed var(--gold);
+    outline-offset: 1px;
+}
+.history-context > span {
+    display: inline-flex;
+    align-items: center;
+    color: var(--muted);
+}
+.history-context > span[title]:hover {
+    color: var(--gold);
+}
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 15px;
+}
+@media (max-width: 750px) {
+    .history-entry li {
+        grid-template-columns: 1fr;
+        gap: 4px;
+        padding: 9px 0;
+    }
+    .history-date[aria-hidden='true'] {
+        display: none;
+    }
+    .history-kind {
+        text-align: left;
+    }
+}
+</style>

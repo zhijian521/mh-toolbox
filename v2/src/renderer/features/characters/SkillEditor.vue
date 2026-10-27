@@ -81,3 +81,69 @@ const sort = useDragSort({
         </button>
     </div>
 </template>
+
+<style scoped>
+.skill-editor {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+}
+.skill-rows {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 20px;
+    width: 100%;
+}
+.skill-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(60px, 1fr) 76px auto;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+}
+.skill-row .actions {
+    gap: 3px;
+    flex-wrap: nowrap;
+}
+.skill-row .drag-handle {
+    width: 22px;
+    height: 27px;
+    border-radius: 3px;
+    color: var(--line-2);
+}
+.skill-row .drag-handle:hover:not(:disabled) {
+    color: var(--gold);
+    border-color: var(--line-2);
+    background: var(--paper-2);
+}
+.skill-row input {
+    padding: 6px;
+}
+/* BaseNumber 是子组件，需要 :deep() 才能命中其内部 input。 */
+.skill-row :deep(.number-field) > input {
+    padding: 6px 22px 6px 6px;
+}
+/* 技能行从左到右排列，插入提示改为竖向细线，落在行间空隙里。 */
+.skill-row.drop-before:before,
+.skill-row.drop-after:after {
+    top: 2px;
+    bottom: 2px;
+    left: auto;
+    right: auto;
+    width: 2px;
+    height: auto;
+}
+.skill-row.drop-before:before {
+    left: -10px;
+}
+.skill-row.drop-after:after {
+    right: -10px;
+}
+@media (max-width: 1150px) {
+    .skill-rows {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
