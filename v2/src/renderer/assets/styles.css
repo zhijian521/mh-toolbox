@@ -884,6 +884,22 @@ details[open] summary {
 .drop-after:after {
     bottom: -8px;
 }
+/* 技能行按从左到右排列，插入提示改为竖向细线，落在行间空隙里。 */
+.skill-row.drop-before:before,
+.skill-row.drop-after:after {
+    top: 2px;
+    bottom: 2px;
+    left: auto;
+    right: auto;
+    width: 2px;
+    height: auto;
+}
+.skill-row.drop-before:before {
+    left: -10px;
+}
+.skill-row.drop-after:after {
+    right: -10px;
+}
 .modal-overlay {
     position: fixed;
     inset: 0;
@@ -1006,11 +1022,23 @@ details[open] summary {
     width: 100%;
 }
 .skill-row {
+    position: relative;
     display: grid;
-    grid-template-columns: minmax(60px, 1fr) 76px auto;
+    grid-template-columns: auto minmax(60px, 1fr) 76px auto;
     gap: 6px;
     align-items: center;
     min-width: 0;
+}
+.skill-row .drag-handle {
+    width: 20px;
+    height: 26px;
+    border-radius: 3px;
+    color: var(--line-2);
+}
+.skill-row .drag-handle:hover:not(:disabled) {
+    color: var(--gold);
+    border-color: var(--line-2);
+    background: var(--paper-2);
 }
 .skill-row .actions {
     gap: 3px;

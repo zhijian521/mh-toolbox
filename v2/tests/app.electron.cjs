@@ -174,6 +174,76 @@ app.on('browser-window-created', (_event, win) => {
             assert.equal(disk().characters[0].school, '普陀山');
             assert.equal(disk().characters[0].progress.schoolSkills[0].name, '为官之道');
 
+            await read(() => document.querySelector('button[aria-label="编辑档案"]').click());
+            await until(() => !!document.querySelector('#character-form'), '技能排序草稿');
+            const skillNames = () =>
+                read(() =>
+                    [...document.querySelectorAll('.skill-row')].map(
+                        (row) => row.querySelector('input:not([type="number"])').value,
+                    ),
+                );
+            const order = await skillNames();
+            assert.ok(order.length >= 3);
+            assert.equal(
+                await read(() => document.querySelectorAll('.skill-row .drag-handle').length),
+                order.length,
+            );
+            await read(() => {
+                const rows = document.querySelectorAll('.skill-row');
+                const transfer = new DataTransfer();
+                rows[0]
+                    .querySelector('.drag-handle')
+                    .dispatchEvent(
+                        new DragEvent('dragstart', { dataTransfer: transfer, bubbles: true }),
+                    );
+                const bounds = rows[2].getBoundingClientRect();
+                rows[2].dispatchEvent(
+                    new DragEvent('dragover', {
+                        dataTransfer: transfer,
+                        clientX: bounds.right - 4,
+                        clientY: bounds.top + 10,
+                        bubbles: true,
+                        cancelable: true,
+                    }),
+                );
+                rows[2].dispatchEvent(
+                    new DragEvent('drop', {
+                        dataTransfer: transfer,
+                        bubbles: true,
+                        cancelable: true,
+                    }),
+                );
+            });
+            await until(
+                (name) =>
+                    document.querySelector('.skill-row input:not([type="number"])').value === name,
+                '技能拖动',
+                order[1],
+            );
+            assert.deepEqual(await skillNames(), [order[1], order[2], order[0], ...order.slice(3)]);
+            await read(() =>
+                document
+                    .querySelector('.skill-row .drag-handle')
+                    .dispatchEvent(
+                        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }),
+                    ),
+            );
+            await until(
+                (name) =>
+                    document.querySelector('.skill-row input:not([type="number"])').value === name,
+                '技能方向键排序',
+                order[2],
+            );
+            assert.deepEqual(await skillNames(), [order[2], order[1], order[0], ...order.slice(3)]);
+            await submit('#character-form');
+            await until(() => !document.querySelector('.modal'), '保存技能顺序');
+            assert.deepEqual(
+                disk()
+                    .characters[0].progress.schoolSkills.map((item) => item.name)
+                    .slice(0, 3),
+                [order[2], order[1], order[0]],
+            );
+
             await click('养成记录');
             await until(() => !!document.querySelector('.history-entry'), '养成历史');
             assert.ok(

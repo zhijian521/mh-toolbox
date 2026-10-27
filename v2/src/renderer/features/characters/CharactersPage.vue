@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import type { Character } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import { plain } from '../../services/desktop';
@@ -10,6 +10,7 @@ import CharacterHistory from './CharacterHistory.vue';
 import BaseModal from '../../components/BaseModal.vue';
 import AppIcon from '../../components/AppIcon.vue';
 import PageHeader from '../../components/PageHeader.vue';
+import { useDragSort } from '../../components/drag-sort';
 const app = useApplication();
 const content = ref<HTMLElement>(),
     addButton = ref<HTMLButtonElement>();
@@ -66,56 +67,15 @@ async function move(id: string, targetId: string, position: 'before' | 'after') 
         app.notify(error instanceof Error ? error.message : String(error), true);
     }
 }
+const sort = useDragSort({
+    keys: () => app.characters.map((character) => character.id),
+    scroll: () => content.value,
+    enabled: () => !app.busy,
+    onMove: ({ key, targetKey, position }) => void move(key, targetKey, position),
+});
 function keyboardMove(id: string, offset: number) {
-    const index = app.characters.findIndex((character) => character.id === id),
-        target = app.characters[index + offset];
-    if (target) void move(id, target.id, offset < 0 ? 'before' : 'after');
+    sort.moveBy(id, offset);
 }
-const dragging = ref(''),
-    dropId = ref(''),
-    dropPosition = ref<'before' | 'after'>('before');
-let scrollSpeed = 0,
-    scrollFrame = 0;
-function scrollTick() {
-    if (!dragging.value) return;
-    if (content.value) content.value.scrollTop += scrollSpeed;
-    scrollFrame = requestAnimationFrame(scrollTick);
-}
-function startDrag(id: string, event: DragEvent) {
-    if (app.busy || !event.dataTransfer) {
-        event.preventDefault();
-        return;
-    }
-    dragging.value = id;
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', id);
-    scrollFrame = requestAnimationFrame(scrollTick);
-}
-function dragOver(id: string, event: DragEvent) {
-    if (!dragging.value) return;
-    event.preventDefault();
-    const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    dropId.value = id;
-    dropPosition.value = event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
-    const viewport = content.value!.getBoundingClientRect();
-    scrollSpeed =
-        event.clientY < viewport.top + 65 ? -12 : event.clientY > viewport.bottom - 65 ? 12 : 0;
-}
-function endDrag() {
-    dragging.value = '';
-    dropId.value = '';
-    scrollSpeed = 0;
-    cancelAnimationFrame(scrollFrame);
-}
-function drop(event: DragEvent) {
-    event.preventDefault();
-    const id = dragging.value,
-        target = dropId.value,
-        position = dropPosition.value;
-    endDrag();
-    if (id && target) void move(id, target, position);
-}
-onBeforeUnmount(endDrag);
 </script>
 <template>
     <PageHeader title="角色" description="角色档案 · 技能修炼 · 养成记录">
@@ -126,7 +86,7 @@ onBeforeUnmount(endDrag);
             </button>
         </template>
     </PageHeader>
-    <div ref="content" class="page-content" @dragend="endDrag" @drop="endDrag">
+    <div ref="content" class="page-content" @dragend="sort.end()" @drop="sort.drop($event)">
         <div v-if="!app.characters.length" class="empty">
             <AppIcon name="user" :size="38" />
             <h2>从一个角色开始</h2>
@@ -138,19 +98,9 @@ onBeforeUnmount(endDrag);
                 v-for="character in app.characters"
                 :key="character.id"
                 class="card-wrapper"
-                :class="{
-                    'is-dragging': dragging === character.id,
-                    'drop-before':
-                        dropId === character.id &&
-                        dragging !== character.id &&
-                        dropPosition === 'before',
-                    'drop-after':
-                        dropId === character.id &&
-                        dragging !== character.id &&
-                        dropPosition === 'after',
-                }"
-                @dragover="dragOver(character.id, $event)"
-                @drop.stop="drop"
+                :class="sort.state(character.id)"
+                @dragover="sort.over(character.id, $event)"
+                @drop.stop="sort.drop($event, character.id)"
             >
                 <CharacterCard
                     :character="character"
@@ -163,7 +113,7 @@ onBeforeUnmount(endDrag);
                     "
                     @quick="(category, key) => (quick = { id: character.id, category, key })"
                     @move="keyboardMove(character.id, $event)"
-                    @drag="startDrag(character.id, $event)"
+                    @drag="sort.start(character.id, $event)"
                 />
             </div>
         </div>
