@@ -17,6 +17,21 @@ function indexed(progress) {
 }
 
 /**
+ * 角色名下的装备 id。删除联动与删除预览都从这里取，避免两处口径漂移。
+ *
+ * @param {Domain} D
+ * @param {string} id
+ * @returns {Set<string>}
+ */
+function ownedEquipmentIds(D, id) {
+    return new Set(
+        D.state.equipment
+            .filter((/** @type {any} */ eq) => eq.characterId === id)
+            .map((/** @type {any} */ eq) => eq.id),
+    );
+}
+
+/**
  * @param {Domain} D
  * @param {any} U
  * @param {unknown} _gateway
@@ -489,6 +504,50 @@ export default function install(D, U, _gateway, _localStorage) {
             },
 
             /**
+             * 角色删除会连带清掉的关联记录统计，供删除确认展示。
+             * 与 removeCharacter 共用 ownedEquipmentIds，口径必须一致：四个按
+             * characterId 归属的集合、该角色装备的变更日志（含按装备 id 反查），
+             * 以及进行中的在线计时。
+             *
+             * @this {Domain}
+             * @param {string} id
+             * @returns {{ transactions: number, sessions: number, goals: number, equipment: number, gearLogs: number, activeSession: number, total: number }}
+             */
+            characterRemovalSummary(id) {
+                const equipmentIds = ownedEquipmentIds(this, id);
+                const counts = {
+                    transactions: this.state.transactions.filter(
+                        (/** @type {any} */ item) => item.characterId === id,
+                    ).length,
+                    sessions: this.state.sessions.filter(
+                        (/** @type {any} */ item) => item.characterId === id,
+                    ).length,
+                    goals: this.state.goals.filter(
+                        (/** @type {any} */ item) => item.characterId === id,
+                    ).length,
+                    equipment: equipmentIds.size,
+                    gearLogs: this.state.gearLogs.filter(
+                        (/** @type {any} */ log) =>
+                            log.characterId === id || equipmentIds.has(log.equipmentId),
+                    ).length,
+                    activeSession:
+                        this.state.activeSession && this.state.activeSession.characterId === id
+                            ? 1
+                            : 0,
+                };
+                return {
+                    ...counts,
+                    total:
+                        counts.transactions +
+                        counts.sessions +
+                        counts.goals +
+                        counts.equipment +
+                        counts.gearLogs +
+                        counts.activeSession,
+                };
+            },
+
+            /**
              * 角色删除与全部关联记录一并落盘，失败时整体恢复。
              *
              * @this {Domain}
@@ -498,11 +557,7 @@ export default function install(D, U, _gateway, _localStorage) {
             async removeCharacter(id) {
                 return this.commit(() => {
                     if (!this.charById(id)) throw new Error('角色不存在');
-                    const equipmentIds = new Set(
-                        this.state.equipment
-                            .filter((/** @type {any} */ eq) => eq.characterId === id)
-                            .map((/** @type {any} */ eq) => eq.id),
-                    );
+                    const equipmentIds = ownedEquipmentIds(this, id);
                     this.state.characters = this.state.characters.filter(
                         (/** @type {any} */ character) => character.id !== id,
                     );

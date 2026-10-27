@@ -54,7 +54,7 @@ async function save() {
         <form id="quick-form" @submit.prevent="save">
             <fieldset :disabled="app.busy">
                 <p class="quick-context">
-                    <span>{{ character.name }}</span>
+                    <span>{{ character?.name }}</span>
                     <span class="quick-context-separator" aria-hidden="true">·</span>
                     <span>{{ metric.group }}</span>
                     <span class="quick-context-separator" aria-hidden="true">·</span>

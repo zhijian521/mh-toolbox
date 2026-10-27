@@ -10,6 +10,7 @@ import BaseModal from '../../components/BaseModal.vue';
 import BaseNumber from '../../components/BaseNumber.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
 import SkillEditor from './SkillEditor.vue';
+import { useSectionNav } from '../../components/section-nav';
 const props = defineProps<{ character?: Character }>();
 const emit = defineEmits<{ close: []; saved: [id: string] }>();
 const app = useApplication(),
@@ -35,9 +36,8 @@ const sections = [
     ['petTraining', '召唤兽修炼'],
     ['auxiliarySkills', '辅助技能'],
     ['growth', '其他养成'],
-];
-const sectionElements = new Map<string, HTMLElement>();
-const activeSection = ref('basic');
+] as const;
+const nav = useSectionNav(sections.map(([key]) => key));
 let skillSchool = draft.school;
 const schoolChoice = ref(false);
 watch(
@@ -52,12 +52,6 @@ function settleSchool(replace: boolean) {
     schoolChoice.value = false;
     skillSchool = draft.school;
 }
-function navigateSection(key: string) {
-    activeSection.value = key;
-    const section = sectionElements.get(key);
-    section?.scrollIntoView({ block: 'start' });
-    section?.querySelector<HTMLElement>('h3')?.focus({ preventScroll: true });
-}
 function captureInput(event: Event) {
     if (event.target instanceof HTMLInputElement && event.target.validity.badInput)
         invalidEdit.value = true;
@@ -67,12 +61,12 @@ async function save() {
     if (app.busy) return;
     if (schoolChoice.value) {
         error.value = '更换门派后，请选择如何处理现有师门技能';
-        navigateSection('basic');
+        nav.go('basic');
         return;
     }
     if (props.character && !draft.changeDate) {
         error.value = '请选择变更日期';
-        navigateSection('growth');
+        nav.go('growth');
         return;
     }
     try {
@@ -129,10 +123,10 @@ const trainingGroups = [
                     v-for="[key, title] in sections"
                     :key="key"
                     class="btn compact"
-                    :class="{ selected: activeSection === key }"
-                    :aria-current="activeSection === key ? 'location' : undefined"
+                    :class="{ selected: nav.active === key }"
+                    :aria-current="nav.active === key ? 'location' : undefined"
                     :disabled="app.busy"
-                    @click="navigateSection(key)"
+                    @click="nav.go(key)"
                 >
                     {{ title }}
                 </button>
@@ -140,14 +134,7 @@ const trainingGroups = [
         </template>
         <form id="character-form" @submit.prevent="save" @input="captureInput">
             <fieldset :disabled="app.busy">
-                <section
-                    :ref="
-                        (element) => {
-                            if (element) sectionElements.set('basic', element as HTMLElement);
-                        }
-                    "
-                    class="edit-section"
-                >
+                <section :ref="nav.register('basic')" class="edit-section">
                     <h3 tabindex="-1">基础信息</h3>
                     <div class="form-grid">
                         <label>
@@ -199,15 +186,7 @@ const trainingGroups = [
                         </div>
                     </div>
                 </section>
-                <section
-                    :ref="
-                        (element) => {
-                            if (element)
-                                sectionElements.set('schoolSkills', element as HTMLElement);
-                        }
-                    "
-                    class="edit-section"
-                >
+                <section :ref="nav.register('schoolSkills')" class="edit-section">
                     <div class="section-heading">
                         <h3 tabindex="-1">师门技能</h3>
                         <button
@@ -230,11 +209,7 @@ const trainingGroups = [
                     <section
                         v-for="group in trainingGroups"
                         :key="group.key"
-                        :ref="
-                            (element) => {
-                                if (element) sectionElements.set(group.key, element as HTMLElement);
-                            }
-                        "
+                        :ref="nav.register(group.key)"
                         class="edit-section"
                     >
                         <h3 tabindex="-1">{{ group.title }}</h3>
@@ -249,15 +224,7 @@ const trainingGroups = [
                         </div>
                     </section>
                 </div>
-                <section
-                    :ref="
-                        (element) => {
-                            if (element)
-                                sectionElements.set('auxiliarySkills', element as HTMLElement);
-                        }
-                    "
-                    class="edit-section"
-                >
+                <section :ref="nav.register('auxiliarySkills')" class="edit-section">
                     <h3 tabindex="-1">辅助技能</h3>
                     <SkillEditor
                         v-model="draft.progress.auxiliarySkills"
@@ -265,14 +232,7 @@ const trainingGroups = [
                         :suggestions="rules.auxiliarySkillNames"
                     />
                 </section>
-                <section
-                    :ref="
-                        (element) => {
-                            if (element) sectionElements.set('growth', element as HTMLElement);
-                        }
-                    "
-                    class="edit-section"
-                >
+                <section :ref="nav.register('growth')" class="edit-section">
                     <h3 tabindex="-1">其他养成</h3>
                     <div class="form-grid">
                         <label>

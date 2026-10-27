@@ -19,27 +19,25 @@ const quick = ref<{ id: string; category: string; key: string } | null>(null);
 const historyId = ref<string | null>(null),
     deleting = ref<Character | null>(null),
     deleteError = ref('');
-// Mirrors domain.removeCharacter: owned records plus equipment logs (including logs of this
-// character's equipment) and the active session are all dropped with the character.
-const relatedCount = computed(() => {
+// 删除范围的口径由领域层给出，页面不再自己遍历 state 计数——两处平行实现
+// 一旦有一侧加了新集合，确认框的数字就会和实际删除对不上。
+const removeSummary = computed(() => {
     const target = deleting.value;
-    if (!target || !app.data) return 0;
-    const data = app.data as any;
-    const owned = ['transactions', 'sessions', 'goals', 'equipment'].reduce(
-        (sum, key) =>
-            sum + (data[key] as any[]).filter((item) => item.characterId === target.id).length,
-        0,
-    );
-    const equipmentIds = new Set(
-        (data.equipment as any[])
-            .filter((item) => item.characterId === target.id)
-            .map((item) => item.id),
-    );
-    const logs = (data.gearLogs as any[]).filter(
-        (log) => log.characterId === target.id || equipmentIds.has(log.equipmentId),
-    ).length;
-    const active = data.activeSession?.characterId === target.id ? 1 : 0;
-    return owned + logs + active;
+    return target ? app.rules().characterRemovalSummary(target.id) : null;
+});
+const removalParts = computed(() => {
+    const summary = removeSummary.value;
+    if (!summary) return [];
+    return [
+        { label: '收益与账号流水', count: summary.transactions },
+        { label: '在线记录', count: summary.sessions },
+        { label: '目标', count: summary.goals },
+        { label: '装备', count: summary.equipment },
+        { label: '装备变更日志', count: summary.gearLogs },
+        { label: '进行中的在线计时', count: summary.activeSession },
+    ]
+        .filter((part) => part.count > 0)
+        .map((part) => part.label + ' ' + part.count);
 });
 async function saved(id: string) {
     editing.value = null;
@@ -149,10 +147,11 @@ function keyboardMove(id: string, offset: number) {
     />
     <BaseModal v-if="deleting" title="删除角色" :busy="app.busy" @close="deleting = null">
         <p>确定删除角色「{{ deleting.name }}」吗？</p>
-        <p>
-            技能养成档案、养成变更记录及名下
-            {{ relatedCount }}
-            条相关记录（收益、在线、账号账本、目标、装备）与装备变更日志会一并删除，且无法恢复。
+        <p>角色档案、技能养成档案与养成变更记录会一并删除，且无法恢复。</p>
+        <p v-if="removalParts.length">
+            名下还有 {{ removeSummary?.total }} 条关联记录会一并清除：{{
+                removalParts.join('、')
+            }}。
         </p>
         <p v-if="deleteError" class="error" role="alert">{{ deleteError }}</p>
         <template #footer="{ close }">

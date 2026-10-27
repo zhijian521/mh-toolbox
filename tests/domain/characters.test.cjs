@@ -441,3 +441,78 @@ test('编辑与养成保存不执行新建角色的排序计算', async () => {
     await D.saveCharacterProgress('c1', { qianyuanPills: 3 });
     assert.equal(D.charById('c1').progress.qianyuanPills, 3);
 });
+
+/** 造一份带各类关联记录的数据：c1 有装备与进行中的计时，c2 有互不相关的记录。 */
+function removalFixture() {
+    const D = domain();
+    D.state.transactions = [
+        { id: 't1', characterId: 'c1', ledger: 'earnings', amount: 10 },
+        { id: 't2', characterId: 'c1', ledger: 'account', amount: 20 },
+        { id: 't3', characterId: 'c2', ledger: 'earnings', amount: 30 },
+    ];
+    D.state.sessions = [
+        { id: 's1', characterId: 'c1' },
+        { id: 's2', characterId: 'c2' },
+    ];
+    D.state.goals = [{ id: 'g1', characterId: 'c1', logs: [] }];
+    D.state.gearLogs = [
+        { id: 'l1', equipmentId: 'sword', characterId: 'c1' },
+        // 装备属于 c1，日志却记在 c2 名下：仍随装备一起删除。
+        { id: 'l2', equipmentId: 'sword', characterId: 'c2' },
+        { id: 'l3', equipmentId: 'other', characterId: 'c2' },
+    ];
+    D.state.activeSession = { id: 'as1', characterId: 'c1' };
+    return D;
+}
+
+test('删除预览的每一项都等于实际删除量', async () => {
+    const D = removalFixture();
+    const summary = D.characterRemovalSummary('c1');
+    assert.deepEqual(plain(summary), {
+        transactions: 2,
+        sessions: 1,
+        goals: 1,
+        equipment: 1,
+        gearLogs: 2,
+        activeSession: 1,
+        total: 8,
+    });
+    const before = {
+        transactions: D.state.transactions.length,
+        sessions: D.state.sessions.length,
+        goals: D.state.goals.length,
+        equipment: D.state.equipment.length,
+        gearLogs: D.state.gearLogs.length,
+        activeSession: D.state.activeSession ? 1 : 0,
+    };
+    await D.removeCharacter('c1');
+    const removed = {
+        transactions: before.transactions - D.state.transactions.length,
+        sessions: before.sessions - D.state.sessions.length,
+        goals: before.goals - D.state.goals.length,
+        equipment: before.equipment - D.state.equipment.length,
+        gearLogs: before.gearLogs - D.state.gearLogs.length,
+        activeSession: before.activeSession - (D.state.activeSession ? 1 : 0),
+    };
+    const counts = plain(summary);
+    delete counts.total;
+    assert.deepEqual(removed, counts, '预览数字必须等于实际删除量');
+    assert.equal(D.charById('c1'), undefined);
+    // 另一个角色的记录不受影响。
+    assert.deepEqual(plain(D.state.transactions.map((item) => item.id)), ['t3']);
+    assert.deepEqual(plain(D.state.sessions.map((item) => item.id)), ['s2']);
+    assert.deepEqual(plain(D.state.gearLogs.map((item) => item.id)), ['l3']);
+});
+
+test('删除预览对不存在的角色返回全零', () => {
+    const D = removalFixture();
+    assert.deepEqual(plain(D.characterRemovalSummary('nope')), {
+        transactions: 0,
+        sessions: 0,
+        goals: 0,
+        equipment: 0,
+        gearLogs: 0,
+        activeSession: 0,
+        total: 0,
+    });
+});

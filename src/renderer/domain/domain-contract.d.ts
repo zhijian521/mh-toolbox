@@ -219,6 +219,16 @@ interface Domain {
         record?: any,
     ) => Promise<any>;
     validateCharacterProgress: (changes: any) => void;
+    /** 角色删除会连带清除的关联记录统计，口径与 removeCharacter 一致。 */
+    characterRemovalSummary: (id: string) => {
+        transactions: number;
+        sessions: number;
+        goals: number;
+        equipment: number;
+        gearLogs: number;
+        activeSession: number;
+        total: number;
+    };
     removeCharacter: (id: string) => Promise<any>;
 
     // ---- schools.js：门派技能模板 ----
