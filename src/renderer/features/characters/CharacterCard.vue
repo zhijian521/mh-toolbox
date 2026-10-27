@@ -283,7 +283,7 @@ const groups = computed(() => [
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: 40px;
-    row-gap: 24px;
+    row-gap: 18px;
     margin-top: 26px;
 }
 .character-sections > section {
@@ -299,7 +299,7 @@ const groups = computed(() => [
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 .character-sections h3:before {
     content: '';
