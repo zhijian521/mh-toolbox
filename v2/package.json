@@ -22,7 +22,7 @@
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "typecheck": "vue-tsc --noEmit",
-        "test": "node --test \"tests/domain/*.test.cjs\" \"tests/*.test.mjs\"",
+        "test": "node --test \"tests/domain/*.test.cjs\" \"tests/domain/*.test.mjs\" \"tests/*.test.mjs\"",
         "test:electron": "node scripts/test-electron.mjs",
         "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
         "verify": "npm run check && npm run build && npm run test:electron",
