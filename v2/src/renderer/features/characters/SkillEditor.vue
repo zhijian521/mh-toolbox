@@ -34,21 +34,6 @@ const sort = useDragSort({
                 @dragover="sort.over(key(skill), $event)"
                 @drop.stop="sort.drop($event, key(skill))"
             >
-                <button
-                    type="button"
-                    class="icon-button drag-handle"
-                    draggable="true"
-                    :aria-label="'拖动排序第 ' + (index + 1) + ' 项技能，或用方向键前后移动'"
-                    title="拖动排序，或用方向键前后移动"
-                    @dragstart="sort.start(key(skill), $event)"
-                    @dragend="sort.end()"
-                    @keydown.left.prevent="sort.moveBy(key(skill), -1)"
-                    @keydown.up.prevent="sort.moveBy(key(skill), -1)"
-                    @keydown.right.prevent="sort.moveBy(key(skill), 1)"
-                    @keydown.down.prevent="sort.moveBy(key(skill), 1)"
-                >
-                    <AppIcon name="grip" :size="14" />
-                </button>
                 <input
                     v-model="skill.name"
                     :list="auxiliary ? 'auxiliary-suggestions' : undefined"
@@ -69,6 +54,21 @@ const sort = useDragSort({
                         @click="skills.splice(index, 1)"
                     >
                         移除
+                    </button>
+                    <button
+                        type="button"
+                        class="icon-button drag-handle"
+                        draggable="true"
+                        :aria-label="'拖动排序第 ' + (index + 1) + ' 项技能，或用方向键前后移动'"
+                        title="拖动排序，或用方向键前后移动"
+                        @dragstart="sort.start(key(skill), $event)"
+                        @dragend="sort.end()"
+                        @keydown.left.prevent="sort.moveBy(key(skill), -1)"
+                        @keydown.up.prevent="sort.moveBy(key(skill), -1)"
+                        @keydown.right.prevent="sort.moveBy(key(skill), 1)"
+                        @keydown.down.prevent="sort.moveBy(key(skill), 1)"
+                    >
+                        <AppIcon name="grip" :size="14" />
                     </button>
                 </div>
             </div>

@@ -1024,14 +1024,18 @@ details[open] summary {
 .skill-row {
     position: relative;
     display: grid;
-    grid-template-columns: auto minmax(60px, 1fr) 76px auto;
+    grid-template-columns: minmax(60px, 1fr) 76px auto;
     gap: 6px;
     align-items: center;
     min-width: 0;
 }
+.skill-row .actions {
+    gap: 3px;
+    flex-wrap: nowrap;
+}
 .skill-row .drag-handle {
-    width: 20px;
-    height: 26px;
+    width: 22px;
+    height: 27px;
     border-radius: 3px;
     color: var(--line-2);
 }
@@ -1039,9 +1043,6 @@ details[open] summary {
     color: var(--gold);
     border-color: var(--line-2);
     background: var(--paper-2);
-}
-.skill-row .actions {
-    gap: 3px;
 }
 .skill-row input {
     padding: 6px;
