@@ -279,8 +279,10 @@ const sparkPoints = computed(() => {
 }
 .card-name {
     margin-top: 3px;
-    font-size: 13.5px;
-    line-height: 1.45;
+    font-size: 15px;
+    line-height: 1.5;
+    letter-spacing: 0.2px;
+    color: var(--ink);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -302,16 +304,20 @@ const sparkPoints = computed(() => {
     min-width: 0;
 }
 .card-price b {
-    font-size: 24px;
+    font-size: 26px;
     line-height: 1.2;
     font-weight: 400;
     letter-spacing: -0.4px;
     font-variant-numeric: tabular-nums;
-    color: var(--ink);
+    /*
+     * 价格用「分类色压暗」而不是纯墨色：既压得住浅色底，又和卡片色系连成一体。
+     * 只混 28%：再高会接近涨跌用的红绿，让人误以为价格本身带了方向。
+     */
+    color: color-mix(in srgb, var(--tone) 28%, var(--ink));
 }
 .card-price small {
-    font-size: 11.5px;
-    color: var(--gold);
+    font-size: 12px;
+    color: color-mix(in srgb, var(--tone) 55%, var(--muted));
 }
 .card-foot {
     display: flex;
