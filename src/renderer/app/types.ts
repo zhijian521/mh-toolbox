@@ -88,6 +88,10 @@ export interface Transaction {
     itemRecordId?: string;
     sessionId?: string;
     saleId?: string;
+    /** 速记来源：`quick` 表示从物品网格一键记录，`timer` 由在线计时器结算。 */
+    source?: string;
+    /** 速记物品在 `game-data/quick-items` 里的 id。 */
+    itemId?: number;
 }
 /**
  * 账本汇总。收入已扣手续费、支出已加手续费，`count` 是参与汇总的笔数。
@@ -181,6 +185,12 @@ export interface GoalEntry {
     goal: Goal;
     summary: GoalSummary;
 }
+/** 进行中的在线会话：`startAt` 是本地毫秒时间戳，其余字段来自速记参数。 */
+export interface ActiveSession extends RecordEntry {
+    startAt?: number;
+    accounts?: number;
+    cardPrice?: number;
+}
 export interface AppData {
     schemaVersion: number;
     characters: Character[];
@@ -189,7 +199,11 @@ export interface AppData {
     goals: Goal[];
     sessions: RecordEntry[];
     gearLogs: RecordEntry[];
-    activeSession: RecordEntry | null;
+    activeSession: ActiveSession | null;
+    /** 速记参数：同时在线角色数与每点单价（游戏币）。 */
+    quickSettings: { accounts: number; cardPrice: number };
+    /** 速记物品的参考单价（游戏币），键是 `game-data/quick-items` 里的 id。 */
+    itemPrices: Record<string, number>;
     [key: string]: unknown;
 }
 /** 角色删除预览：领域层 `characterRemovalSummary` 的返回值。 */
@@ -406,6 +420,16 @@ export interface Domain {
     ): EarningsStats;
     /** 物品剩余数量（获得数量减去已成交数量）。 */
     itemRemaining(tx: Transaction): number;
+    /** 剩余数量 × 单价；已售罄的物品为 0。 */
+    itemHoldingValue(tx: Transaction): number;
+    /** 速记物品的参考单价，单位是游戏币（15000 = 1.5 万）。 */
+    itemPrice(id: number | string): number;
+    setItemPrice(id: string, price: number): void;
+    /** 速记参数：同时在线角色数与每点单价。 */
+    setQuickSettings(input: { accounts?: number; cardPrice?: number }): void;
+    startSession(characterId: string): Promise<RecordEntry>;
+    adjustSessionStart(startAt: number): Promise<unknown>;
+    saveSession(input: RecordEntry, finishActiveId?: string): Promise<RecordEntry>;
     saveTransaction(input: unknown, id?: string): Promise<Transaction>;
     removeTransaction(id: string): Promise<unknown>;
 }

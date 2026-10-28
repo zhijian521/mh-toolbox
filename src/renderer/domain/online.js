@@ -289,6 +289,24 @@ export default function install(D, U, _gateway, _localStorage) {
             },
 
             /**
+             * 速记参数：参与点卡成本的账号数与每点单价（单位：游戏币）。
+             *
+             * 只影响下一次开始计时与点卡成本的换算，不改已经结算过的会话。
+             *
+             * @this {Domain}
+             * @param {{ accounts?: number, cardPrice?: number }} input
+             */
+            setQuickSettings(input) {
+                const accounts = Math.round(Number(input.accounts));
+                const cardPrice = Number(input.cardPrice);
+                if (!Number.isSafeInteger(accounts) || accounts < 1 || accounts > 99)
+                    throw new Error('同时在线角色数需为 1-99 的整数');
+                if (!Number.isFinite(cardPrice) || cardPrice <= 0)
+                    throw new Error('请填写有效的点卡单价');
+                this.state.quickSettings = { accounts, cardPrice };
+            },
+
+            /**
              * @this {Domain}
              * @param {string} characterId
              * @returns {Promise<any>}

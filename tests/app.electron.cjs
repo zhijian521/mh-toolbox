@@ -889,7 +889,7 @@ app.on('browser-window-created', (_event, win) => {
 
             // ---- 收益页：菜单已迁移、记一笔、汇总、记录弹窗、删除 ----
             await read(() => document.querySelector('a[href="#/income"]').click());
-            await until(() => !!document.querySelector('.income-totals'), '收益页');
+            await until(() => !!document.querySelector('.stat-grid'), '收益页');
             assert.equal(
                 await read(() =>
                     document.querySelector('a[href="#/income"]').textContent.includes('待迁移'),
@@ -898,7 +898,7 @@ app.on('browser-window-created', (_event, win) => {
                 '收益页已迁移，菜单不再挂角标',
             );
             assert.equal(
-                await read(() => document.querySelector('.recent-footer b')?.textContent),
+                await read(() => document.querySelector('.loot-footer b')?.textContent),
                 '0',
                 '本月还没有收益记录',
             );
@@ -937,13 +937,16 @@ app.on('browser-window-created', (_event, win) => {
             // 1200 - 80 = 1120
             assert.equal(
                 await read(() =>
-                    document.querySelector('.income-totals .card .net b').textContent.trim(),
+                    document
+                        .querySelectorAll('.stat-grid .stat')[3]
+                        .querySelector('.stat-value')
+                        .textContent.trim(),
                 ),
                 '1120 万',
                 '净收益按收入减支出',
             );
 
-            await click('查看记录');
+            await click('查看全部记录');
             await until(() => !!document.querySelector('.record-head'), '收益记录弹窗');
             assert.equal(
                 await read(() => document.querySelectorAll('.record-row').length),
@@ -970,6 +973,43 @@ app.on('browser-window-created', (_event, win) => {
             );
             await click('关闭');
             await until(() => !document.querySelector('.modal'), '关闭收益记录');
+
+            // ---- 物品速记：没设价先弹单价，保存后按单价入库 ----
+            await read(() => document.querySelector('[data-item="1"]').click());
+            await until(() => !!document.querySelector('#item-price-form'), '单价弹窗');
+            await field('[name="price"]', '8.5');
+            await click('保存并记录');
+            await until(() => !document.querySelector('#item-price-form'), '单价保存');
+            await until(() => document.querySelectorAll('.loot-row').length === 1, '掉落记录出现');
+            const quick = disk().transactions.find((item) => item.source === 'quick');
+            assert.equal(quick.recordType, 'item');
+            assert.equal(quick.itemName, '60武器');
+            assert.equal(quick.quantity, 1);
+            assert.equal(quick.unitPrice, 8.5);
+            assert.equal(quick.status, 'held');
+            assert.equal(disk().itemPrices['1'], 85000, '单价按游戏币原值存储');
+            assert.equal(
+                await read(() => document.querySelector('.loot-price').textContent.trim()),
+                '8.50 万',
+                '掉落列表显示剩余数量估值',
+            );
+
+            // ---- 在线计时：开始后立刻结束，按会话结算出点卡流水 ----
+            await click('▶ 开始游戏');
+            await until(() => !!document.querySelector('.live'), '计时中');
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+            await click('■ 结束游戏');
+            await until(() => !document.querySelector('.live'), '计时结束');
+            assert.equal(disk().sessions.length, 1, '计时结束后落一条会话');
+            assert.equal(
+                disk().transactions.filter((item) => item.sessionId).length,
+                1,
+                '会话结算出点卡流水',
+            );
+            assert.ok(
+                await read(() => document.querySelector('.stat-value') !== null),
+                '统计卡仍在',
+            );
 
             await read(() => document.querySelector('a[href="#/settings"]').click());
             await until(() => !!document.querySelector('.settings-page'), '设置页面');

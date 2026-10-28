@@ -541,3 +541,32 @@ CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都�
 
 - `--disable-gpu` 下 `capturePage()` 返回的是上一帧，连拍四张每张都慢一步。截图脚本改成「先空拍一张丢掉、再取第二张」，否则会把旧画面当成新结果判断。
 - 物品行先用 `disabled` 的 `button` 做只读，浏览器把它整行灰化；改 `div` 后正常。
+
+## 收益页补上物品速记与在线计时
+
+日期：2026-10-28。范围：`game-data/quick-items.js`、`assets/images/online-record/`、`features/income/` 四个组件、`online.js` 新增 `setQuickSettings`、集成测试。
+
+| 检查              | 结果                                |
+| ----------------- | ----------------------------------- |
+| 格式化            | `prettier --check .` 通过           |
+| ESLint            | 0 错误 0 警告                       |
+| 类型检查          | `vue-tsc --noEmit` 0 错误           |
+| 领域与隔离测试    | 95 项通过 0 失败（含契约双向比对）  |
+| Vite 生产构建     | 通过，56 张 png + 3 张 gif 进入产物 |
+| Electron 集成流程 | PASS，新增速记落库与计时结算断言    |
+
+上一刀只做了「通用记录 + 汇总」，把 V1 收益页真正的主体——**物品速记网格 + 在线计时**——漏掉了。这一刀补齐：
+
+**1. 物品目录与图标。** 59 个物品从 V1 `views/quick-items.js` 原样搬进 `game-data/quick-items.js`，分「固定价格」与「未设价格」两组；图标从 V1 归档的 `assets/images/online-record/` 迁入 `src/renderer/assets/images/`，用 `import.meta.glob` 取构建后的 URL。目录里 `img` 与 `name` 不一致的情况（`摇钱树树苗.png` 对应「摇钱树苗」）以 `img` 字段为准。
+
+**2. 点一下记一条。** 有单价直接记：`recordType: 'item'`、数量 1、按单价估值、状态持有、来源标记 `quick`；没单价先弹「设置单价」，保存后接着记录（与 V1 一致）。右键物品图标可以改价。「金币」按 V1 的约定记成金额记录而不是库存。
+
+**3. 单价单位。** 输入按万，领域里存游戏币原值（1.5 万存 15000），记录金额再折回万并保留两位。`itemPrices` 的键是字符串，读的时候 `itemPrice(id)` 内部自己转。
+
+**4. 五张统计卡**全部来自 `earningsStats(charId, from, to, includeActive)`：在线时长、点卡消耗、持有物品估值、游戏币净收益、在线净时薪。计时中传 `includeActive: true` 并每秒重算一次，秒表和统计一起走。
+
+**5. 在线计时。** 开始走 `startSession`，结束后 `saveSession({ ...active, mode: 'range', endAt, source: 'timer' }, active.id)`，由 `syncSession` 切出跨日片并生成点卡流水。点卡参数（角色数 / 每点单价）放进 `QuickSettings` 弹窗，新增领域方法 `setQuickSettings` 并同步 `domain-contract.d.ts`——这是本轮唯一新增的领域方法。
+
+**已知缺口（V1 有、这一刀没做）：** 补记在线、调整开始时间、物品库存与分次出售、单价导入导出、CSV。物品与成交记录在「全部记录」里仍只读，等物品模块一起做。
+
+**踩到的坑：** `import.meta.glob` 的路径多写了一层 `../`，59 张图标全部返回空字符串——界面不报错、构建不报错，只是所有图标变成空白。是构建后 `find dist -name '*.png' | wc -l` 得 0 才发现的。以后接静态资源要顺手查一次产物里有没有对应文件。

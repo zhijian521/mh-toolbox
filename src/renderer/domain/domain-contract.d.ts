@@ -343,6 +343,7 @@ interface Domain {
     saveSession: (input: any, finishActiveId?: string) => Promise<any>;
     removeSession: (id: string) => Promise<any>;
     startSession: (charId: string) => Promise<any>;
+    setQuickSettings: (input: { accounts?: number; cardPrice?: number }) => void;
     adjustSessionStart: (startAt: number) => Promise<any>;
     commitOnline: (change: () => any) => Promise<any>;
     _saleList?: any[];
