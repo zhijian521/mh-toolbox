@@ -1029,6 +1029,35 @@ app.on('browser-window-created', (_event, win) => {
                 '会话结算出点卡流水',
             );
 
+            // ---- 结算窗：把这一局的盈亏记进账号账本（两本账唯一的交集） ----
+            await until(() => !!document.querySelector('#settle-form'), '结算弹窗');
+            assert.equal(
+                await read(() => document.querySelector('.settle-subject').textContent.trim()),
+                '轻舟 · 在线 1 秒',
+                '结算窗说明本段时长',
+            );
+            // 默认金额 = 本段速记（金币 1200 + 物品 43.5）− 本段点卡。
+            assert.ok(
+                await read(() => {
+                    const input = document.querySelector('#settle-form [name="amount"]');
+                    return Math.abs(Number(input.value) - 1243.5) < 0.02;
+                }),
+                '默认金额按本段速记折算',
+            );
+            const accountBefore = disk().transactions.filter((item) => item.ledger === 'account');
+            await field('[name="amount"]', '200');
+            await click('记入账号');
+            await until(() => !document.querySelector('#settle-form'), '结算完成');
+            const accountAfter = disk().transactions.filter((item) => item.ledger === 'account');
+            assert.equal(accountAfter.length, accountBefore.length + 1, '账号账本多一条');
+            const settled = accountAfter.at(-1);
+            assert.equal(settled.kind, 'income');
+            assert.equal(settled.amount, 200);
+            assert.equal(settled.category, '其他收支');
+            assert.equal(settled.currency, 'cash');
+            assert.equal(settled.ledger, 'account', '记的是账号账本，不是收益账本');
+            assert.equal(disk().sessions.length, 1, '结算不额外产生会话');
+
             // ---- 补在线时长：默认全选在线角色，角色数就是点卡的乘数 ----
             await click('补在线时长');
             await until(() => !!document.querySelector('#online-form'), '补记在线弹窗');

@@ -51,7 +51,7 @@ async function save() {
                     v-model="accounts"
                     name="accounts"
                     :min="1"
-                    :max="99"
+                    :max="20"
                     @update:model-value="dirty = true"
                 />
             </label>

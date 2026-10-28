@@ -122,11 +122,13 @@ export default function install(D, U, _gateway, _localStorage) {
                     session.mode !== 'legacy' &&
                     (!Number.isInteger(session.accounts) ||
                         session.accounts < 1 ||
-                        session.accounts > 20 ||
+                        /* 这里只校验「是正整数」，不设业务上限：上限归 `setQuickSettings`
+                           与界面管。校验路径一旦收紧，历史数据里角色数超范围的会话就永远
+                           结算不了，计时会卡在 activeSession 里出不来。 */
                         !Number.isFinite(session.cardPrice) ||
                         session.cardPrice <= 0)
                 )
-                    return '角色数需为 1～20 的整数，点卡价格需大于 0';
+                    return '角色数需为正整数，点卡价格需大于 0';
                 if (session.mode !== 'range') {
                     if (
                         !/^\d{4}-\d{2}-\d{2}$/.test(session.date) ||
@@ -299,8 +301,8 @@ export default function install(D, U, _gateway, _localStorage) {
             setQuickSettings(input) {
                 const accounts = Math.round(Number(input.accounts));
                 const cardPrice = Number(input.cardPrice);
-                if (!Number.isSafeInteger(accounts) || accounts < 1 || accounts > 99)
-                    throw new Error('同时在线角色数需为 1-99 的整数');
+                if (!Number.isSafeInteger(accounts) || accounts < 1 || accounts > 20)
+                    throw new Error('同时在线角色数需为 1-20 的整数');
                 if (!Number.isFinite(cardPrice) || cardPrice <= 0)
                     throw new Error('请填写有效的点卡单价');
                 this.state.quickSettings = { accounts, cardPrice };

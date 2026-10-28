@@ -20,6 +20,7 @@ import IncomeRecords from './IncomeRecords.vue';
 import ItemPriceDialog from './ItemPriceDialog.vue';
 import OnlineDialog from './OnlineDialog.vue';
 import QuickSettings from './QuickSettings.vue';
+import SettleDialog from './SettleDialog.vue';
 
 /**
  * 收益账本。
@@ -39,6 +40,14 @@ import QuickSettings from './QuickSettings.vue';
  * 物品值多少、梦幻币净赚多少。
  */
 type CatalogItem = { id: number; name: string; img: string; icon: string };
+/** 一局结束后用于结算的会话摘要。 */
+type SettledSession = {
+    characterId: string;
+    startAt: number;
+    endAt: number;
+    minutes: number;
+    cost: number;
+};
 
 const app = useApplication();
 const rules = app.rules();
@@ -51,6 +60,8 @@ const onlineMode = ref<'backfill' | 'adjust' | null>(null);
 const settingsOpen = ref(false);
 const removing = ref<Transaction | null>(null);
 const removeError = ref('');
+/** 刚结束的计时：弹结算窗，问要不要把这一局的盈亏记进账号账本。 */
+const settle = ref<SettledSession | null>(null);
 /** 打开弹窗的那个按钮：保存后把焦点还回去。 */
 const opener = ref<HTMLElement | null>(null);
 
@@ -188,7 +199,7 @@ async function startGame() {
         app.notify(failure instanceof Error ? failure.message : String(failure), true);
     }
 }
-/** 结束计时：把进行中的会话结算成 sessions 与点卡流水，统计随即回到已结算口径。 */
+/** 结束计时：把进行中的会话结算成 sessions 与点卡流水，然后问要不要记进账号账本。 */
 async function stopGame() {
     const session = active.value;
     if (!session || app.busy) return;
@@ -198,8 +209,14 @@ async function stopGame() {
                 { ...session, mode: 'range', endAt: Date.now(), source: 'timer' },
                 String(session.id),
             ),
-        )) as unknown as { minutes?: number; cost?: number };
-        app.notify('本段在线 ' + U.fmtMinutes(done.minutes) + '，点卡 −' + U.fmtMoney(done.cost));
+        )) as unknown as SettledSession;
+        app.notify(
+            '本段在线 ' +
+                U.fmtMinutes(Number(done.minutes)) +
+                '，点卡 −' +
+                U.fmtMoney(Number(done.cost)),
+        );
+        settle.value = done;
     } catch (failure) {
         app.notify(failure instanceof Error ? failure.message : String(failure), true);
     }
@@ -495,6 +512,7 @@ async function saved() {
         @close="settingsOpen = false"
         @saved="settingsOpen = false"
     />
+    <SettleDialog v-if="settle" :session="settle" @close="settle = null" @saved="settle = null" />
     <BaseModal v-if="removing" title="移除收益记录" :busy="app.busy" @close="removing = null">
         <p>确定移除「{{ removing.itemName || removing.note || '物品' }}」这一条吗？</p>
         <p v-if="removing.saleId">它已经关联了成交收入，移除后成交记录也会一起删除，且无法恢复。</p>

@@ -351,6 +351,22 @@ test('在线校验阻止重叠、反向、未来及无效时长，邻接时段�
     assert.equal(D.state.sessions.length, 2);
 });
 
+test('角色数上限写不进参数表，但历史超范围的会话仍能结算', async () => {
+    const D = onlineDomain();
+    assert.throws(() => D.setQuickSettings({ accounts: 30, cardPrice: 15000 }), /1-20/);
+    // 旧版本允许存 30：读取保留、结束计时也必须能结算，否则 activeSession 永远清不掉。
+    D.state.quickSettings = { accounts: 30, cardPrice: 15000 };
+    const active = await D.startSession('c1');
+    assert.equal(active.accounts, 30);
+    await D.adjustSessionStart(Date.now() - 3600000);
+    const session = await D.saveSession(
+        Object.assign({}, D.state.activeSession, { mode: 'range', endAt: Date.now() }),
+        active.id,
+    );
+    assert.ok(session.cost > 0);
+    assert.equal(D.state.activeSession, null);
+});
+
 test('计时保存参数快照、调整开始时间；结束失败可恢复重试且不重复结算', async () => {
     const D = onlineDomain();
     const active = await D.startSession('c1');
