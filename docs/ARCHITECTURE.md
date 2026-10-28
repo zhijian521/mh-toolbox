@@ -7,7 +7,7 @@ src/main/                   Electron 窗口、独立 profile、文件保存、�
 src/preload/                只暴露 mhV2 白名单接口
 src/renderer/app/           Vue 入口、Hash 路由、桌面布局、类型
 src/renderer/components/    弹窗、图标、数字单位、变更类型、页面错误边界，可聚焦判定 focus.ts，以及 popover / drag-sort / section-nav 组合式函数
-src/renderer/features/      按业务模块划分的页面：总览、收益、账号、目标、物价、角色、设置，以及待迁移占位页与页内组件
+src/renderer/features/      按业务模块划分的页面：总览、收益、账号、目标、角色、物价、设置，以及待迁移占位页与页内组件
 src/renderer/game-data/     按主题独立维护的梦幻游戏资料，供页面和领域规则引用
 src/renderer/domain/        从基线迁入的领域规则，ES 模块工厂
 src/renderer/stores/        Pinia 应用状态、完成或回滚后的界面快照
