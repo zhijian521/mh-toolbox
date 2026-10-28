@@ -353,12 +353,16 @@ test('在线校验阻止重叠、反向、未来及无效时长，邻接时段�
     assert.equal(D.state.sessions.length, 2);
 });
 
-test('角色数上限写不进参数表，但历史超范围的会话仍能结算', async () => {
+test('参数表只存点卡单价，历史超范围人数的会话仍能结算', async () => {
     const D = onlineDomain();
-    assert.throws(() => D.setQuickSettings({ accounts: 30, cardPrice: 15000 }), /1-20/);
-    // 新计时一律单角色段：人数由段数表达，参数表里的角色数不参与成本换算。
+    // 人数是派生量（一段一个号），不再进参数表：就算传了 accounts 也只会被丢掉。
+    D.setQuickSettings({ accounts: 30, cardPrice: 16000 });
+    assert.deepEqual(D.state.quickSettings, { cardPrice: 16000 });
+    assert.throws(() => D.setQuickSettings({ cardPrice: 0 }), /单价/);
+    // 新计时一律单角色段：人数由段数表达。
     const active = (await D.startSessions(['c1']))[0];
     assert.equal(active.accounts, 1);
+    assert.equal(active.cardPrice, 16000);
     // 旧版本允许存 30 的会话：读取保留、结束计时也必须能结算，否则会卡在活跃清单里出不来。
     D.state.activeSessions = [Object.assign({}, active, { accounts: 30 })];
     await D.adjustSessionStart(Date.now() - 3600000);
@@ -402,7 +406,7 @@ test('删掉一段在线记录会带走它按天拆出的全部点卡流水，�
 test('计时固定参数快照、可错峰加号、可调整起点；结束失败可恢复重试且不重复结算', async () => {
     const D = onlineDomain();
     const active = (await D.startSessions(['c1']))[0];
-    D.state.quickSettings = { accounts: 1, cardPrice: 20000 };
+    D.state.quickSettings = { cardPrice: 20000 };
     D.setCharFilter('c2');
     assert.equal(active.accounts, 1, '每个号一段，人数恒为 1');
     assert.equal(active.cardPrice, 15000, '开始时固定单价，之后改参数不影响这一段');

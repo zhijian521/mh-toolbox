@@ -175,7 +175,7 @@ const rangeText = computed(() => {
 });
 const quick = computed(() => {
     void app.data;
-    return rules.state.quickSettings || { accounts: 5, cardPrice: 15000 };
+    return rules.state.quickSettings || { cardPrice: 15000 };
 });
 /**
  * 速记记给谁：正在计时的号优先，没开计时才退回当前筛选（再退回第一个角色）。
@@ -574,7 +574,7 @@ async function onlineSaved(dates: string[]) {
                 </div>
                 <button class="chip" :disabled="app.busy" @click="settingsOpen = true">
                     <AppIcon name="coin" :size="13" />
-                    点卡 {{ quick.accounts }} 角色 · {{ U.fmtMoney(quick.cardPrice / 10000) }}/点
+                    点卡 {{ U.fmtMoney(quick.cardPrice / 10000) }}/点
                 </button>
             </div>
             <div class="stat-grid">

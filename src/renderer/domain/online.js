@@ -557,21 +557,22 @@ export default function install(D, U, _gateway, _localStorage) {
             },
 
             /**
-             * 速记参数：参与点卡成本的账号数与每点单价（单位：游戏币）。
+             * 速记参数：点卡单价（单位：游戏币）。
              *
-             * 只影响下一次开始计时与点卡成本的换算，不改已经结算过的会话。
+             * 只影响之后的计时与补记，不改已经结算过的会话。
+             *
+             * 这里以前还存「同时在线角色数」，但它是个派生量：人数由实际开着的计时段
+             * 表达（一段一号），参数表里再存一个数字，改成错峰计时后就必然与真实成本
+             * 对不上。所以参数表只剩单价。
              *
              * @this {Domain}
-             * @param {{ accounts?: number, cardPrice?: number }} input
+             * @param {{ cardPrice?: number }} input
              */
             setQuickSettings(input) {
-                const accounts = Math.round(Number(input.accounts));
                 const cardPrice = Number(input.cardPrice);
-                if (!Number.isSafeInteger(accounts) || accounts < 1 || accounts > 20)
-                    throw new Error('同时在线角色数需为 1-20 的整数');
                 if (!Number.isFinite(cardPrice) || cardPrice <= 0)
                     throw new Error('请填写有效的点卡单价');
-                this.state.quickSettings = { accounts, cardPrice };
+                this.state.quickSettings = { cardPrice };
             },
 
             /**

@@ -6,17 +6,18 @@ import BaseModal from '../../components/BaseModal.vue';
 import BaseNumber from '../../components/BaseNumber.vue';
 
 /**
- * 点卡参数：同时在线角色数与每点单价。
+ * 点卡单价：只留每点多少钱。
  *
- * 这两项决定计时结束时结算的点卡成本（`sessionSlices` 里 每小时 6 点 × 角色数 × 单价），
- * 只影响之后的计时，不改已经结算的会话。
+ * 「同时在线角色数」以前也在这张弹窗里，但它其实是个派生量——人数由实际开着的
+ * 计时段表达，存一个数字下来只会跟真实成本对不上。现在成本 = 每小时 6 点 × 单价，
+ * 再乘以段数，页面上不再需要人来填人数。
+ *
+ * 改完只影响之后的计时与补记，不改已经结算的会话。
  */
 const emit = defineEmits<{ close: []; saved: [] }>();
 const app = useApplication();
 const rules = app.rules();
-const settings = rules.state.quickSettings;
-const accounts = ref<number | string>(settings.accounts);
-const cardPrice = ref<number | string>(settings.cardPrice / 10000);
+const cardPrice = ref<number | string>(rules.state.quickSettings.cardPrice / 10000);
 const dirty = ref(false);
 const error = ref('');
 
@@ -27,12 +28,11 @@ async function save() {
         await app.execute((domain) =>
             domain.commit(() =>
                 domain.setQuickSettings({
-                    accounts: Number(accounts.value),
                     cardPrice: Math.round(Number(cardPrice.value) * 10000),
                 }),
             ),
         );
-        app.notify('点卡参数已更新');
+        app.notify('点卡单价已更新');
         emit('saved');
     } catch (failure) {
         error.value = failure instanceof Error ? failure.message : String(failure);
@@ -40,21 +40,12 @@ async function save() {
 }
 </script>
 <template>
-    <BaseModal title="点卡参数" :busy="app.busy" :dirty="dirty" @close="emit('close')">
+    <BaseModal title="点卡单价" :busy="app.busy" :dirty="dirty" @close="emit('close')">
         <p class="hint">
-            每小时按 6 点计算：角色数 × 6 点 × 单价。改完只影响之后的计时，不改已结算的记录。
+            每小时每号按 6 点计算：点卡 = 6 点 ×
+            单价。在线几个号由计时段数决定，不用另外填。改完只影响之后的计时与补记，不改已结算的记录。
         </p>
         <form id="quick-settings-form" class="settings-grid" @submit.prevent="save">
-            <label>
-                同时在线角色数
-                <BaseNumber
-                    v-model="accounts"
-                    name="accounts"
-                    :min="1"
-                    :max="20"
-                    @update:model-value="dirty = true"
-                />
-            </label>
             <label>
                 点卡单价（万 / 点）
                 <BaseNumber
@@ -66,9 +57,7 @@ async function save() {
                 />
             </label>
         </form>
-        <p class="hint preview">
-            折算：{{ U.fmtMoney(Number(accounts) * 6 * Number(cardPrice)) }} / 小时
-        </p>
+        <p class="hint preview">折算：每号每小时 {{ U.fmtMoney(6 * Number(cardPrice)) }}</p>
         <p v-if="error" class="error form-error" role="alert">{{ error }}</p>
         <template #footer="{ close }">
             <button class="btn" :disabled="app.busy" @click="close">取消</button>
@@ -87,7 +76,7 @@ async function save() {
 <style scoped>
 .settings-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 16px;
     margin-top: 14px;
 }

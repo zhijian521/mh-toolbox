@@ -1224,3 +1224,15 @@ CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都�
 **页面：顶部从「一个秒表」变成「一排号」。** 每个在线号一个 chip（名字 · 走的时长 · ✕），点名字改这个号的开始时间，点 ✕ 只结算这一个。有号在线时「开始游戏」变「＋ 加入角色」且不再禁用，弹窗里已在线角色显示为灰色「在线中」且不可勾选，默认只勾没在线的号——这就是中途加号。
 
 **验证：** 领域探针覆盖 32 项（老档拆段、幂等、成本守恒、错峰加号去重、批量结束、0 时长撤段、删角色只撤自己那段、统计口径、5 类坏数据降级）全过；端到端在临时 profile 下走通「起一个号 → 加入角色（已在线被灰掉）→ 无可加入时报错 → 点 ✕ 单独结束」，并核对 `data.json` 里 `activeSessions` 清空。
+
+## 点卡参数只剩单价
+
+日期：2026-10-28。起因：上一刀把计时改成「一段一个号」之后，`quickSettings.accounts`（同时在线角色数）不再参与 `spawn` 里的成本换算，但按钮还写着「点卡 5 角色 · 1.5 万/点」、弹窗还让人填人数并预览「角色数 × 6 点 × 单价」——数字与实际结算对不上，属于必然误导的残留。
+
+范围：`domain/online.js`（`setQuickSettings`）、`domain/migration.js`（归一默认值）、`features/income/QuickSettings.vue`、收益页按钮文案、在线弹窗写入参数处、`app/types.ts` 与 `domain-contract.d.ts`、`ledgers.test.cjs`、`frozen-fidelity.test.mjs`。
+
+**派生量不进参数表。** 在线人数由「开着的计时段数」表达，段已经有 `accounts: 1` 快照；参数表再存一份「上次填了几个号」只会与真实成本脱节。因此 `quickSettings` 从 `{ accounts, cardPrice }` 收成 `{ cardPrice }`，`setQuickSettings` 只校验单价（有限且 > 0），传进来的 `accounts` 被忽略。老档里的 `accounts` 在 `normalize` 时静默丢弃，历史会话自己的 `accounts` 快照照旧参与结算——`sessionError` 仍只要求它是正整数，所以旧版本存过 30 的会话依旧能结束。
+
+**界面：一行输入，一句折算。** 弹窗标题「点卡参数」→「点卡单价」，只剩「点卡单价（万 / 点）」，预览改成「折算：每号每小时 9 万」（6 点 × 1.5 万）。说明文字明确「在线几个号由计时段数决定，不用另外填」。筛选栏那颗 chip 从「点卡 5 角色 · 1.5 万/点」变成「点卡 1.5 万/点」。
+
+**验证：** 领域测试 124 项通过（`getQuickSettings` 相关用例改为断言参数表只剩 `cardPrice`、传 `accounts` 被丢弃、`cardPrice: 0` 被拦、老档 `accounts: 30` 的会话仍可结算）；`frozen-fidelity` 增加一条断言，确认 V1 备份里的 `quickSettings.accounts` 归一后被丢弃且单价保留、两次归一幂等；`prettier --check`、ESLint、`vue-tsc --noEmit`、Vite 构建与 Electron 端到端全部通过。

@@ -358,7 +358,7 @@ interface Domain {
     runningSessions: () => any[];
     rosterOf: (session: any) => string[];
     onlineRoster: () => string[];
-    setQuickSettings: (input: { accounts?: number; cardPrice?: number }) => void;
+    setQuickSettings: (input: { cardPrice?: number }) => void;
     adjustSessionStart: (startAt: number, sessionId?: string) => Promise<any>;
     commitOnline: (change: () => any) => Promise<any>;
     _saleList?: any[];

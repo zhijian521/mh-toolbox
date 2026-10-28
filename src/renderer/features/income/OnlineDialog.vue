@@ -30,7 +30,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; saved: [dates: string[]] }>();
 const app = useApplication();
 const rules = app.rules();
-const quick = rules.state.quickSettings || { accounts: 5, cardPrice: 15000 };
+const quick = rules.state.quickSettings || { cardPrice: 15000 };
 /** 正在计时的段；开始模式要跳过这些角色，调整模式要选其中一段。 */
 const running = rules.runningSessions();
 const onlineIds = new Set<string>();
@@ -188,7 +188,7 @@ async function save() {
             // 一次 execute 里先写参数再开始：`startSessions` 内部的 commit 会把参数一起落盘，
             // 分成两次就会出现「参数存了、计时没开」的中间态。
             const created = (await app.execute(async (domain) => {
-                domain.setQuickSettings({ accounts: accounts.value, cardPrice: priceValue });
+                domain.setQuickSettings({ cardPrice: priceValue });
                 return domain.startSessions(selected.value);
             })) as unknown as Array<{ id: string }>;
             app.notify(

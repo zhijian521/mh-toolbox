@@ -304,7 +304,10 @@ export interface PriceLogInput {
     price: number | string;
     note: string;
 }
-/** 进行中的在线会话：`startAt` 是本地毫秒时间戳，其余字段来自速记参数。 */
+/**
+ * 进行中的在线会话：`startAt` 是本地毫秒时间戳，`cardPrice` 取自速记参数。
+ * 一段只对应一个角色，`accounts` 恒为 1；多开靠段数表达。
+ */
 export interface ActiveSession extends RecordEntry {
     startAt?: number;
     accounts?: number;
@@ -322,8 +325,8 @@ export interface AppData {
     prices: PriceItem[];
     /** 计时中的会话：每个在线角色一段，各自起停。 */
     activeSessions: ActiveSession[];
-    /** 速记参数：同时在线角色数与每点单价（游戏币）。 */
-    quickSettings: { accounts: number; cardPrice: number };
+    /** 速记参数：点卡每点单价（游戏币）。在线人数由计时段数表达，不再存成参数。 */
+    quickSettings: { cardPrice: number };
     /** 速记物品的参考单价（游戏币），键是 `game-data/quick-items` 里的 id。 */
     itemPrices: Record<string, number>;
     [key: string]: unknown;
@@ -614,8 +617,8 @@ export interface Domain {
         skipped: number;
         problems: string[];
     }>;
-    /** 速记参数：同时在线角色数与每点单价。 */
-    setQuickSettings(input: { accounts?: number; cardPrice?: number }): void;
+    /** 点卡单价；在线人数由计时段数决定，不在参数表里。 */
+    setQuickSettings(input: { cardPrice?: number }): void;
     /** 开始计时：每个还没在线的角色各开一段，已在线的跳过；返回这次新建的段。 */
     startSessions(characterIds: string[]): Promise<ActiveSession[]>;
     /** 正在计时的段，每个在线角色一段，彼此独立起停。 */

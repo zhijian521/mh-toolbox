@@ -230,6 +230,8 @@ test('V1 备份能正常打开：冻结数据两次归一结果一致，且旧�
         assert.deepEqual(plain(third[key]), plain(second[key]), key + ' 第三次归一发生了变化');
     }
     const detail = first.equipment[0].details;
+    // 老档参数表里的「同时在线角色数」是派生量，归一后丢掉；单价必须留着。
+    assert.deepEqual(plain(first.quickSettings), { cardPrice: 16000 });
     // 原 legacy 原文、未知字段与无法表示的值都必须留在记录里，不能被静默删除。
     for (const text of ['旧版手写特别说明', '自定义补充', '凝气决', '星辉石'])
         assert.match(detail.legacy, new RegExp(text), '修好的属性里缺少原文：' + text);
