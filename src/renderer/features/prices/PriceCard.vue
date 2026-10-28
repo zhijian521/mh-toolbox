@@ -15,8 +15,9 @@ import { useApplication } from '../../stores/application';
  * （`priceCurrent` / `priceChange` / `priceLabel`），卡片里不重算一遍，
  * 否则卡片与历史弹窗迟早给出两个价。
  *
- * 编辑与删除物品在卡片底部右侧有两个小图标（默认半透明，不抢眼），历史弹窗里
- * 也保留同一对入口——只在弹窗里给，卡片上就找不到地方改删了。
+ * 编辑与删除物品在卡片底部左侧有两个小图标（默认半透明，不抢眼），历史弹窗里
+ * 也保留同一对入口——只在弹窗里给，卡片上就找不到地方改删了。记价与历史靠右，
+ * 记价落在右下角，是最顺手的点击位置。
  */
 const props = defineProps<{
     item: PriceItem;
@@ -147,17 +148,6 @@ const sparkPoints = computed(() => {
         </p>
 
         <div class="card-actions">
-            <button class="text-button act" :disabled="busy" aria-label="记价" @click="emit('log')">
-                ＋ 记价
-            </button>
-            <button
-                class="text-button act quiet"
-                :disabled="busy"
-                aria-label="历史"
-                @click="emit('history')"
-            >
-                历史
-            </button>
             <span class="card-tools">
                 <button
                     class="icon-button"
@@ -178,6 +168,17 @@ const sparkPoints = computed(() => {
                     <AppIcon name="trash" :size="13" />
                 </button>
             </span>
+            <button
+                class="text-button act quiet"
+                :disabled="busy"
+                aria-label="历史"
+                @click="emit('history')"
+            >
+                历史
+            </button>
+            <button class="text-button act" :disabled="busy" aria-label="记价" @click="emit('log')">
+                ＋ 记价
+            </button>
         </div>
     </article>
 </template>
@@ -346,12 +347,15 @@ const sparkPoints = computed(() => {
     padding-top: 7px;
     position: relative;
 }
-/* 物品级操作靠右，默认半透明：平时不抢镜，指上去或键盘聚焦才变清楚。 */
+/*
+ * 物品级操作（编辑 / 删除）靠左，默认半透明：平时不抢镜，指上去或键盘聚焦才变清楚。
+ * 记价与历史被推到右侧，记价落在卡片的右下角——鼠标从右下过来就是这个最常用的动作。
+ */
 .card-tools {
     display: flex;
     align-items: center;
     gap: 2px;
-    margin-left: auto;
+    margin-right: auto;
     opacity: 0.68;
     transition: opacity 120ms ease;
 }
