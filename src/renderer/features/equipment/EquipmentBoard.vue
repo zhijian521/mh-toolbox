@@ -85,11 +85,11 @@ function isPending(slot: string) {
                         <h2>装备</h2>
                         <p>点击格子换装</p>
                     </div>
-                    <span v-if="viewed === active" class="eq-in-use">使用中</span>
-                    <button v-else class="btn compact" :disabled="app.busy" @click="activate">
-                        使用此套
-                    </button>
                 </div>
+                <!--
+                    方案切换：三个号码签 + 名字。号码是固定的（一 / 二 / 三），名字可以改，
+                    所以号码用等宽数字单独占一枚小方章，扫一眼就能对上「方案 2」。
+                -->
                 <div class="eq-plan-row">
                     <div
                         class="eq-plan-tabs"
@@ -101,18 +101,34 @@ function isPending(slot: string) {
                             :key="index"
                             type="button"
                             class="eq-plan"
-                            :class="{ on: index === viewed, active: index === active }"
+                            :class="{ on: index === viewed }"
                             :aria-pressed="index === viewed"
                             :title="`方案 ${index + 1}：${item.name}`"
                             @click="setViewed(index)"
                         >
                             <b>{{ index + 1 }}</b>
-                            <span>{{ item.name }}</span>
+                            <span class="eq-plan-name">{{ item.name }}</span>
+                            <i
+                                v-if="index === active"
+                                class="eq-plan-used"
+                                title="当前使用方案"
+                                aria-label="当前使用方案"
+                            ></i>
                         </button>
                     </div>
                     <div class="eq-plan-actions">
+                        <span v-if="viewed === active" class="eq-in-use">使用中</span>
                         <button
+                            v-else
                             class="btn compact"
+                            type="button"
+                            :disabled="app.busy"
+                            @click="activate"
+                        >
+                            使用此套
+                        </button>
+                        <button
+                            class="text-button eq-plan-act"
                             type="button"
                             :disabled="app.busy"
                             title="给三套方案改名"
@@ -120,8 +136,9 @@ function isPending(slot: string) {
                         >
                             改名
                         </button>
+                        <span class="eq-plan-sep" aria-hidden="true">·</span>
                         <button
-                            class="btn compact"
+                            class="text-button eq-plan-act"
                             type="button"
                             :disabled="app.busy"
                             :title="'把「' + set.name + '」的搭配复制到另一套'"
@@ -216,7 +233,7 @@ function isPending(slot: string) {
 }
 .eq-board-head {
     display: flex;
-    align-items: flex-end;
+    align-items: baseline;
     gap: 10px;
     min-height: 26px;
 }
@@ -244,56 +261,95 @@ function isPending(slot: string) {
 }
 .eq-plan-row {
     display: flex;
-    align-items: stretch;
-    gap: 6px;
+    align-items: center;
+    gap: 8px 12px;
+    flex-wrap: wrap;
 }
 .eq-plan-tabs {
     display: flex;
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
     gap: 6px;
+    flex-wrap: wrap;
 }
 /* 改名与复制都作用于「当前这套」，因此贴着方案标签放，而不是丢进页面顶栏。 */
 .eq-plan-actions {
     display: flex;
+    align-items: center;
     flex: none;
-    gap: 6px;
+    gap: 8px;
+    margin-left: auto;
 }
+/*
+ * 号码签：等宽数字单独占一枚小方章，名字跟在后面。
+ * 三枚签按内容宽度排，不再等分整行——名字是两三个字时，等分出来的就是一条长条按钮。
+ */
 .eq-plan {
-    display: flex;
-    align-items: baseline;
-    gap: 5px;
-    flex: 1;
-    min-width: 0;
-    padding: 5px 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 11em;
+    padding: 3px 10px 3px 3px;
     border: 1px solid var(--line);
-    border-radius: 3px;
+    border-radius: 4px;
     background: var(--paper);
     color: var(--muted);
     font-size: 12px;
-    text-align: left;
 }
 .eq-plan b {
+    display: grid;
+    place-items: center;
     flex: none;
+    width: 17px;
+    height: 17px;
+    border-radius: 3px;
+    background: var(--paper-2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 400;
     font-variant-numeric: tabular-nums;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
 }
-.eq-plan span {
+.eq-plan-name {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.eq-plan:hover {
+.eq-plan:hover:not(:disabled) {
     border-color: var(--line-2);
-}
-.eq-plan.on {
-    border-color: var(--line-2);
-    background: var(--panel-3);
     color: var(--ink);
 }
-/* 当前使用的那一套加一道内描边，与「正在查看」的选中态区分开。 */
-.eq-plan.active {
-    box-shadow: inset 0 -2px 0 var(--green);
+.eq-plan.on {
+    border-color: color-mix(in srgb, var(--gold) 55%, var(--line));
+    background: color-mix(in srgb, var(--gold) 8%, var(--paper));
+    color: var(--ink);
+}
+.eq-plan.on b {
+    background: color-mix(in srgb, var(--gold) 24%, var(--paper));
+    color: color-mix(in srgb, var(--gold) 72%, var(--ink));
+}
+/* 当前使用方案：名字后面一粒绿点，与「正在查看」的描边选中态区分开。 */
+.eq-plan-used {
+    flex: none;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--green);
+}
+.eq-plan-act {
+    color: var(--muted);
+    font-size: 12px;
+}
+.eq-plan-act:hover:not(:disabled) {
+    color: var(--ink);
+    text-decoration: none;
+}
+.eq-plan-sep {
+    color: var(--line-2);
+    font-size: 12px;
 }
 .eq-gear-grid,
 .eq-accessory-grid,
@@ -304,6 +360,13 @@ function isPending(slot: string) {
 }
 @media (max-width: 1080px) {
     .eq-board-columns {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+@media (max-width: 900px) {
+    .eq-gear-grid,
+    .eq-accessory-grid,
+    .eq-jade-grid {
         grid-template-columns: minmax(0, 1fr);
     }
 }

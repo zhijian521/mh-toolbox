@@ -3,11 +3,13 @@ import { computed, ref } from 'vue';
 import type { EquipmentItem, EquipmentProfile } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import AppIcon from '../../components/AppIcon.vue';
+import BaseModal from '../../components/BaseModal.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
 import EquipmentProperties from './EquipmentProperties.vue';
 
 const props = defineProps<{ profile: EquipmentProfile }>();
 const emit = defineEmits<{
+    close: [];
     detail: [eq: EquipmentItem];
     edit: [eq: EquipmentItem];
     log: [eq: EquipmentItem];
@@ -18,11 +20,14 @@ const app = useApplication();
 const rules = app.rules();
 
 /**
- * 仓库就是这个角色的全部档案。
+ * 仓库就是这个角色的全部档案，做成弹窗而不是第二个视图。
  *
- * 与装备栏的差别只在「看什么」：栏里看的是三套方案各自穿了什么，仓库看的是这个人
- * 拥有什么。所以筛选按类型/部位/状态，不按方案——一件装备可能同时挂在两套里，
- * 按方案筛会让人以为有重复档案。
+ * 装备页的主体只有一件事：看这一套穿了什么。把仓库放在同一层用标签切换，
+ * 换装后要来回切两下才能确认结果；弹窗盖在上面，关掉就回到刚才那套，
+ * 页面也始终只回答「现在穿着什么」。
+ *
+ * 筛选按类型/部位/状态，不按方案——一件装备可能同时挂在两套里，按方案筛会让
+ * 人以为有重复档案。
  */
 const group = ref('');
 const slot = ref('');
@@ -110,7 +115,7 @@ async function equip(eq: EquipmentItem) {
 </script>
 
 <template>
-    <section class="eq-warehouse">
+    <BaseModal :title="profile.name + ' · 装备仓库'" wide :busy="app.busy" @close="emit('close')">
         <div class="eq-filters">
             <BaseSelect v-model="group" label="装备类型筛选" :options="groupOptions" />
             <BaseSelect v-model="slot" label="装备部位筛选" :options="slotOptions" />
@@ -124,13 +129,6 @@ async function equip(eq: EquipmentItem) {
             />
             <button class="btn compact" type="button" @click="reset">重置</button>
         </div>
-        <p class="eq-warehouse-count">
-            共
-            <b>{{ own.length }}</b>
-            件档案 · 当前筛选 {{ rows.length }} 件 · 穿戴目标「{{
-                profile.equipmentSets[profile.viewedEquipmentSet].name
-            }}」
-        </p>
         <div v-if="rows.length" class="eq-table">
             <div class="eq-row eq-row-head">
                 <span>部位 / 名称</span>
@@ -148,7 +146,7 @@ async function equip(eq: EquipmentItem) {
                         {{ eq.name }}
                     </button>
                 </span>
-                <EquipmentProperties :eq="eq" :lines="5" />
+                <EquipmentProperties :eq="eq" :lines="3" />
                 <span class="eq-cell-state">
                     <span class="badge" :class="statusOf(eq)">
                         {{ rules.equipmentStatuses[statusOf(eq)] }}
@@ -215,19 +213,28 @@ async function equip(eq: EquipmentItem) {
             <p>这个角色还没有装备档案。</p>
             <button class="btn primary" type="button" @click="emit('add')">＋ 新增装备</button>
         </div>
-    </section>
+        <template #footer="{ close }">
+            <span class="footer-hint">
+                共
+                <b>{{ own.length }}</b>
+                件 · 当前筛选 {{ rows.length }} 件 · 配置目标「{{
+                    profile.equipmentSets[profile.viewedEquipmentSet].name
+                }}」
+            </span>
+            <button class="btn" type="button" :disabled="app.busy" @click="close">关闭</button>
+            <button class="btn primary" type="button" :disabled="app.busy" @click="emit('add')">
+                ＋ 新增装备
+            </button>
+        </template>
+    </BaseModal>
 </template>
 
 <style scoped>
-.eq-warehouse {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
 .eq-filters {
     display: flex;
     align-items: center;
     gap: 8px;
+    padding-bottom: 10px;
     flex-wrap: wrap;
 }
 .eq-search {
@@ -246,15 +253,6 @@ async function equip(eq: EquipmentItem) {
     outline: 2px solid color-mix(in srgb, var(--gold) 45%, transparent);
     outline-offset: -1px;
 }
-.eq-warehouse-count {
-    margin: 0;
-    color: var(--muted);
-    font-size: 11.5px;
-}
-.eq-warehouse-count b {
-    color: var(--ink);
-    font-variant-numeric: tabular-nums;
-}
 .eq-table {
     border: 1px solid var(--line);
     border-radius: 4px;
@@ -262,7 +260,8 @@ async function equip(eq: EquipmentItem) {
 }
 .eq-row {
     display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) 132px 216px;
+    /* 弹窗内宽约 840：名称、属性各让一档，操作列按四个 compact 按钮的实测宽度留足。 */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) 118px 232px;
     align-items: center;
     gap: 10px;
     padding: 7px 12px;
@@ -343,15 +342,15 @@ async function equip(eq: EquipmentItem) {
     border-color: color-mix(in srgb, var(--gold) 40%, transparent);
 }
 .eq-empty {
-    min-height: 220px;
+    min-height: 180px;
     padding: 30px;
 }
 .eq-empty p {
     margin: 0;
 }
-@media (max-width: 1080px) {
+@media (max-width: 900px) {
     .eq-row {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 116px 190px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 104px 200px;
     }
 }
 </style>

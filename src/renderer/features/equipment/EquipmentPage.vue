@@ -5,7 +5,6 @@ import { plain } from '../../services/desktop';
 import { useApplication } from '../../stores/application';
 import AppIcon from '../../components/AppIcon.vue';
 import BaseModal from '../../components/BaseModal.vue';
-import BaseSelect from '../../components/BaseSelect.vue';
 import PageHeader from '../../components/PageHeader.vue';
 import EquipmentBoard from './EquipmentBoard.vue';
 import EquipmentDetail from './EquipmentDetail.vue';
@@ -21,9 +20,11 @@ import SoulJadeDialog from './SoulJadeDialog.vue';
 /**
  * 装备页。
  *
- * 一个角色一套装备栏：「搭配」看三套方案各自穿了什么，「仓库」看这个人拥有什么，两边
- * 都只动当前角色的档案。V1 把所有角色的栏纵向排在同一个页面，角色一多就要滚三四屏，
- * 而且换装时得先确认自己点的是哪个号的格子。
+ * 一个角色一套装备栏，角色用顶部的名字签切换：「搭配」是页面本体，看这套穿了什么；
+ * 仓库是盖在上面的弹窗，看这个人拥有什么。两边都只动当前角色的档案。
+ *
+ * 以前角色是下拉框、仓库是同层标签：角色一多就要先展开列表找名字，换完装还得切回
+ * 「搭配」看一眼结果。现在名字签直接摆在最上面，一屏能看到的角色数就是切换成本。
  *
  * 三套方案共用同一批档案：同一件装备可以同时挂在方案一和方案二里，所以栏里看到的是
  * 「方案 → 装备 ID」的引用，仓库里才是档案本身。删除与售出会清空所有引用，账本流水
@@ -33,7 +34,7 @@ const app = useApplication();
 const rules = app.rules();
 
 const character = ref(app.characters[0]?.id || '');
-const tab = ref<'board' | 'warehouse'>('board');
+const warehouseOpen = ref(false);
 const picking = ref<{ index: number; slot: string } | null>(null);
 const detail = ref<EquipmentItem | null>(null);
 const logTarget = ref<EquipmentItem | null>(null);
@@ -49,10 +50,7 @@ const planDialog = ref<'rename' | 'copy' | null>(null);
 const importOpen = ref(false);
 const shotOpen = ref(false);
 
-const characterOptions = computed(() =>
-    app.characters.map((item) => ({ value: item.id, label: item.name })),
-);
-/** 角色被删掉后下拉还指着旧 ID 时回落到第一个，避免整页抛「角色不存在」。 */
+/** 角色被删掉后标签还指着旧 ID 时回落到第一个，避免整页抛「角色不存在」。 */
 watch(
     () => app.characters.map((item) => item.id).join(','),
     () => {
@@ -130,23 +128,26 @@ function cancelRemove() {
     removing.value = null;
     removeError.value = '';
 }
-/** 导入完直接切到仓库：刚进来的几件就在列表顶上，不用自己找。 */
+/** 导入完直接把仓库弹窗打开：刚进来的几件就在列表顶上，不用自己找。 */
 function imported() {
     importOpen.value = false;
-    tab.value = 'warehouse';
+    warehouseOpen.value = true;
 }
 function shotImported() {
     shotOpen.value = false;
-    tab.value = 'warehouse';
+    warehouseOpen.value = true;
+}
+/** 切角色时把仓库关掉：那一列档案属于上一个角色，留着会误点。 */
+function switchCharacter(id: string) {
+    if (id === character.value) return;
+    character.value = id;
+    warehouseOpen.value = false;
 }
 </script>
 
 <template>
     <PageHeader title="装备" description="三套搭配 · 命魂之玉 · 全部档案">
         <template #actions>
-            <div class="eq-character">
-                <BaseSelect v-model="character" label="装备角色筛选" :options="characterOptions" />
-            </div>
             <button
                 class="btn"
                 type="button"
@@ -184,48 +185,44 @@ function shotImported() {
         </div>
         <template v-else-if="profile">
             <div class="eq-toolbar">
-                <div class="eq-tabs" role="tablist" aria-label="装备视图">
+                <div class="eq-chars" role="tablist" aria-label="装备角色">
                     <button
+                        v-for="item in app.characters"
+                        :key="item.id"
                         type="button"
-                        class="eq-tab"
-                        :class="{ on: tab === 'board' }"
+                        class="eq-char"
+                        :class="{ on: item.id === character }"
                         role="tab"
-                        :aria-selected="tab === 'board'"
-                        @click="tab = 'board'"
+                        :aria-selected="item.id === character"
+                        @click="switchCharacter(item.id)"
                     >
-                        搭配
+                        <span class="eq-char-name">{{ item.name }}</span>
+                        <span class="eq-char-sub">
+                            {{ item.level ? item.level + ' 级' : '未填等级' }} ·
+                            {{ item.school }}
+                        </span>
                     </button>
+                </div>
+                <div class="eq-toolbar-side">
+                    <span class="eq-toolbar-hint">{{ archiveCount }} 件档案</span>
                     <button
+                        class="btn eq-warehouse-btn"
                         type="button"
-                        class="eq-tab"
-                        :class="{ on: tab === 'warehouse' }"
-                        role="tab"
-                        :aria-selected="tab === 'warehouse'"
-                        @click="tab = 'warehouse'"
+                        :disabled="app.busy"
+                        :title="`查看「${profile.name}」的全部装备档案`"
+                        @click="warehouseOpen = true"
                     >
+                        <AppIcon name="archive" :size="15" />
                         仓库
                     </button>
                 </div>
-                <span class="eq-toolbar-hint">
-                    {{ profile.name }} · 共 {{ archiveCount }} 件档案
-                </span>
             </div>
             <EquipmentBoard
-                v-if="tab === 'board'"
                 :profile="profile"
                 @pick="openPick"
                 @detail="detail = $event"
                 @soul="soulOpen = true"
                 @plan="planDialog = $event"
-            />
-            <EquipmentWarehouse
-                v-else
-                :profile="profile"
-                @detail="detail = $event"
-                @edit="openEditor($event)"
-                @log="logTarget = $event"
-                @remove="removing = $event"
-                @add="openEditor()"
             />
         </template>
     </div>
@@ -237,6 +234,16 @@ function shotImported() {
         @close="picking = null"
         @saved="picking = null"
         @add="addFromPick"
+    />
+    <EquipmentWarehouse
+        v-if="warehouseOpen && profile"
+        :profile="profile"
+        @close="warehouseOpen = false"
+        @detail="detail = $event"
+        @edit="openEditor($event)"
+        @log="logTarget = $event"
+        @remove="removing = $event"
+        @add="openEditor()"
     />
     <EquipmentDetail
         v-if="detail && profile"
@@ -310,42 +317,87 @@ function shotImported() {
 </template>
 
 <style scoped>
-.eq-character {
-    width: 150px;
-}
+/*
+ * 角色名字签：一屏之内看得到几个号就能直接点几个号。
+ * 选中的一枚在行下那道横线上压一段金线，其余只有名字——一排框会把注意力
+ * 分给五个同样重的方块，而这里只有「我在看谁」需要被强调。
+ */
 .eq-toolbar {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    align-items: flex-end;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--line);
 }
-.eq-tabs {
-    display: inline-flex;
-    border: 1px solid var(--line-2);
-    border-radius: 3px;
-    overflow: hidden;
+.eq-chars {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
 }
-.eq-tab {
-    padding: 5px 18px;
+.eq-chars::-webkit-scrollbar {
+    height: 0;
+}
+.eq-char {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    gap: 1px;
+    max-width: 11em;
+    padding: 5px 13px 6px;
+    /* 下边框压住行线（-1px），选中态的金线才会嵌在那条线上而不是浮在上方。 */
+    margin-bottom: -1px;
     border: 0;
-    background: var(--paper);
+    border-bottom: 2px solid transparent;
+    border-radius: 3px 3px 0 0;
+    background: none;
     color: var(--muted);
-    font-size: 12.5px;
+    text-align: left;
+    transition:
+        color 120ms ease,
+        border-color 120ms ease,
+        background-color 120ms ease;
 }
-.eq-tab + .eq-tab {
-    border-left: 1px solid var(--line-2);
-}
-.eq-tab:hover {
+.eq-char:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--paper) 62%, transparent);
     color: var(--ink);
 }
-.eq-tab.on {
-    background: var(--panel-3);
+.eq-char.on {
+    border-bottom-color: var(--gold);
     color: var(--ink);
+}
+.eq-char-name {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.eq-char.on .eq-char-name {
     font-weight: 600;
+}
+.eq-char-sub {
+    color: var(--muted);
+    font-size: 10.5px;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.eq-toolbar-side {
+    display: flex;
+    align-items: center;
+    flex: none;
+    gap: 8px;
+    padding-bottom: 5px;
 }
 .eq-toolbar-hint {
     color: var(--muted);
     font-size: 11.5px;
+}
+/* 仓库是「另一个视图」而不是主操作，用图标 + 文字，别再给主色。 */
+.eq-warehouse-btn {
+    gap: 6px;
 }
 </style>

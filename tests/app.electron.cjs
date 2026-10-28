@@ -1458,6 +1458,12 @@ app.on('browser-window-created', (_event, win) => {
             // 记一次变动：默认同时记进账号账本，双向关联。
             await click('仓库');
             await until(() => !!document.querySelector('.eq-table'), '装备仓库');
+            assert.ok(
+                await read(() =>
+                    document.querySelector('.modal h2')?.textContent.endsWith('装备仓库'),
+                ),
+                '仓库盖在页面上弹窗打开，不是同层标签',
+            );
             await click('记变动');
             await until(() => !!document.querySelector('#gear-log-form'), '记变动弹窗');
             await field('[name="amount"]', '300');
@@ -1478,14 +1484,30 @@ app.on('browser-window-created', (_event, win) => {
             assert.equal(disk().gearLogs.length, 1, '时间线有一条变动');
 
             // 删除档案：流水保留、只解除关联。
+            // 仓库是盖在页面上的弹窗，详情与删除确认会再叠一层，所以 `.modal` 不止一个，
+            // 取最后一个才是当前最上面那层。
             await click('删除');
             await until(
-                () => document.querySelector('.modal')?.textContent.includes('删除装备档案'),
+                () =>
+                    [...document.querySelectorAll('.modal')].some((modal) =>
+                        modal.textContent.includes('删除装备档案'),
+                    ),
                 '删除确认',
             );
-            await read(() => document.querySelector('.modal .btn.danger').click());
-            await until(() => !document.querySelector('.modal'), '装备已删除');
+            await read(() =>
+                [...document.querySelectorAll('.modal')]
+                    .at(-1)
+                    .querySelector('.btn.danger')
+                    .click(),
+            );
             await untilDisk(() => disk().equipment.length === 0, '档案已删除');
+            await until(
+                () =>
+                    ![...document.querySelectorAll('.modal')].some((modal) =>
+                        modal.textContent.includes('删除装备档案'),
+                    ),
+                '删除确认收起',
+            );
             assert.equal(disk().gearLogs.length, 0, '变动记录一并删除');
             const keptTx = disk().transactions.find((tx) => tx.amount === 300);
             assert.ok(keptTx, '账本流水保留');
@@ -1542,7 +1564,14 @@ app.on('browser-window-created', (_event, win) => {
             assert.equal(crafted.attributes, '伤害 +480\n命中 +530\n力量 +32', '快照文本同步');
 
             // ---- 方案改名：三条一起校验，改完随档案读回 ----
-            await click('搭配');
+            // 仓库这时还开着（新增是从页面顶部进去的，弹窗留在下面），先收起它回到搭配。
+            await read(() => {
+                const modal = [...document.querySelectorAll('.modal')].at(-1);
+                [...modal.querySelectorAll('.btn')]
+                    .find((button) => button.textContent.trim() === '关闭')
+                    .click();
+            });
+            await until(() => !document.querySelector('.eq-table'), '收起仓库');
             await until(() => document.querySelectorAll('.eq-plan').length === 3, '回到搭配');
             await click('改名');
             await until(() => !!document.querySelector('#plan-form'), '改名弹窗');
@@ -1615,7 +1644,7 @@ app.on('browser-window-created', (_event, win) => {
                 );
                 button.click();
             });
-            await until(() => !document.querySelector('.modal'), '导入完成');
+            await until(() => !document.querySelector('[name="paste"]'), '导入完成');
             await untilDisk(() => disk().equipment.length === 3, '两件都落盘');
             const imported = disk().equipment.find((eq) => eq.name === '霜寒剑');
             assert.equal(imported.slot, '武器');
@@ -1631,7 +1660,7 @@ app.on('browser-window-created', (_event, win) => {
             assert.equal(
                 await read(() => document.querySelectorAll('.eq-row').length),
                 4,
-                '导入后自动切到仓库，包含表头与三件档案',
+                '导入后自动打开仓库，包含表头与三件档案',
             );
 
             // ---- 截图识别：真实截图跑通「图片 → 本地 OCR → 同一套解析 → 落盘」 ----
@@ -1642,7 +1671,8 @@ app.on('browser-window-created', (_event, win) => {
                 .toString('base64');
             // 文件读不了、真实拖拽又难模拟，直接把字节塞进 file input，走与选择图片相同的路径。
             await read((bytes) => {
-                const input = document.querySelector('.modal input[type="file"]');
+                // 仓库弹窗还开着，按类名精确找截图弹窗里的「选择图片」输入框。
+                const input = document.querySelector('.shot-add input[type="file"]');
                 if (!input) throw new Error('截图弹窗里没有文件输入框');
                 const binary = atob(bytes);
                 const pixels = new Uint8Array(binary.length);
@@ -1711,16 +1741,27 @@ app.on('browser-window-created', (_event, win) => {
                     .querySelector('.eq-name-button')
                     .click();
             });
-            await until(() => !!document.querySelector('.modal'), '玉魄详情');
+            await until(() => !!document.querySelector('.detail-grid'), '玉魄详情');
             // 只看属性区：详情里的「识别原文」也含「灵尘等级」，拿整个弹窗断言会假阳性。
+            // 仓库弹窗里每行也有 `.eq-props`，所以限定在详情的属性区里取。
             const detailText = await read(
-                () => document.querySelector('.modal .eq-props')?.textContent || '',
+                () => document.querySelector('.detail-grid .eq-props')?.textContent || '',
             );
             assert.ok(/灵尘/.test(detailText), '详情里能看到灵尘等级');
             assert.ok(/开光/.test(detailText), '详情里能看到开光孔');
             assert.ok(/奇袭/.test(detailText), '详情里能看到奇袭法术');
-            await click('关闭');
-            await until(() => !document.querySelector('.modal'), '详情已关闭');
+            // 关掉详情，再关掉仓库——后面回到页面上的其它弹窗，层不能留着。
+            const closeTop = () =>
+                read(() => {
+                    const modal = [...document.querySelectorAll('.modal')].at(-1);
+                    [...modal.querySelectorAll('.btn')]
+                        .find((button) => button.textContent.trim() === '关闭')
+                        .click();
+                });
+            await closeTop();
+            await until(() => !document.querySelector('.detail-grid'), '详情已关闭');
+            await closeTop();
+            await until(() => !document.querySelector('.modal'), '仓库已收起');
 
             await read(() => document.querySelector('a[href="#/settings"]').click());
             await until(() => !!document.querySelector('.settings-page'), '设置页面');
