@@ -6,12 +6,13 @@ import { useApplication } from '../../stores/application';
 /**
  * 一张物价卡片。
  *
- * 卡片只负责展示与派发操作：当前价、涨跌与显示口径全部来自领域层
- * （`priceCurrent` / `priceChange` / `priceLabel`），页面再把算好的走势点集传进来，
- * 卡片里不重算一遍，否则卡片与历史弹窗迟早给出两个价。
+ * 版面按「价签」组织而不是表格行：分类与涨跌徽章在最上，名称与价格是唯一焦点，
+ * 底部一行极淡的元信息，走势线铺在卡片下沿当背景——一眼扫过去看到的是价格和方向，
+ * 而不是七个字号差不多的行。
  *
- * 编辑与删除物品的入口放在历史弹窗里：卡片上一排图标会把紧凑的版面重新撑开，
- * 而这两件事本来也不是高频操作。
+ * 卡片只负责展示与派发操作：当前价、涨跌与显示口径全部来自领域层
+ * （`priceCurrent` / `priceChange` / `priceLabel`），卡片里不重算一遍，
+ * 否则卡片与历史弹窗迟早给出两个价。物品的编辑与删除在历史弹窗里。
  */
 const props = defineProps<{
     item: PriceItem;
@@ -33,22 +34,22 @@ const label = computed(() => rules.priceLabel(props.current ? props.current.pric
 const updateText = computed(() => (props.current ? props.current.date.slice(5) : '未记录'));
 const logCount = computed(() => props.item.logs.length);
 
-const delta = computed(() => {
+/** 涨跌徽章只放百分比，具体金额与基准日期挂在 title 上，省一行的宽度。 */
+const badge = computed(() => {
     const change = props.change;
     if (!change) return null;
-    const diff = rules.priceLabel(Math.abs(change.delta));
-    const sign = change.delta > 0 ? '+' : change.delta < 0 ? '−' : '';
+    const amount = rules.priceLabel(Math.abs(change.delta));
+    const money = amount.value + ' ' + amount.unit;
+    if (change.delta === 0) {
+        return { dir: 'flat', text: '持平', title: '与 ' + change.since + ' 同价' };
+    }
+    const up = change.delta > 0;
+    const pct = change.pct === null ? null : Math.abs(change.pct * 100);
     return {
-        dir: change.delta > 0 ? 'up' : change.delta < 0 ? 'down' : 'flat',
-        arrow: change.delta > 0 ? '▲' : change.delta < 0 ? '▼' : '—',
-        text: change.delta === 0 ? '持平' : sign + diff.value + ' ' + diff.unit,
-        pct:
-            change.pct === null || change.pct === 0
-                ? ''
-                : (change.pct > 0 ? '+' : '−') +
-                  Math.abs(change.pct * 100).toFixed(Math.abs(change.pct) < 0.01 ? 2 : 1) +
-                  '%',
-        since: change.since.slice(5),
+        dir: up ? 'up' : 'down',
+        arrow: up ? '▲' : '▼',
+        text: pct === null ? money : pct.toFixed(pct < 1 ? 1 : 0) + '%',
+        title: '较 ' + change.since + (up ? ' 涨 ' : ' 跌 ') + money,
     };
 });
 
@@ -74,15 +75,18 @@ const tone = computed(() => {
     return pool[hash % pool.length];
 });
 
-/** 折线点集：宽高固定，交给 viewBox 缩放，不依赖容器尺寸。 */
+/**
+ * 走势线跟着价格走：viewBox 固定，线宽由 `non-scaling-stroke` 兜住，
+ * 放在价格右侧而不是铺成底纹——底纹会穿过底部那行元信息与操作按钮。
+ */
 const sparkPoints = computed(() => {
     const values = props.trend;
     if (values.length < 2) return '';
     const min = Math.min(...values);
     const max = Math.max(...values);
     const span = max - min || 1;
-    const width = 52;
-    const height = 15;
+    const width = 60;
+    const height = 18;
     const pad = 1.5;
     return values
         .map((value, index) => {
@@ -101,55 +105,51 @@ const sparkPoints = computed(() => {
         :aria-label="item.name + ' 的物价'"
         :style="{ '--tone': tone }"
     >
-        <header class="card-head">
+        <header class="card-top">
             <span class="card-category">{{ item.category }}</span>
-            <span class="card-count">{{ logCount }} 条</span>
+            <span v-if="badge" class="card-badge" :class="badge.dir" :title="badge.title">
+                {{ badge.arrow }} {{ badge.text }}
+            </span>
         </header>
 
         <h2 class="card-name" :title="item.name">{{ item.name }}</h2>
 
         <div class="card-price">
-            <span class="price-value">{{ label.value }}</span>
-            <span v-if="label.unit" class="price-unit">{{ label.unit }}</span>
+            <b>{{ label.value }}</b>
+            <small v-if="label.unit">{{ label.unit }}</small>
             <svg
                 v-if="sparkPoints"
                 class="price-spark"
-                viewBox="0 0 52 15"
-                :class="delta ? delta.dir : 'flat'"
+                viewBox="0 0 60 18"
+                :class="badge ? badge.dir : 'flat'"
                 aria-hidden="true"
             >
-                <polyline :points="sparkPoints" />
+                <polyline :points="sparkPoints" vector-effect="non-scaling-stroke" />
             </svg>
         </div>
 
-        <p class="card-delta" :class="delta ? delta.dir : 'none'">
-            <template v-if="delta">
-                <span class="delta-text">{{ delta.arrow }} {{ delta.text }}</span>
-                <span v-if="delta.pct" class="delta-pct">{{ delta.pct }}</span>
-                <span class="delta-since">较 {{ delta.since }}</span>
-            </template>
-            <template v-else-if="current">首次记录</template>
-            <template v-else>还没有价格</template>
-        </p>
-
-        <p v-if="current || item.note" class="card-meta">
+        <p class="card-foot">
             <span>{{ updateText }}</span>
+            <template v-if="logCount">
+                <i>·</i>
+                <span>{{ logCount }} 条</span>
+            </template>
             <template v-if="item.note">
-                <span class="meta-dot">·</span>
-                <span class="meta-note" :title="item.note">{{ item.note }}</span>
+                <i>·</i>
+                <span class="foot-note" :title="item.note">{{ item.note }}</span>
             </template>
         </p>
 
-        <div class="actions card-actions">
-            <button
-                class="btn compact primary"
-                :disabled="busy"
-                aria-label="记价"
-                @click="emit('log')"
-            >
+        <div class="card-actions">
+            <button class="text-button act" :disabled="busy" aria-label="记价" @click="emit('log')">
                 ＋ 记价
             </button>
-            <button class="btn compact" :disabled="busy" aria-label="历史" @click="emit('history')">
+            <button
+                class="text-button act quiet"
+                :disabled="busy"
+                aria-label="历史"
+                @click="emit('history')"
+            >
                 历史
             </button>
         </div>
@@ -161,85 +161,41 @@ const sparkPoints = computed(() => {
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 9px 12px 10px 14px;
+    padding: 9px 12px 8px 14px;
     border: 1px solid var(--line);
-    border-radius: 4px;
+    border-radius: 5px;
     background: var(--paper);
     min-width: 0;
     overflow: hidden;
     transition:
         border-color 120ms ease,
-        box-shadow 120ms ease;
+        background-color 120ms ease;
 }
-/* 分类竖条：比整块色底更克制，也避免一屏卡片变成调色盘。 */
+/* 分类竖条：比整块色底克制，也不至于让一屏卡片变成调色盘。 */
 .price-card::before {
     content: '';
     position: absolute;
     inset: 0 auto 0 0;
     width: 3px;
     background: var(--tone);
-    opacity: 0.62;
+    opacity: 0.8;
 }
 .price-card:hover {
     border-color: var(--line-2);
-    box-shadow: 0 2px 8px #2f2a240f;
+    background: #fffdf6;
 }
-.card-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 8px;
-    font-size: 11px;
-    line-height: 1.5;
-}
-.card-category {
-    letter-spacing: 1px;
-    color: var(--tone);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.card-count {
-    flex: none;
-    color: var(--muted);
-    font-variant-numeric: tabular-nums;
-}
-.card-name {
-    font-size: 14px;
-    line-height: 1.4;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.card-price {
-    display: flex;
-    align-items: baseline;
-    gap: 3px;
-    min-width: 0;
-}
-.price-value {
-    font-size: 22px;
-    line-height: 1.2;
-    letter-spacing: -0.3px;
-    font-variant-numeric: tabular-nums;
-    color: var(--ink);
-}
-.price-unit {
-    font-size: 11.5px;
-    color: var(--gold);
-}
+/* 走势线贴着价格右侧，作为一行内容而不是底纹：底纹会穿过元信息与操作按钮。 */
 .price-spark {
-    width: 52px;
-    height: 15px;
+    width: 60px;
+    height: 18px;
     margin-left: auto;
     align-self: center;
     flex: none;
     fill: none;
-    stroke-width: 1.4;
+    stroke-width: 1.3;
     stroke-linecap: round;
     stroke-linejoin: round;
-    opacity: 0.85;
+    opacity: 0.7;
 }
 .price-spark.up {
     stroke: var(--red);
@@ -250,54 +206,106 @@ const sparkPoints = computed(() => {
 .price-spark.flat {
     stroke: var(--muted);
 }
-.card-delta {
+.card-top {
     display: flex;
-    align-items: baseline;
-    gap: 5px;
-    font-size: 11.5px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
     min-height: 16px;
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
 }
-.card-delta.up .delta-text,
-.card-delta.up .delta-pct {
-    color: var(--red);
-}
-.card-delta.down .delta-text,
-.card-delta.down .delta-pct {
-    color: var(--green);
-}
-.delta-text,
-.delta-pct {
-    font-variant-numeric: tabular-nums;
-}
-.delta-since {
+.card-category {
     font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--tone);
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.card-meta {
+.card-badge {
+    flex: none;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-size: 10.5px;
+    line-height: 15px;
+    letter-spacing: 0.2px;
+    font-variant-numeric: tabular-nums;
+}
+.card-badge.up {
+    color: var(--red);
+    background: #b33a3a12;
+}
+.card-badge.down {
+    color: var(--green);
+    background: #4a7c5912;
+}
+.card-badge.flat {
+    color: var(--muted);
+    background: #7b705f12;
+}
+.card-name {
+    margin-top: 3px;
+    font-size: 13.5px;
+    line-height: 1.45;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.card-price {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+    margin-top: 2px;
+    min-width: 0;
+}
+.card-price b {
+    font-size: 24px;
+    line-height: 1.2;
+    font-weight: 400;
+    letter-spacing: -0.4px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+}
+.card-price small {
+    font-size: 11.5px;
+    color: var(--gold);
+}
+.card-foot {
     display: flex;
     align-items: baseline;
     gap: 4px;
+    margin-top: 1px;
     font-size: 11px;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
     overflow: hidden;
     white-space: nowrap;
 }
-.meta-dot {
+.card-foot i {
+    font-style: normal;
     opacity: 0.6;
 }
-.meta-note {
+.foot-note {
     overflow: hidden;
     text-overflow: ellipsis;
 }
 .card-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     margin-top: auto;
-    padding-top: 6px;
-    gap: 5px;
-    flex-wrap: nowrap;
+    padding-top: 7px;
+    position: relative;
+}
+.act {
+    padding: 3px 2px;
+    font-size: 12px;
+    color: var(--gold);
+    border-radius: 2px;
+}
+.act.quiet {
+    color: var(--muted);
+}
+.act:disabled {
+    opacity: 0.55;
 }
 </style>

@@ -112,26 +112,28 @@ async function save() {
         <form id="price-item-form" @submit.prevent="save">
             <fieldset :disabled="app.busy">
                 <div class="form-grid stack">
-                    <label>
-                        物品名称
-                        <input
-                            v-model="draft.name"
-                            name="name"
-                            maxlength="40"
-                            autocomplete="off"
-                            placeholder="例如：高级兽决"
-                            autofocus
-                        />
-                    </label>
-                    <label>
-                        分类
-                        <BaseSelect
-                            v-model="categoryPick"
-                            label="物品分类"
-                            placeholder="选择分类"
-                            :options="categoryOptions"
-                        />
-                    </label>
+                    <div class="form-grid name-row">
+                        <label>
+                            物品名称
+                            <input
+                                v-model="draft.name"
+                                name="name"
+                                maxlength="40"
+                                autocomplete="off"
+                                placeholder="例如：高级兽决"
+                                autofocus
+                            />
+                        </label>
+                        <label>
+                            分类
+                            <BaseSelect
+                                v-model="categoryPick"
+                                label="物品分类"
+                                placeholder="选择分类"
+                                :options="categoryOptions"
+                            />
+                        </label>
+                    </div>
                     <label v-if="custom">
                         新类型名称
                         <input
@@ -143,7 +145,7 @@ async function save() {
                             placeholder="例如：灵饰"
                         />
                     </label>
-                    <template v-if="!editing">
+                    <div v-if="!editing" class="price-block">
                         <div class="initial-price">
                             <span class="field-text">当前价</span>
                             <NumberStepper
@@ -158,7 +160,7 @@ async function save() {
                             <span class="field-text">记录日期</span>
                             <BaseDate v-model="draft.date" label="价格记录日期" />
                         </div>
-                    </template>
+                    </div>
                     <p v-else class="hint">改价请回卡片点「记价」，每次改价都会留下一条历史。</p>
                     <label>
                         备注
@@ -189,28 +191,36 @@ fieldset {
     padding: 0;
     margin: 0;
 }
+/* 名称与分类同一行：名称多留一点宽度，分类是固定短词。 */
+.name-row {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+}
+/* 数值块居中：上面是「物品是什么」，这里是「多少钱」，两者用对齐方式分开。 */
+.price-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 2px 0 4px;
+}
 .initial-price,
 .initial-date {
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    align-items: center;
+    gap: 5px;
 }
-/*
- * NumberStepper 默认居中（它多用在「一次只调一个数」的弹窗里）。
- * 这里是普通表单的一行，与上面的分类、下面的日期一样左对齐才不乱，
- * 所以只在这一处把内部 grid 的排布推到左边。
- */
+/* 步进器自带 8px 上下外边距，在居中块里会跟 gap 叠成一大截空白。 */
 .initial-price :deep(.stepper) {
-    justify-content: start;
     margin: 0;
 }
-/* 日期输入框不必铺满整行，留白比拉长的空框好看。 */
 .initial-date {
-    max-width: 190px;
+    width: 190px;
 }
 .field-text {
     color: var(--muted);
-    font-size: 13px;
+    font-size: 12px;
+    letter-spacing: 0.5px;
 }
 .form-error {
     margin-top: 12px;
