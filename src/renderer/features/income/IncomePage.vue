@@ -108,7 +108,7 @@ const elapsedText = computed(() => {
 });
 const stats = computed(() => {
     void app.data;
-    // 计时中点卡成本还在累加，十秒重算一次就够；太快没有意义。
+    // 计时中时长与点卡都在累加，十秒重算一次就够；每秒跑一遍纯属浪费。
     void statTick.value;
     return rules.earningsStats(character.value, range.value.from, range.value.to, true);
 });
@@ -126,10 +126,24 @@ const quick = computed(() => {
     void app.data;
     return rules.state.quickSettings || { accounts: 5, cardPrice: 15000 };
 });
-/** 两张统计卡：物品按标价合计，梦幻币按收支相抵，口径都来自 `earningsStats`。 */
+/** 四张统计卡：时长与点卡在前，物品与梦幻币在后，口径都来自 `earningsStats`。 */
 const statCards = computed(() => {
     const s = stats.value;
     return [
+        {
+            key: 'online',
+            label: '在线时长',
+            value: U.fmtMinutes(s.onlineMinutes),
+            note: '所选范围 · 含正在计时',
+            tone: '',
+        },
+        {
+            key: 'card',
+            label: '点卡消耗',
+            value: U.fmtMoney(s.cardCost),
+            note: quick.value.accounts + ' 角色 · 每小时 6 点',
+            tone: 'out',
+        },
         {
             key: 'item',
             label: '物品估值',

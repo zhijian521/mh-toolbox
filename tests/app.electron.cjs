@@ -902,11 +902,11 @@ app.on('browser-window-created', (_event, win) => {
                 '0',
                 '本月还没有收益记录',
             );
-            // 统计只留「物品估值 + 梦幻币净收益」，不再有在仓/时薪这类卡片。
+            // 统计卡：在线时长、点卡消耗在前，物品估值与梦幻币净收益在后，不再有在仓/时薪。
             assert.equal(
                 await read(() => document.querySelectorAll('.stat-grid .stat').length),
-                2,
-                '统计只剩两张卡',
+                4,
+                '统计共四张卡',
             );
             assert.equal(
                 await read(() =>
@@ -914,8 +914,8 @@ app.on('browser-window-created', (_event, win) => {
                         .map((element) => element.textContent.trim())
                         .join('|'),
                 ),
-                '物品估值|梦幻币净收益',
-                '统计卡标题',
+                '在线时长|点卡消耗|物品估值|梦幻币净收益',
+                '统计卡顺序',
             );
             // 收益页不再给「记一笔」：日常收益走物品速记，通用收支去账号页记。
             assert.equal(
@@ -947,7 +947,7 @@ app.on('browser-window-created', (_event, win) => {
             assert.equal(
                 await read(() =>
                     document
-                        .querySelectorAll('.stat-grid .stat')[1]
+                        .querySelectorAll('.stat-grid .stat')[3]
                         .querySelector('.stat-value')
                         .textContent.trim(),
                 ),
@@ -977,7 +977,7 @@ app.on('browser-window-created', (_event, win) => {
             assert.equal(
                 await read(() =>
                     document
-                        .querySelectorAll('.stat-grid .stat')[0]
+                        .querySelectorAll('.stat-grid .stat')[2]
                         .querySelector('.stat-value')
                         .textContent.trim(),
                 ),
