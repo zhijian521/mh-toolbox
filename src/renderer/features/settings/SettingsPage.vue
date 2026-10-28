@@ -20,6 +20,24 @@ const counts = computed(() => [
     ['装备', app.data?.equipment.length],
 ]);
 /*
+ * 使用帮助：每页一句，只写「这页能干什么」，不复述界面上的按钮。
+ * 说得太长就没人看，八条各控制在 26 字以内。
+ */
+const helpItems = [
+    { page: '总览', text: '双账本合计、14 天趋势与目标进度' },
+    { page: '收益', text: '物品速记与在线计时，按天分账' },
+    { page: '账号', text: '人民币与梦幻币分开记，含买卖进出' },
+    { page: '目标', text: '长期目标与每次进度记录' },
+    { page: '装备', text: '装备栏与仓库，可粘贴或截图导入' },
+    { page: '角色', text: '档案、门派与养成进度' },
+    { page: '物价', text: '物品价格卡片与历史流水' },
+    { page: '设置', text: '备份、外观与这份帮助' },
+];
+const helpTips = [
+    '数据只在本机，换机或重装前先导出备份。',
+    '收益页记的日常产出会同步成账号页里的「游戏收益」那条，不用再记一遍。',
+];
+/*
  * 外观：偏好存在主进程（建窗口前就要知道），所以只能经桌面通道读写。
  * 状态放在 services/theme.ts 里与侧栏共用——各存一份的话，侧栏切完再进设置页
  * 会看到旧的选中项。
@@ -108,113 +126,127 @@ async function wipe() {
 }
 </script>
 <template>
-    <PageHeader title="设置" description="数据备份、导入与关于" />
+    <PageHeader title="设置" description="外观、使用帮助、数据与关于" />
+    <!--
+        两列各自堆叠，不用 grid 按行填：grid 里短卡下方会空出与长卡等高的空白，
+        这正是上一版看着乱的原因。flex 列内卡片紧贴，列高只由自己决定。
+    -->
     <div class="page-content settings-page">
-        <section class="paper-section">
-            <h2>外观</h2>
-            <p>跟随系统时会随 Windows 的浅色 / 深色设置自动切换。</p>
-            <div class="theme-choices" role="group" aria-label="外观主题">
+        <div class="settings-column">
+            <section class="paper-section">
+                <h2>外观</h2>
+                <div class="theme-choices" role="group" aria-label="外观主题">
+                    <button
+                        v-for="option in themeOptions"
+                        :key="option.value"
+                        class="btn"
+                        :class="{ selected: themePreference === option.value }"
+                        :aria-pressed="themePreference === option.value"
+                        :disabled="busy"
+                        @click="chooseTheme(option.value)"
+                    >
+                        {{ option.label }}
+                    </button>
+                </div>
+                <p class="hint">
+                    跟随系统时随 Windows 设置自动切换；侧栏底部的太阳 / 月亮也能随时对调。
+                </p>
+            </section>
+            <section class="paper-section">
+                <h2>数据</h2>
+                <dl class="data-counts">
+                    <div v-for="[title, count] in counts" :key="title">
+                        <dt>{{ title }}</dt>
+                        <dd>{{ count }}</dd>
+                    </div>
+                </dl>
+                <!-- 文件路径归在「数据」里：找备份、想核对存哪儿的人会先来这看。 -->
+                <dl class="info-list">
+                    <div>
+                        <dt>数据文件</dt>
+                        <dd class="data-path">{{ app.info?.dataFile }}</dd>
+                    </div>
+                </dl>
+                <p class="hint">
+                    只保存在本机。换机或重装前先导出一份 JSON
+                    备份；导入会替换当前数据，替换前自动留一份本地副本。
+                </p>
+                <div class="actions">
+                    <button class="btn primary" :disabled="busy" @click="exportBackup">
+                        导出 JSON 备份
+                    </button>
+                    <button class="btn" :disabled="busy" @click="chooseImport">
+                        导入 JSON 备份
+                    </button>
+                </div>
+            </section>
+            <section class="paper-section danger-section">
+                <h2>清空数据</h2>
+                <p>删除角色及全部记录，清空前自动保留本地副本。</p>
                 <button
-                    v-for="option in themeOptions"
-                    :key="option.value"
-                    class="btn"
-                    :class="{ selected: themePreference === option.value }"
-                    :aria-pressed="themePreference === option.value"
+                    class="btn danger"
                     :disabled="busy"
-                    @click="chooseTheme(option.value)"
+                    @click="
+                        confirmWipe = true;
+                        error = '';
+                    "
                 >
-                    {{ option.label }}
+                    清空 V2 数据
                 </button>
-            </div>
-            <p class="hint">侧栏底部的太阳 / 月亮图标可以在浅色与深色之间直接对调。</p>
-        </section>
-        <section class="paper-section">
-            <h2>数据概览</h2>
-            <dl class="data-counts">
-                <div v-for="[title, count] in counts" :key="title">
-                    <dt>{{ title }}</dt>
-                    <dd>{{ count }}</dd>
+            </section>
+        </div>
+        <div class="settings-column">
+            <section class="paper-section">
+                <h2>使用帮助</h2>
+                <dl class="help-list">
+                    <div v-for="item in helpItems" :key="item.page">
+                        <dt>{{ item.page }}</dt>
+                        <dd>{{ item.text }}</dd>
+                    </div>
+                </dl>
+                <ul class="help-tips">
+                    <li v-for="tip in helpTips" :key="tip">{{ tip }}</li>
+                </ul>
+            </section>
+            <section class="paper-section">
+                <h2>关于</h2>
+                <dl class="info-list">
+                    <div>
+                        <dt>版本</dt>
+                        <dd>{{ app.info?.version }} · 数据版本 {{ app.data?.schemaVersion }}</dd>
+                    </div>
+                </dl>
+                <p>源码公开，可自行运行、修改与再发布。</p>
+                <!--
+                    强调不用行内 <strong>：prettier 会把它拆到单独一行，Vue 的空白压缩
+                    就会在中文里塞进一个空格。改用左侧红条，视觉上同样有分量。
+                -->
+                <p class="license-notice">
+                    它用的不是可以商用的开源许可，而是 PolyForm Noncommercial
+                    1.0.0——任何以营利为目的的使用都不在授权范围内。
+                </p>
+                <dl class="license-terms">
+                    <div class="allow">
+                        <dt>可以</dt>
+                        <dd>运行、修改、再发布</dd>
+                    </div>
+                    <div class="deny">
+                        <dt>不可以</dt>
+                        <dd>打包出售、收费分发等商业用途</dd>
+                    </div>
+                </dl>
+                <div class="license-links">
+                    <a :href="projectUrl" @click.prevent="openLink(projectUrl)">
+                        <AppIcon name="external" :size="13" />
+                        <span>github.com/zhijian521/mh-toolbox</span>
+                    </a>
+                    <a :href="licenseUrl" @click.prevent="openLink(licenseUrl)">
+                        <AppIcon name="external" :size="13" />
+                        <span>许可证全文</span>
+                    </a>
                 </div>
-            </dl>
-        </section>
-        <section class="paper-section">
-            <h2>备份与恢复</h2>
-            <p>数据仅保存在本机。可以导入当前版本导出的完整 JSON 备份，或导出 V2 数据留存。</p>
-            <p class="hint">导入会替换 V2 当前数据，并在替换前自动保留本地副本。</p>
-            <div class="actions">
-                <button class="btn primary" :disabled="busy" @click="exportBackup">
-                    导出 JSON 备份
-                </button>
-                <button class="btn" :disabled="busy" @click="chooseImport">导入 JSON 备份</button>
-            </div>
-        </section>
-        <section class="paper-section">
-            <h2>应用信息</h2>
-            <dl class="info-list">
-                <div>
-                    <dt>版本</dt>
-                    <dd>{{ app.info?.version }}</dd>
-                </div>
-                <div>
-                    <dt>数据版本</dt>
-                    <dd>{{ app.data?.schemaVersion }}</dd>
-                </div>
-                <div>
-                    <dt>本地数据</dt>
-                    <dd class="data-path">{{ app.info?.dataFile }}</dd>
-                </div>
-            </dl>
-            <p class="hint">V2 使用独立数据目录，与当前版本分别保存。</p>
-        </section>
-        <section class="paper-section">
-            <h2>开源与许可</h2>
-            <p>本项目源码公开在 GitHub：可以自己运行、改代码，也可以把改过的版本再发布。</p>
-            <!--
-                强调不用行内 <strong>：prettier 会把它拆到单独一行，Vue 的空白压缩
-                就会在中文里塞进一个空格。改用左侧红条，视觉上同样有分量。
-            -->
-            <p class="license-notice">
-                它用的不是可以商用的开源许可，而是 PolyForm Noncommercial
-                1.0.0——任何以营利为目的的使用都不在授权范围内。
-            </p>
-            <dl class="license-terms">
-                <div class="allow">
-                    <dt>可以</dt>
-                    <dd>
-                        运行、复制与修改源码；再发布原版或改后的版本；个人学习、研究与娱乐使用；公益、教育、科研与政府机构使用。
-                    </dd>
-                </div>
-                <div class="deny">
-                    <dt>不可以</dt>
-                    <dd>打包出售、收费分发、随硬件或服务捆绑销售，以及其他任何商业用途。</dd>
-                </div>
-            </dl>
-            <div class="license-links">
-                <a :href="projectUrl" @click.prevent="openLink(projectUrl)">
-                    <AppIcon name="external" :size="13" />
-                    <span>github.com/zhijian521/mh-toolbox</span>
-                </a>
-                <a :href="licenseUrl" @click.prevent="openLink(licenseUrl)">
-                    <AppIcon name="external" :size="13" />
-                    <span>许可证全文</span>
-                </a>
-            </div>
-            <p class="hint">再发布时请一并保留许可证与版权声明，并注明原仓库地址。</p>
-        </section>
-        <section class="paper-section">
-            <h2>清空数据</h2>
-            <p>清空 V2 的角色及全部相关记录，建议先导出备份。</p>
-            <button
-                class="btn danger"
-                :disabled="busy"
-                @click="
-                    confirmWipe = true;
-                    error = '';
-                "
-            >
-                清空 V2 数据
-            </button>
-        </section>
+            </section>
+        </div>
     </div>
     <BaseModal
         v-if="importCandidate"
@@ -254,15 +286,24 @@ async function wipe() {
 </template>
 
 <style scoped>
+/*
+ * 两列各自堆叠。用 grid 的话，同一行里短卡下方会空出与长卡等高的空白，
+ * 上一版六张卡片参差不齐其实就是这个原因；flex 列内卡片紧贴，列高各算各的。
+ */
 .settings-page {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    align-items: flex-start;
     gap: 18px;
-    align-content: start;
-    align-items: start;
+}
+.settings-column {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
 }
 .paper-section {
-    padding: 20px;
+    padding: 18px 20px 20px;
     border: 1px solid var(--line);
     border-radius: 4px;
     background: var(--paper);
@@ -273,7 +314,7 @@ async function wipe() {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
 }
 .paper-section h2:before {
     content: '';
@@ -286,34 +327,88 @@ async function wipe() {
     margin-bottom: 12px;
 }
 .paper-section .actions {
-    margin-top: 18px;
+    margin-top: 14px;
+}
+/* 危险操作单独一张卡：和最常用的「导出备份」挤在一起最容易点错。 */
+.danger-section {
+    border-color: color-mix(in srgb, var(--red) 24%, var(--line));
 }
 .theme-choices {
     display: flex;
     gap: 8px;
-    margin: 4px 0 12px;
+    margin-bottom: 12px;
 }
 .data-counts {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 8px;
-    margin-top: 20px;
+    margin: 2px 0 14px;
 }
 .data-counts dt {
     font-size: 12px;
     color: var(--muted);
 }
 .data-counts dd {
-    font-size: 27px;
+    font-size: 24px;
     color: var(--gold);
-    margin-top: 7px;
+    margin-top: 5px;
     font-variant-numeric: tabular-nums;
+}
+/*
+ * 使用帮助：八页各一句，两列排。dt 用赭金当小标题，dd 收一档字号压成灰，
+ * 扫的时候先看到页名，需要时再看那句解释。
+ *
+ * 按列填（左 1-4、右 5-8）而不是按行填：默认的行优先会排成
+ * 「总览 / 收益 / 账号 / 目标」…读下来左列是 1、3、5、7，和侧栏顺序对不上。
+ */
+.help-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(4, auto);
+    grid-auto-flow: column;
+    gap: 11px 16px;
+    margin-bottom: 14px;
+}
+.help-list dt {
+    font-size: 12.5px;
+    color: var(--gold);
+    letter-spacing: 0.3px;
+}
+.help-list dd {
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--muted);
+}
+/* 要点用虚线隔开：它们不是第九、第十个页面，而是两句通用的提醒。 */
+.help-tips {
+    margin: 0;
+    padding: 12px 0 0;
+    border-top: 1px dashed color-mix(in srgb, var(--line-2) 55%, transparent);
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.help-tips li {
+    position: relative;
+    padding-left: 13px;
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--muted);
+}
+.help-tips li::before {
+    content: '·';
+    position: absolute;
+    left: 3px;
+    color: var(--gold);
+    font-weight: 700;
 }
 .info-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    margin-bottom: 15px;
+    gap: 10px;
+    margin-bottom: 14px;
 }
 .info-list > div {
     display: grid;
@@ -391,8 +486,22 @@ async function wipe() {
     border-bottom-color: color-mix(in srgb, var(--ink) 45%, transparent);
 }
 @media (max-width: 1150px) {
+    /*
+     * 单列时用 display: contents 把「列」这层盒子抹掉，五张卡直接成为同一个
+     * grid 的项——这样才有机会用 order 把「清空数据」挪到最末。
+     * 只改 flex-direction 的话，顺序仍是 外观、数据、清空、帮助、关于，
+     * 危险操作夹在中间。
+     */
     .settings-page {
-        grid-template-columns: 1fr;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+    }
+    .settings-column {
+        display: contents;
+    }
+    .danger-section {
+        order: 1;
     }
 }
 </style>
