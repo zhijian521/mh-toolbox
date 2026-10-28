@@ -363,14 +363,46 @@ const sparkPoints = computed(() => {
     width: 22px;
     height: 22px;
 }
+/*
+ * 「记价」是每张卡上最常用的动作，纯文字时一屏十二张都像一行灰注释。
+ * 给它一块淡色底 + 同色描边做成小 chip：一眼看得出是可点的，但用分类色而不是
+ * 主色金，不至于让整页变成一墙金按钮。
+ */
 .act {
-    padding: 3px 2px;
+    padding: 2px 10px;
+    border: 1px solid color-mix(in srgb, var(--tone) 52%, transparent);
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--tone) 24%, var(--paper));
     font-size: 12px;
-    color: var(--gold);
-    border-radius: 2px;
+    line-height: 17px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: color-mix(in srgb, var(--tone) 85%, var(--ink));
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        color 120ms ease;
 }
+/* 全局 .text-button:hover 会画下划线并转金色，chip 上不需要。 */
+.act:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--tone) 78%, transparent);
+    background: color-mix(in srgb, var(--tone) 36%, var(--paper));
+    color: var(--ink);
+    text-decoration: none;
+}
+/* 「历史」保持文字形态，与 chip 拉开层级。 */
 .act.quiet {
+    padding: 2px 2px;
+    border-color: transparent;
+    background: none;
+    font-weight: 400;
     color: var(--muted);
+}
+.act.quiet:hover:not(:disabled) {
+    border-color: transparent;
+    background: none;
+    color: var(--ink);
+    text-decoration: none;
 }
 .act:disabled {
     opacity: 0.55;
