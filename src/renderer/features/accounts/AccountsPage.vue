@@ -144,6 +144,14 @@ const shortcuts: Array<{
         preset: { category: '养成投入', kind: 'expense', currency: 'cash', channel: '游戏内' },
     },
     {
+        // 收益页结算一局时也写这个分类；同一天只留一条，后面的覆盖前面的。
+        id: 'game-income',
+        title: '游戏收益',
+        icon: 'bolt',
+        hint: '日常产出 · 梦幻币',
+        preset: { category: '游戏收益', kind: 'income', currency: 'cash', channel: '游戏内' },
+    },
+    {
         id: 'other',
         title: '其他收支',
         icon: 'book',
@@ -417,7 +425,8 @@ function showAll() {
 /* 十个入口固定五列，正好两整行；auto-fill 在宽窗口下会排成 6+4，末行缺角很难看。 */
 .shortcut-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    /* 十一个入口排四列：4 + 4 + 3，最后一行不会只剩一个孤零零的卡片。 */
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
     margin-top: 14px;
 }

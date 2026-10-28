@@ -52,7 +52,8 @@ type SettledSession = {
 const app = useApplication();
 const rules = app.rules();
 const character = ref('all');
-const range = ref<DateRangeValue>({ preset: 'month', ...U.rangeFor('month') });
+/** 默认看今天：收益是当天打完一局就记的，默认「本月」会把还没发生的月末也算进区间。 */
+const range = ref<DateRangeValue>({ preset: 'today', ...U.rangeFor('today') });
 const editing = ref<Transaction | null>(null);
 const recordsOpen = ref(false);
 const priceTarget = ref<{ item: CatalogItem; thenAdd: boolean; once: boolean } | null>(null);

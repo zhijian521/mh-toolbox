@@ -900,7 +900,7 @@ app.on('browser-window-created', (_event, win) => {
             assert.equal(
                 await read(() => document.querySelector('.loot-footer b')?.textContent),
                 '0',
-                '本月还没有收益记录',
+                '本日还没有收益记录',
             );
             // 统计卡：在线时长、点卡消耗在前，物品估值与梦幻币净收益在后，不再有在仓/时薪。
             assert.equal(
@@ -1030,7 +1030,7 @@ app.on('browser-window-created', (_event, win) => {
             );
 
             // ---- 结算窗：把这一局的盈亏记进账号账本（两本账唯一的交集） ----
-            await until(() => !!document.querySelector('#settle-form'), '结算弹窗');
+            await until(() => !!document.querySelector('[id^="settle-form"]'), '结算弹窗');
             assert.equal(
                 await read(() => document.querySelector('.settle-subject').textContent.trim()),
                 '轻舟 · 在线 1 秒',
@@ -1039,24 +1039,41 @@ app.on('browser-window-created', (_event, win) => {
             // 默认金额 = 本段速记（金币 1200 + 物品 43.5）− 本段点卡。
             assert.ok(
                 await read(() => {
-                    const input = document.querySelector('#settle-form [name="amount"]');
+                    const input = document.querySelector('[name^="amount-"]');
                     return Math.abs(Number(input.value) - 1243.5) < 0.02;
                 }),
                 '默认金额按本段速记折算',
             );
             const accountBefore = disk().transactions.filter((item) => item.ledger === 'account');
-            await field('[name="amount"]', '200');
+            await field('[name^="amount-"]', '200');
             await click('记入账号');
-            await until(() => !document.querySelector('#settle-form'), '结算完成');
+            await until(() => !document.querySelector('[id^="settle-form"]'), '结算完成');
             const accountAfter = disk().transactions.filter((item) => item.ledger === 'account');
             assert.equal(accountAfter.length, accountBefore.length + 1, '账号账本多一条');
             const settled = accountAfter.at(-1);
             assert.equal(settled.kind, 'income');
             assert.equal(settled.amount, 200);
-            assert.equal(settled.category, '其他收支');
+            assert.equal(settled.category, '游戏收益');
             assert.equal(settled.currency, 'cash');
             assert.equal(settled.ledger, 'account', '记的是账号账本，不是收益账本');
             assert.equal(disk().sessions.length, 1, '结算不额外产生会话');
+
+            // ---- 同一天再打一局：后面的覆盖前面的，账号里仍然只有一条 ----
+            await click('▶ 开始游戏');
+            await until(() => !!document.querySelector('.live'), '第二局计时中');
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+            await click('■ 结束游戏');
+            await until(() => !!document.querySelector('[id^="settle-form"]'), '第二局结算');
+            await field('[name^="amount-"]', '300');
+            await click('记入账号');
+            await until(() => !document.querySelector('[id^="settle-form"]'), '第二局结算完成');
+            const merged = disk().transactions.filter(
+                (item) => item.ledger === 'account' && item.source === 'settle',
+            );
+            assert.equal(merged.length, 1, '同一天第二次结算覆盖当天那条');
+            assert.equal(merged[0].amount, 300, '金额被后一次覆盖');
+            assert.equal(merged[0].id, settled.id, '改的是原来那条，不是新增');
+            assert.equal(disk().sessions.length, 2, '第二局落一条会话');
 
             // ---- 补在线时长：默认全选在线角色，角色数就是点卡的乘数 ----
             await click('补在线时长');
@@ -1084,7 +1101,7 @@ app.on('browser-window-created', (_event, win) => {
             await read(() => document.querySelector('.who-chip').click());
             await click('补记');
             await until(() => !document.querySelector('#online-form'), '补记保存');
-            assert.equal(disk().sessions.length, 2, '补记后多一条会话');
+            assert.equal(disk().sessions.length, 3, '补记后多一条会话');
             const backfill = disk().sessions.find((item) => item.mode === 'duration');
             assert.equal(backfill.minutes, 90, '按小时与分钟折算时长');
             assert.equal(backfill.source, 'manual');
@@ -1100,14 +1117,14 @@ app.on('browser-window-created', (_event, win) => {
             await until(() => !!document.querySelector('.record-head'), '收益记录弹窗');
             assert.equal(
                 await read(() => document.querySelectorAll('.record-row').length),
-                5,
-                '三条速记 + 两段在线点卡',
+                6,
+                '三条速记 + 三段在线点卡',
             );
             assert.equal(
                 await read(() =>
                     document.querySelector('.record-filters .seg-btn.on')?.textContent.trim(),
                 ),
-                '本月',
+                '本日',
                 '收益记录继承页面区间',
             );
             assert.equal(
@@ -1121,7 +1138,7 @@ app.on('browser-window-created', (_event, win) => {
             await until(() => document.querySelectorAll('.modal').length === 2, '收益删除确认');
             await click('确认删除');
             await until(
-                () => document.querySelectorAll('.record-row').length === 4,
+                () => document.querySelectorAll('.record-row').length === 5,
                 '收益记录减少',
             );
             assert.equal(

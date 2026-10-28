@@ -438,6 +438,17 @@ export interface Domain {
     makeSession(input: RecordEntry): RecordEntry & { minutes: number; cost: number };
     /** 会话校验，空串表示通过；补录与调整起点前先跑一遍领域规则。 */
     sessionError(session: RecordEntry, ignoreActiveId?: string): string;
+    /** 把一段会话按自然日切片，跨夜时给出每天的时长与点卡。 */
+    sessionSlices(session: {
+        id?: string;
+        characterId: string;
+        startAt: number;
+        endAt: number;
+        minutes: number;
+        cost: number;
+        mode?: string;
+        [key: string]: unknown;
+    }): Array<{ date: string; minutes: number; cost: number }>;
     adjustSessionStart(startAt: number): Promise<unknown>;
     saveSession(input: RecordEntry, finishActiveId?: string): Promise<RecordEntry>;
     saveTransaction(input: unknown, id?: string): Promise<Transaction>;
