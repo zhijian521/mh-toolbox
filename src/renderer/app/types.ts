@@ -428,6 +428,10 @@ export interface Domain {
     /** 速记参数：同时在线角色数与每点单价。 */
     setQuickSettings(input: { accounts?: number; cardPrice?: number }): void;
     startSession(characterId: string): Promise<RecordEntry>;
+    /** 会话折算：`range` 由起止时间算时长与点卡，`duration` 用给定分钟数。 */
+    makeSession(input: RecordEntry): RecordEntry & { minutes: number; cost: number };
+    /** 会话校验，空串表示通过；补录与调整起点前先跑一遍领域规则。 */
+    sessionError(session: RecordEntry, ignoreActiveId?: string): string;
     adjustSessionStart(startAt: number): Promise<unknown>;
     saveSession(input: RecordEntry, finishActiveId?: string): Promise<RecordEntry>;
     saveTransaction(input: unknown, id?: string): Promise<Transaction>;

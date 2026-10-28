@@ -63,8 +63,11 @@ const fixedItems = [
     { id: 39, name: '法宝任务书', img: '法宝任务书.png' },
 ];
 
-/** 不设固定价的物品：第一次记录前先填单价，之后按单价入库。 */
-const unsetItems = [
+/**
+ * 不固定价格的物品：价格随等级、品类浮动，记一条的单价不能代表下一条，
+ * 所以每次点击都现填一次，只用于那一条记录的估值，不写回单价表。
+ */
+const variableItems = [
     { id: 99, name: '金币', img: '金币.png' },
     { id: 100, name: '兽决', img: '兽决.png' },
     { id: 101, name: '高级兽决', img: '高级兽决.gif' },
@@ -95,10 +98,10 @@ function withIcon(/** @type {Array<{ id: number, name: string, img: string }>} *
 
 /** 固定价格组：记一条就按参考单价入库。 */
 export const quickItems = withIcon(fixedItems);
-/** 未设价格组：第一次记录前先填单价。 */
-export const quickUnset = withIcon(unsetItems);
+/** 不固定价格组：每次记录前现填单价。 */
+export const quickVariable = withIcon(variableItems);
 /** 完整目录，`quickItemById` 用它反查名称与图标。 */
-export const quickCatalog = [...quickItems, ...quickUnset];
+export const quickCatalog = [...quickItems, ...quickVariable];
 
 /** @param {number} id @returns {{ id: number, name: string, img: string, icon: string } | undefined} */
 export function quickItemById(id) {

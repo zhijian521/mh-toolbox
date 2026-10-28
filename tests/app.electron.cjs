@@ -946,7 +946,7 @@ app.on('browser-window-created', (_event, win) => {
                 '净收益按收入减支出',
             );
 
-            await click('查看全部记录');
+            await click('查看全部');
             await until(() => !!document.querySelector('.record-head'), '收益记录弹窗');
             assert.equal(
                 await read(() => document.querySelectorAll('.record-row').length),
@@ -991,8 +991,21 @@ app.on('browser-window-created', (_event, win) => {
             assert.equal(
                 await read(() => document.querySelector('.loot-price').textContent.trim()),
                 '8.50 万',
-                '掉落列表显示剩余数量估值',
+                '收益列表显示剩余数量估值',
             );
+
+            // ---- 不固定价格：每次现填单价，且不写回单价表 ----
+            await read(() => document.querySelector('[data-item="100"]').click());
+            await until(() => !!document.querySelector('#item-price-form'), '兽决单价弹窗');
+            await field('[name="price"]', '35');
+            await click('记录');
+            await until(() => !document.querySelector('#item-price-form'), '一次性单价保存');
+            await until(() => document.querySelectorAll('.loot-row').length === 2, '第二条收益');
+            assert.equal(disk().itemPrices['100'], undefined, '不固定价格不写回单价表');
+            const variable = disk()
+                .transactions.filter((item) => item.source === 'quick')
+                .find((item) => item.itemId === 100);
+            assert.equal(variable.unitPrice, 35, '按本次填的单价估值');
 
             // ---- 在线计时：开始后立刻结束，按会话结算出点卡流水 ----
             await click('▶ 开始游戏');
@@ -1009,6 +1022,23 @@ app.on('browser-window-created', (_event, win) => {
             assert.ok(
                 await read(() => document.querySelector('.stat-value') !== null),
                 '统计卡仍在',
+            );
+
+            // ---- 补在线时长：忘了点「开始游戏」时的补救 ----
+            await click('补在线时长');
+            await until(() => !!document.querySelector('#online-form'), '补记在线弹窗');
+            await field('[name="hours"]', '1');
+            await field('[name="minutes"]', '30');
+            await click('补记');
+            await until(() => !document.querySelector('#online-form'), '补记保存');
+            assert.equal(disk().sessions.length, 2, '补记后多一条会话');
+            const backfill = disk().sessions.find((item) => item.mode === 'duration');
+            assert.equal(backfill.minutes, 90, '按小时与分钟折算时长');
+            assert.equal(backfill.source, 'manual');
+            assert.equal(
+                disk().transactions.filter((item) => item.sessionId === backfill.id).length,
+                1,
+                '补记也结算点卡流水',
             );
 
             await read(() => document.querySelector('a[href="#/settings"]').click());

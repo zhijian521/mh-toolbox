@@ -8,7 +8,7 @@ import {
     QUICK_MONEY_ITEM,
     quickItemById,
     quickItems,
-    quickUnset,
+    quickVariable,
 } from '../../game-data/quick-items.js';
 import AppIcon from '../../components/AppIcon.vue';
 import BaseModal from '../../components/BaseModal.vue';
@@ -18,6 +18,7 @@ import PageHeader from '../../components/PageHeader.vue';
 import IncomeEditor from './IncomeEditor.vue';
 import IncomeRecords from './IncomeRecords.vue';
 import ItemPriceDialog from './ItemPriceDialog.vue';
+import OnlineDialog from './OnlineDialog.vue';
 import QuickSettings from './QuickSettings.vue';
 
 /**
@@ -26,11 +27,15 @@ import QuickSettings from './QuickSettings.vue';
  * 与账号页是同一张 transactions 表的另一半（`ledger: 'earnings'`）：那边记人民币与
  * 梦幻币的进出，这边记游戏内的日常收益、点卡成本与在线时长。
  *
- * 主体是**物品速记**：点一下物品图标就记一条当天掉落（带参考单价、进库存），
- * 右键改单价。汇总一律来自领域 `earningsStats`，页面不重算。
+ * 主体是**物品速记**：点一下物品图标就记一条当天收益，汇总一律来自领域
+ * `earningsStats`，页面不重算。物品分两组：
+ *
+ * - 固定价格：常见掉落有稳定参考价，记一条就按它入库，右键可改价。
+ * - 不固定价格：价格随等级、品类浮动（书、铁、兽决…），每次点击现填一次单价，
+ *   只用于那一条记录，不写回单价表。
  *
  * 物品记录不计入收支——持有中的物品只算库存估值，卖出时才由成交记录产生收入，
- * 所以掉落列表里的金额是估值而不是收益。
+ * 所以右侧「收益记录」里的金额是估值而不是已入账收益。
  */
 type CatalogItem = { id: number; name: string; img: string; icon: string };
 
@@ -41,7 +46,8 @@ const character = ref('all');
 const range = ref<DateRangeValue>({ preset: 'month', ...U.rangeFor('month') });
 const editing = ref<{ tx?: Transaction } | null>(null);
 const recordsOpen = ref(false);
-const priceTarget = ref<{ item: CatalogItem; thenAdd: boolean } | null>(null);
+const priceTarget = ref<{ item: CatalogItem; thenAdd: boolean; once: boolean } | null>(null);
+const onlineMode = ref<'backfill' | 'adjust' | null>(null);
 const settingsOpen = ref(false);
 const removing = ref<Transaction | null>(null);
 const removeError = ref('');
@@ -203,19 +209,24 @@ function restore() {
     opener.value = null;
 }
 
-/** 有单价就直接记；没单价先弹设置，设完再记（与 V1 一致）。 */ async function addLoot(
-    item: CatalogItem,
-) {
+/** 固定价格：有单价就直接记；第一次没单价先设一次，保存后沿用到之后的记录。 */
+async function addFixed(item: CatalogItem) {
     if (app.busy) return;
-    if (!rules.itemPrice(item.id)) {
+    const price = rules.itemPrice(item.id);
+    if (!price) {
         remember();
-        priceTarget.value = { item, thenAdd: true };
+        priceTarget.value = { item, thenAdd: true, once: false };
         return;
     }
-    await recordLoot(item);
+    await recordLoot(item, price);
 }
-async function recordLoot(item: CatalogItem) {
-    const price = rules.itemPrice(item.id);
+/** 不固定价格：价格每条都不一样，所以每条都现填，且不写回单价表。 */
+function addVariable(item: CatalogItem) {
+    if (app.busy) return;
+    remember();
+    priceTarget.value = { item, thenAdd: true, once: true };
+}
+async function recordLoot(item: CatalogItem, price: number) {
     // 领域里单价存的是游戏币原值，记录金额用「万」，保留两位。
     const wan = Math.round(price / 100) / 100;
     const money = item.id === QUICK_MONEY_ITEM;
@@ -248,12 +259,16 @@ async function recordLoot(item: CatalogItem) {
 }
 function openPrice(item: CatalogItem) {
     remember();
-    priceTarget.value = { item, thenAdd: false };
+    priceTarget.value = { item, thenAdd: false, once: false };
 }
-async function priceSaved() {
+/** 一次性单价不回写单价表，价格必须从弹窗带出来，不能再读 `itemPrice`。 */
+async function priceSaved(price?: number) {
     const target = priceTarget.value;
     priceTarget.value = null;
-    if (target?.thenAdd) await recordLoot(target.item);
+    if (target?.thenAdd) {
+        const raw = price ?? rules.itemPrice(target.item.id);
+        if (raw > 0) await recordLoot(target.item, raw);
+    }
     await nextTick();
     restore();
 }
@@ -299,8 +314,21 @@ async function saved() {
 <template>
     <PageHeader title="收益" description="物品速记 · 在线时长与点卡 · 物品卖出后才计入收入">
         <template #actions>
-            <button ref="addButton" class="btn primary" :disabled="app.busy" @click="openEditor()">
-                ＋ 记一笔
+            <span v-if="active" class="live" aria-live="polite">
+                <span class="dot" aria-hidden="true"></span>
+                {{ elapsedText }} · {{ rules.charName(String(active.characterId ?? '')) }}
+            </span>
+            <button class="btn" :disabled="app.busy" @click="onlineMode = 'backfill'">
+                补在线时长
+            </button>
+            <button v-if="active" class="btn" :disabled="app.busy" @click="onlineMode = 'adjust'">
+                调整开始时间
+            </button>
+            <button v-if="!active" class="btn primary" :disabled="app.busy" @click="startGame">
+                ▶ 开始游戏
+            </button>
+            <button v-else class="btn danger" :disabled="app.busy" @click="stopGame">
+                ■ 结束游戏
             </button>
         </template>
     </PageHeader>
@@ -326,15 +354,8 @@ async function saved() {
                     点卡 {{ quick.accounts }} 角色 · {{ U.fmtMoney(quick.cardPrice / 10000) }}/点
                 </button>
                 <span class="spacer"></span>
-                <span v-if="active" class="live" aria-live="polite">
-                    <span class="dot" aria-hidden="true"></span>
-                    {{ elapsedText }} · {{ rules.charName(String(active.characterId ?? '')) }}
-                </span>
-                <button v-if="!active" class="btn primary" :disabled="app.busy" @click="startGame">
-                    ▶ 开始游戏
-                </button>
-                <button v-else class="btn danger" :disabled="app.busy" @click="stopGame">
-                    ■ 结束游戏
+                <button ref="addButton" class="btn" :disabled="app.busy" @click="openEditor()">
+                    ＋ 记一笔
                 </button>
             </div>
             <div class="stat-grid">
@@ -348,7 +369,7 @@ async function saved() {
                 <section class="card">
                     <header class="card-title">
                         物品速记
-                        <small>点一下记一条 · 右键改单价</small>
+                        <small>点一下记一条 · 固定价格可右键改价</small>
                     </header>
                     <p class="section-label">固 定 价 格</p>
                     <div class="item-grid">
@@ -360,7 +381,7 @@ async function saved() {
                             :data-item="item.id"
                             :disabled="app.busy"
                             :title="item.name + ' · ' + priceText(item.id)"
-                            @click="addLoot(item)"
+                            @click="addFixed(item)"
                             @contextmenu.prevent="openPrice(item)"
                         >
                             <img :src="item.icon" :alt="item.name" loading="lazy" />
@@ -370,30 +391,27 @@ async function saved() {
                             </span>
                         </button>
                     </div>
-                    <p class="section-label">未 设 价 格</p>
+                    <p class="section-label">不 固 定 价 格</p>
                     <div class="item-grid">
                         <button
-                            v-for="item in quickUnset"
+                            v-for="item in quickVariable"
                             :key="item.id"
                             type="button"
                             class="item-card"
                             :data-item="item.id"
                             :disabled="app.busy"
-                            :title="item.name + ' · ' + priceText(item.id)"
-                            @click="addLoot(item)"
-                            @contextmenu.prevent="openPrice(item)"
+                            :title="item.name + ' · 每次填单价'"
+                            @click="addVariable(item)"
                         >
                             <img :src="item.icon" :alt="item.name" loading="lazy" />
                             <span class="item-name">{{ item.name }}</span>
-                            <span class="item-price" :class="{ none: !rules.itemPrice(item.id) }">
-                                {{ priceText(item.id) }}
-                            </span>
+                            <span class="item-price none">每次填价</span>
                         </button>
                     </div>
                 </section>
                 <section class="card loot-card">
                     <header class="card-title">
-                        掉落记录
+                        收益记录
                         <small>{{ rangeText }}</small>
                     </header>
                     <ul v-if="loot.length" class="loot-list">
@@ -421,7 +439,7 @@ async function saved() {
                                     type="button"
                                     class="loot-remove"
                                     :disabled="app.busy"
-                                    aria-label="移除这条掉落记录"
+                                    aria-label="移除这条收益记录"
                                     title="移除"
                                     @click="askRemove(tx)"
                                 >
@@ -431,10 +449,10 @@ async function saved() {
                         </li>
                     </ul>
                     <p v-else class="empty-line">
-                        这个范围还没有掉落记录，点左边的物品图标记一条。
+                        这个范围还没有收益记录，点左边的物品图标记一条。
                     </p>
                     <footer class="loot-footer">
-                        <span>
+                        <span class="loot-sum">
                             共
                             <b>{{ loot.length }}</b>
                             条 · 持有估值
@@ -445,7 +463,7 @@ async function saved() {
                             :disabled="app.busy"
                             @click="recordsOpen = true"
                         >
-                            查看全部记录
+                            查看全部
                         </button>
                     </footer>
                 </section>
@@ -466,15 +484,23 @@ async function saved() {
         :id="priceTarget.item.id"
         :name="priceTarget.item.name"
         :then-add="priceTarget.thenAdd"
+        :once="priceTarget.once"
         @close="priceTarget = null"
         @saved="priceSaved"
+    />
+    <OnlineDialog
+        v-if="onlineMode"
+        :mode="onlineMode"
+        :character="character"
+        @close="onlineMode = null"
+        @saved="onlineMode = null"
     />
     <QuickSettings
         v-if="settingsOpen"
         @close="settingsOpen = false"
         @saved="settingsOpen = false"
     />
-    <BaseModal v-if="removing" title="移除掉落记录" :busy="app.busy" @close="removing = null">
+    <BaseModal v-if="removing" title="移除收益记录" :busy="app.busy" @close="removing = null">
         <p>确定移除「{{ removing.itemName || removing.note || '物品' }}」这一条吗？</p>
         <p v-if="removing.saleId">它已经关联了成交收入，移除后成交记录也会一起删除，且无法恢复。</p>
         <p v-else>移除后库存与估值会重新计算，且无法恢复。</p>
@@ -527,7 +553,8 @@ async function saved() {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: var(--red);
+    padding-right: 4px;
+    color: var(--muted);
     font-size: 12.5px;
     font-variant-numeric: tabular-nums;
 }
@@ -584,9 +611,10 @@ async function saved() {
     font-size: 11px;
     line-height: 1.4;
 }
+/* 右栏固定 288px：收益记录是速记的辅助视图，不该跟着窗口一起变宽。 */
 .quick-main {
     display: grid;
-    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 288px;
     gap: 14px;
     align-items: start;
 }
@@ -724,26 +752,27 @@ async function saved() {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid var(--line);
     color: var(--muted);
     font-size: 12.5px;
 }
+.loot-sum {
+    min-width: 0;
+}
 .empty-line {
     margin: 14px 0;
     color: var(--muted);
     font-size: 12.5px;
 }
-@media (max-width: 1150px) {
-    .quick-main {
-        grid-template-columns: minmax(0, 1fr);
-    }
-}
 @media (max-width: 750px) {
     .filter-character {
         width: 100%;
+    }
+    .quick-main {
+        grid-template-columns: minmax(0, 1fr);
     }
     .item-grid {
         grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
