@@ -25,7 +25,7 @@ export const useApplication = defineStore('application', () => {
     let toastTimer: ReturnType<typeof setTimeout>;
     const busy = computed(() => pending.value > 0);
     // 排序规则只在领域层维护一份（`orderedCards`）：`sortOrder` 缺省、空串与非法值时
-    // 的落位由 `characterNumber` 统一裁决，门店端不再自行解释这些值。
+    // 的落位由 `characterNumber` 统一裁决，界面层不再自行解释这些值。
     const characters = computed(() =>
         data.value ? rules().orderedCards(data.value.characters) : [],
     );
