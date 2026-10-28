@@ -121,7 +121,7 @@ onMounted(application.initialize);
     font-size: 10px;
     line-height: 16px;
     padding: 0 5px;
-    border: 1px solid #b33a3a30;
+    border: 1px solid color-mix(in srgb, var(--red) 19%, transparent);
     border-radius: 3px;
     letter-spacing: 0;
 }
@@ -190,8 +190,8 @@ onMounted(application.initialize);
         color 120ms ease;
 }
 .nav-item.router-link-active {
-    background: #ead9c7;
-    color: #8d3430;
+    background: var(--danger-bg);
+    color: color-mix(in srgb, var(--red) 78%, var(--ink));
 }
 .nav-item.router-link-active::before {
     content: '';
@@ -205,13 +205,13 @@ onMounted(application.initialize);
     background: var(--red);
 }
 .nav-item:not(.router-link-active):hover {
-    background: #eee4d3;
+    background: var(--warn-bg);
 }
 .nav-item small {
     font-size: 10px;
     margin-left: auto;
     color: var(--muted);
-    border: 1px solid #c2b58f80;
+    border: 1px solid color-mix(in srgb, var(--line-2) 50%, transparent);
     border-radius: 3px;
     padding: 1px 4px;
     line-height: 15px;
@@ -263,7 +263,7 @@ onMounted(application.initialize);
     border: 1px solid color-mix(in srgb, var(--green) 45%, var(--line));
     border-radius: 4px;
     background: color-mix(in srgb, var(--green) 10%, var(--paper));
-    box-shadow: 0 3px 12px #2f2a2414;
+    box-shadow: 0 3px 12px var(--shadow);
     color: var(--green);
     z-index: 100;
 }

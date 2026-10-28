@@ -10,27 +10,46 @@
     font-weight: 400;
     font-display: swap;
 }
+/*
+ * 颜色令牌：全站唯一来源，每个令牌一份 light-dark(亮, 暗)。
+ *
+ * 切换靠 `color-scheme`：主进程改 nativeTheme.themeSource 就会改渲染层的
+ * prefers-color-scheme，`light-dark()` 随之一并切换，所以三档主题不需要三份变量、
+ * 也不需要页面里的防闪脚本。组件里不要再出现十六进制值。
+ */
 :root {
+    color-scheme: light dark;
     font-family: 'LXGW WenKai Screen', 'Microsoft YaHei', sans-serif;
-    color: #5b5348;
-    background: #f2ecdd;
+    color: var(--ink-2);
+    background: var(--bg);
     font-synthesis: weight;
     font-size: 13.5px;
-    --bg: #f2ecdd;
-    --paper: #fbf7ec;
-    --paper-2: #f5efdf;
-    --panel-3: #ece3cc;
-    --ink: #2f2a24;
-    --muted: #7b705f;
-    --line: #d9cfb6;
-    --line-2: #c2b58f;
-    --red: #b33a3a;
-    --gold: #a67c2e;
-    --green: #4a7c59;
-    --blue: #3d5a6c;
-    --scrollbar-thumb: #c2b58f;
-    --scrollbar-thumb-hover: #a68f5d;
-    --scrollbar-thumb-active: #8f7546;
+    --bg: light-dark(#f2ecdd, #17150f);
+    --paper: light-dark(#fbf7ec, #201d16);
+    --paper-2: light-dark(#f5efdf, #262218);
+    --panel-3: light-dark(#ece3cc, #2e291e);
+    /* 正文默认色比 --ink 浅一档：标题用 --ink，成段的字用 --ink-2。 */
+    --ink: light-dark(#2f2a24, #e8e0cd);
+    --ink-2: light-dark(#5b5348, #cfc6b2);
+    --muted: light-dark(#7b705f, #a09580);
+    --line: light-dark(#d9cfb6, #3a3427);
+    --line-2: light-dark(#c2b58f, #4d4534);
+    --red: light-dark(#b33a3a, #d9706a);
+    --gold: light-dark(#a67c2e, #d2a44e);
+    --green: light-dark(#4a7c59, #7faf8c);
+    --blue: light-dark(#3d5a6c, #8aa7b8);
+    /* 语义令牌：这几个原本是各组件里手写的值，暗色下必须换一套。 */
+    --hover: light-dark(#fffdf6, #262218);
+    --shadow: light-dark(#2f2a2414, #00000059);
+    --shadow-lg: light-dark(#2f2a242e, #00000080);
+    /* 遮罩不能跟 --ink 走：暗色下 --ink 是浅色，混出来会把背景提亮而不是压暗。 */
+    --overlay: light-dark(#2f2a2445, #000000a6);
+    --danger-bg: light-dark(#ead9c7, #3a2622);
+    --warn-bg: light-dark(#eee4d3, #332c1f);
+    --on-accent: light-dark(#fff8e7, #1a1610);
+    --scrollbar-thumb: light-dark(#c2b58f, #4d4534);
+    --scrollbar-thumb-hover: light-dark(#a68f5d, #6a5f45);
+    --scrollbar-thumb-active: light-dark(#8f7546, #857551);
 }
 * {
     box-sizing: border-box;
@@ -174,7 +193,7 @@ input:focus,
 select:focus,
 textarea:focus {
     border-color: var(--gold);
-    box-shadow: 0 0 0 1px #a67c2e40;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 25%, transparent);
 }
 textarea {
     resize: vertical;
@@ -191,7 +210,7 @@ input[type='number']::-webkit-inner-spin-button {
 }
 input::placeholder,
 textarea::placeholder {
-    color: #9a917e;
+    color: color-mix(in srgb, var(--muted) 78%, var(--paper));
 }
 input:disabled,
 textarea:disabled,
@@ -237,12 +256,12 @@ details[open] summary {
     border-color: var(--gold);
 }
 .btn.primary {
-    background: #a67c2e;
-    border-color: #a67c2e;
-    color: #fff8e7;
+    background: var(--gold);
+    border-color: var(--gold);
+    color: var(--on-accent);
 }
 .btn.primary:hover:not(:disabled) {
-    background: #8a6322;
+    background: color-mix(in srgb, var(--gold) 82%, var(--ink));
 }
 .btn.danger,
 .danger {
@@ -255,8 +274,8 @@ details[open] summary {
 }
 .btn.selected {
     color: var(--red);
-    border-color: #bd8f77;
-    background: #f2e6d5;
+    border-color: color-mix(in srgb, var(--red) 42%, var(--line-2));
+    background: color-mix(in srgb, var(--red) 9%, var(--paper));
 }
 .icon-button {
     display: inline-flex;
@@ -337,7 +356,7 @@ details[open] summary {
     background: var(--paper);
     border: 1px solid var(--line-2);
     border-radius: 4px;
-    box-shadow: 0 6px 24px #2f2a242e;
+    box-shadow: 0 6px 24px var(--shadow-lg);
     animation: pop 120ms ease-out;
 }
 @keyframes pop {

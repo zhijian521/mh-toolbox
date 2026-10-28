@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('mhV2', {
     exportData: (data) => ipcRenderer.invoke('mhv2:exportData', data),
     window: (action) => ipcRenderer.invoke('mhv2:window', action),
     getWindowState: () => ipcRenderer.invoke('mhv2:windowState'),
+    // 外观：偏好存在主进程，切换要走主进程才能改到 prefers-color-scheme。
+    getTheme: () => ipcRenderer.invoke('mhv2:getTheme'),
+    setTheme: (theme) => ipcRenderer.invoke('mhv2:setTheme', theme),
     onWindowStateChanged: (listener) => {
         const handler = (_event, state) => listener(state);
         ipcRenderer.on('mhv2:windowStateChanged', handler);

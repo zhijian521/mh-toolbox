@@ -43,7 +43,7 @@ function show(value: number) {
     font-size: 11.5px;
 }
 .number-value.unknown {
-    color: #9a917e;
+    color: color-mix(in srgb, var(--muted) 78%, var(--paper));
 }
 .number-value.unknown b {
     font-weight: 400;

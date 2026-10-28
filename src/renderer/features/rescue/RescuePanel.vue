@@ -141,9 +141,9 @@ function formatSize(bytes: number) {
 .rescue-reason {
     margin-top: 8px;
     padding: 9px 11px;
-    border: 1px solid #b33a3a40;
+    border: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
     border-radius: 4px;
-    background: #b33a3a0a;
+    background: color-mix(in srgb, var(--red) 5%, transparent);
     color: var(--red);
     font-size: 13px;
     word-break: break-all;
@@ -223,7 +223,7 @@ function formatSize(bytes: number) {
     white-space: nowrap;
 }
 .danger-zone {
-    border-color: #b33a3a40;
+    border-color: color-mix(in srgb, var(--red) 25%, transparent);
 }
 .danger-zone .btn {
     margin-top: 4px;

@@ -353,7 +353,7 @@ const trainingGroups = [
     margin-top: 20px;
     padding: 10px;
     background: var(--paper-2);
-    border: 1px solid #b33a3a55;
+    border: 1px solid color-mix(in srgb, var(--red) 33%, transparent);
     border-radius: 3px;
 }
 @media (max-width: 750px) {

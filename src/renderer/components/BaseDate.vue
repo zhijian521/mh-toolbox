@@ -204,12 +204,12 @@ function onKeydown(event: KeyboardEvent) {
 }
 .date-trigger[aria-expanded='true'] {
     border-color: var(--gold);
-    box-shadow: inset 0 0 0 1px #a67c2e33;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 20%, transparent);
 }
 .date-trigger:focus-visible {
     outline: none;
     border-color: var(--gold);
-    box-shadow: 0 0 0 1px #a67c2e40;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 25%, transparent);
 }
 .date-trigger:disabled {
     opacity: 0.65;
@@ -224,7 +224,7 @@ function onKeydown(event: KeyboardEvent) {
     white-space: nowrap;
 }
 .date-trigger.placeholder .date-value {
-    color: #9a917e;
+    color: color-mix(in srgb, var(--muted) 78%, var(--paper));
 }
 .date-popover {
     width: 246px;
@@ -286,7 +286,7 @@ function onKeydown(event: KeyboardEvent) {
     background: var(--paper-2);
 }
 .xday.dim {
-    color: #9a917e;
+    color: color-mix(in srgb, var(--muted) 78%, var(--paper));
     opacity: 0.55;
 }
 .xday:disabled {
@@ -306,14 +306,14 @@ function onKeydown(event: KeyboardEvent) {
 }
 .xday.on {
     background: var(--red);
-    color: #f7f2e7;
+    color: var(--on-accent);
     font-weight: 700;
 }
 .xday.on:hover:not(:disabled) {
-    background: #9c3131;
+    background: color-mix(in srgb, var(--red) 85%, var(--ink));
 }
 .xday.on.today::after {
-    background: #f7f2e7;
+    background: var(--on-accent);
 }
 .xcal-quick {
     display: flex;

@@ -198,7 +198,7 @@ async function remove(log: PriceLog) {
     align-items: center;
     gap: 10px;
     padding: 8px 0;
-    border-bottom: 1px solid #d9cfb680;
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
     font-size: 13px;
 }
 .log-row:last-child {

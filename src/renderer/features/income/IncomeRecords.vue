@@ -442,11 +442,11 @@ async function deleted(dates: string[]) {
 }
 .badge.income {
     color: var(--green);
-    border-color: #4a7c5973;
+    border-color: color-mix(in srgb, var(--green) 45%, transparent);
 }
 .badge.expense {
     color: var(--red);
-    border-color: #b33a3a66;
+    border-color: color-mix(in srgb, var(--red) 40%, transparent);
 }
 /* 物品按标价算价值，不进当期收支。 */
 .badge.item {

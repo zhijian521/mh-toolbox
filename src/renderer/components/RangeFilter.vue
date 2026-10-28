@@ -123,7 +123,7 @@ function change(key: 'from' | 'to', value: string) {
     background: var(--paper-2);
 }
 .seg-btn.on {
-    background: #f2e6d5;
+    background: color-mix(in srgb, var(--red) 12%, var(--paper));
     color: var(--red);
     font-weight: 600;
 }

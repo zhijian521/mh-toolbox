@@ -377,7 +377,7 @@ function timeText() {
 }
 .who-chip.on {
     border-color: var(--red);
-    background: #f2e6d5;
+    background: color-mix(in srgb, var(--red) 12%, var(--paper));
     color: var(--red);
     font-weight: 600;
 }

@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import BaseModal from '../../components/BaseModal.vue';
 import PageHeader from '../../components/PageHeader.vue';
 import { useApplication } from '../../stores/application';
 import { desktop, plain } from '../../services/desktop';
-import type { AppData } from '../../app/types';
+import type { AppData, ThemePreference } from '../../app/types';
 const app = useApplication();
 const importCandidate = ref<AppData | null>(null),
     confirmWipe = ref(false),
@@ -17,6 +17,36 @@ const counts = computed(() => [
     ['目标', app.data?.goals.length],
     ['装备', app.data?.equipment.length],
 ]);
+/*
+ * 外观：偏好存在主进程（建窗口前就要知道），所以只能经桌面通道读写。
+ * 切换后渲染层的 prefers-color-scheme 立刻变，light-dark() 跟着翻，页面不用重载。
+ */
+const theme = ref<ThemePreference>('auto');
+const themeOptions: Array<{ value: ThemePreference; label: string }> = [
+    { value: 'auto', label: '跟随系统' },
+    { value: 'light', label: '浅色' },
+    { value: 'dark', label: '深色' },
+];
+onMounted(async () => {
+    try {
+        theme.value = (await desktop().getTheme()).theme;
+    } catch {
+        // 浏览器预览没有桌面通道，保留默认档即可，不做提示。
+    }
+});
+async function chooseTheme(next: ThemePreference) {
+    if (busy.value || theme.value === next) return;
+    const previous = theme.value;
+    // 先落到界面上：失败了再退回去，避免点了没反应的观感。
+    theme.value = next;
+    try {
+        const state = await desktop().setTheme(next);
+        theme.value = state.theme;
+    } catch (failure) {
+        theme.value = previous;
+        app.notify(failure instanceof Error ? failure.message : String(failure), true);
+    }
+}
 async function chooseImport() {
     if (busy.value) return;
     localBusy.value = true;
@@ -74,6 +104,24 @@ async function wipe() {
 <template>
     <PageHeader title="设置" description="数据备份、导入与关于" />
     <div class="page-content settings-page">
+        <section class="paper-section">
+            <h2>外观</h2>
+            <p>跟随系统时会随 Windows 的浅色 / 深色设置自动切换。</p>
+            <div class="theme-choices" role="group" aria-label="外观主题">
+                <button
+                    v-for="option in themeOptions"
+                    :key="option.value"
+                    class="btn"
+                    :class="{ selected: theme === option.value }"
+                    :aria-pressed="theme === option.value"
+                    :disabled="busy"
+                    @click="chooseTheme(option.value)"
+                >
+                    {{ option.label }}
+                </button>
+            </div>
+            <p class="hint">深色模式仍在逐页适配，个别页面可能还是浅色底。</p>
+        </section>
         <section class="paper-section">
             <h2>数据概览</h2>
             <dl class="data-counts">
@@ -198,6 +246,11 @@ async function wipe() {
 }
 .paper-section .actions {
     margin-top: 18px;
+}
+.theme-choices {
+    display: flex;
+    gap: 8px;
+    margin: 4px 0 12px;
 }
 .data-counts {
     display: grid;

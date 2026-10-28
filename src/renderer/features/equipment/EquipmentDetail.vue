@@ -195,11 +195,11 @@ const logs = computed(() => rules.gearLogsOf(props.eq.id) as unknown as GearLog[
 }
 .badge.income {
     color: var(--green);
-    border-color: #4a7c5973;
+    border-color: color-mix(in srgb, var(--green) 45%, transparent);
 }
 .badge.expense {
     color: var(--red);
-    border-color: #b33a3a66;
+    border-color: color-mix(in srgb, var(--red) 40%, transparent);
 }
 .footer-gap {
     margin-left: auto;

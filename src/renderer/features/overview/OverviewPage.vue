@@ -752,13 +752,25 @@ function rowTone(tx: Transaction) {
     border-radius: 2px;
     transition: height 140ms ease;
 }
+/*
+ * 柱子的渐变用「令牌色 + 令牌色混纸色」而不是两个写死的十六进制：
+ * 亮色下顶端仍是原来那档提亮，暗色下则自动落成偏暗的金 / 红，不会在深底上刺眼。
+ */
 .chart-bar.up {
     bottom: 50%;
-    background: linear-gradient(to top, #a67c2e, #c39a4d);
+    background: linear-gradient(
+        to top,
+        var(--gold),
+        color-mix(in srgb, var(--gold) 72%, var(--paper))
+    );
 }
 .chart-bar.down {
     top: 50%;
-    background: linear-gradient(to bottom, #b33a3a, #cf6a5f);
+    background: linear-gradient(
+        to bottom,
+        var(--red),
+        color-mix(in srgb, var(--red) 72%, var(--paper))
+    );
 }
 .chart-col:hover .chart-bar {
     filter: brightness(1.08);
@@ -783,11 +795,11 @@ function rowTone(tx: Transaction) {
     border-radius: 1px;
 }
 .chart-legend .dot.up {
-    background: #a67c2e;
+    background: var(--gold);
 }
 .chart-legend .dot.down {
     margin-left: 6px;
-    background: #b33a3a;
+    background: var(--red);
 }
 /* ---------- 账号数字 ---------- */
 .account-figures {
@@ -918,7 +930,11 @@ function rowTone(tx: Transaction) {
     display: block;
     height: 100%;
     border-radius: 3px;
-    background: linear-gradient(to right, #a67c2e, #c39a4d);
+    background: linear-gradient(
+        to right,
+        var(--gold),
+        color-mix(in srgb, var(--gold) 72%, var(--paper))
+    );
 }
 .goal-mini p {
     color: var(--muted);

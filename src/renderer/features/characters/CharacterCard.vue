@@ -265,18 +265,18 @@ const groups = computed(() => [
 }
 .card-actions .icon-button:hover:not(:disabled) {
     border-color: var(--gold);
-    background: #eee3cb;
-    color: #806027;
+    background: color-mix(in srgb, var(--gold) 14%, var(--paper));
+    color: color-mix(in srgb, var(--gold) 78%, var(--ink));
 }
 .card-actions .icon-button:active:not(:disabled) {
-    background: #e6d9bc;
+    background: color-mix(in srgb, var(--gold) 22%, var(--paper));
 }
 .card-actions .icon-button.danger {
     color: var(--muted);
 }
 .card-actions .icon-button.danger:hover:not(:disabled) {
-    border-color: #c89483;
-    background: #f2e3d8;
+    border-color: color-mix(in srgb, var(--red) 40%, var(--line-2));
+    background: color-mix(in srgb, var(--red) 10%, var(--paper));
     color: var(--red);
 }
 .character-sections {
@@ -326,7 +326,7 @@ const groups = computed(() => [
     min-height: 29px;
 }
 .metric-list dt {
-    color: #6b6353;
+    color: color-mix(in srgb, var(--muted) 70%, var(--ink));
     overflow-wrap: anywhere;
 }
 .metric-list dd {

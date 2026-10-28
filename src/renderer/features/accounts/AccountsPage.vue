@@ -450,7 +450,7 @@ function showAll() {
 }
 .shortcut:hover:not(:disabled) {
     border-color: var(--gold);
-    background: #eee3cb;
+    background: color-mix(in srgb, var(--gold) 14%, var(--paper));
 }
 .shortcut:disabled {
     opacity: 0.6;
@@ -478,11 +478,11 @@ function showAll() {
 }
 .badge.income {
     color: var(--green);
-    border-color: #4a7c5973;
+    border-color: color-mix(in srgb, var(--green) 45%, transparent);
 }
 .badge.expense {
     color: var(--red);
-    border-color: #b33a3a66;
+    border-color: color-mix(in srgb, var(--red) 40%, transparent);
 }
 .recent-list {
     padding: 0;

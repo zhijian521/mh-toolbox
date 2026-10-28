@@ -143,7 +143,7 @@ async function save() {
     font-size: 11.5px;
 }
 .member-label small.muted {
-    color: #9a917e;
+    color: color-mix(in srgb, var(--muted) 78%, var(--paper));
 }
 .form-error {
     margin-top: 12px;

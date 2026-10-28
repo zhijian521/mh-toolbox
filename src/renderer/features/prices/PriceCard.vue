@@ -75,23 +75,35 @@ const badge = computed(() => {
     };
 });
 
-/** 分类竖条的颜色：常见分类固定，自定义分类按名称散列到同一组颜色里，保证每次打开一致。 */
+/**
+ * 分类色的色调：常见分类固定，自定义分类按名称散列到同一组颜色里，保证每次打开一致。
+ *
+ * 令牌色直接引 var()，卡面自己带的两套取值；这里几个写死的褐 / 橄榄 / 黛 / 紫
+ * 用 light-dark() 各给一份——暗底上原来的深色几乎看不见，卡片会变成没分类的灰块。
+ */
 const tone = computed(() => {
     const fixed: Record<string, string> = {
         兽决: 'var(--gold)',
         内丹: 'var(--blue)',
         宝石: 'var(--red)',
-        五宝: '#8a5a2b',
-        环装: '#6b7b52',
-        材料: '#7a6a53',
-        符石: '#3d5a6c',
+        五宝: 'light-dark(#8a5a2b, #c49a6a)',
+        环装: 'light-dark(#6b7b52, #9db083)',
+        材料: 'light-dark(#7a6a53, #b3a184)',
+        符石: 'light-dark(#3d5a6c, #8aa7b8)',
         药品: 'var(--green)',
-        召唤兽: '#8a6a8a',
+        召唤兽: 'light-dark(#8a6a8a, #b99cc0)',
         其他: 'var(--muted)',
     };
     const name = props.item.category || '其他';
     if (fixed[name]) return fixed[name];
-    const pool = ['var(--gold)', 'var(--blue)', 'var(--red)', 'var(--green)', '#8a5a2b', '#8a6a8a'];
+    const pool = [
+        'var(--gold)',
+        'var(--blue)',
+        'var(--red)',
+        'var(--green)',
+        'light-dark(#8a5a2b, #c49a6a)',
+        'light-dark(#8a6a8a, #b99cc0)',
+    ];
     let hash = 0;
     for (const char of name) hash = (hash * 31 + char.codePointAt(0)!) % 997;
     return pool[hash % pool.length];
@@ -270,7 +282,11 @@ const sparkPoints = computed(() => {
     background: var(--bg);
     box-shadow:
         inset 0 1.5px 2px color-mix(in srgb, var(--ink) 34%, transparent),
-        inset 0 -1px 0 color-mix(in srgb, #fff 70%, transparent);
+        /* 孔下沿的高光：亮色是纸的厚度，暗色下换成一道更黑的边才像凹进去。 */ inset 0 -1px 0
+            light-dark(
+                color-mix(in srgb, #fff 70%, transparent),
+                color-mix(in srgb, #000 55%, transparent)
+            );
     pointer-events: none;
 }
 .tag-hole.right {
@@ -310,15 +326,15 @@ const sparkPoints = computed(() => {
 }
 .card-badge.up {
     color: var(--red);
-    background: #b33a3a12;
+    background: color-mix(in srgb, var(--red) 12%, transparent);
 }
 .card-badge.down {
     color: var(--green);
-    background: #4a7c5912;
+    background: color-mix(in srgb, var(--green) 12%, transparent);
 }
 .card-badge.flat {
     color: var(--muted);
-    background: #7b705f12;
+    background: color-mix(in srgb, var(--muted) 12%, transparent);
 }
 .card-name {
     margin-top: 3px;

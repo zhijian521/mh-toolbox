@@ -149,7 +149,7 @@ onBeforeUnmount(() => {
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: #2f2a2445;
+    background: var(--overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -163,7 +163,7 @@ onBeforeUnmount(() => {
     background: var(--paper);
     border: 1px solid var(--line-2);
     border-radius: 5px;
-    box-shadow: 0 5px 24px #2f2a241c;
+    box-shadow: 0 5px 24px var(--shadow);
     overflow: hidden;
     outline: none;
 }
@@ -214,7 +214,8 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: center;
     padding: 25px;
-    background: #fbf7ecb8;
+    /* 盖在弹窗上的那层：半透明纸色，暗色下自动变成半透明暗底。 */
+    background: color-mix(in srgb, var(--paper) 72%, transparent);
 }
 .discard-panel {
     background: var(--paper);
@@ -222,7 +223,7 @@ onBeforeUnmount(() => {
     border-radius: 4px;
     padding: 24px;
     max-width: 400px;
-    box-shadow: 0 4px 15px #2f2a2414;
+    box-shadow: 0 4px 15px var(--shadow);
 }
 .discard-panel h3 {
     font-size: 17px;

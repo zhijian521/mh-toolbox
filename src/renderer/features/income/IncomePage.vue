@@ -846,7 +846,7 @@ async function onlineSaved(dates: string[]) {
 }
 .item-card:hover:not(:disabled) {
     border-color: var(--gold);
-    background: #eee3cb;
+    background: color-mix(in srgb, var(--gold) 14%, var(--paper));
 }
 .item-card:disabled {
     opacity: 0.6;

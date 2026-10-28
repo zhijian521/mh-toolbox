@@ -332,15 +332,15 @@ async function equip(eq: EquipmentItem) {
 }
 .badge.active {
     color: var(--green);
-    border-color: #4a7c5973;
+    border-color: color-mix(in srgb, var(--green) 45%, transparent);
 }
 .badge.sold {
     color: var(--red);
-    border-color: #b33a3a66;
+    border-color: color-mix(in srgb, var(--red) 40%, transparent);
 }
 .badge.standby {
     color: var(--gold);
-    border-color: #a67c2e66;
+    border-color: color-mix(in srgb, var(--gold) 40%, transparent);
 }
 .eq-empty {
     min-height: 220px;

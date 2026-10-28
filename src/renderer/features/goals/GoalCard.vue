@@ -224,7 +224,7 @@ const unit = computed(() => props.goal.unit || '万');
     height: 100%;
 }
 .goal-card.done {
-    border-color: #4a7c5973;
+    border-color: color-mix(in srgb, var(--green) 45%, transparent);
 }
 .goal-head {
     display: flex;
@@ -251,8 +251,8 @@ const unit = computed(() => props.goal.unit || '万');
 }
 .goal-tools .icon-button:hover:not(:disabled) {
     border-color: var(--gold);
-    background: #eee3cb;
-    color: #806027;
+    background: color-mix(in srgb, var(--gold) 14%, var(--paper));
+    color: color-mix(in srgb, var(--gold) 78%, var(--ink));
 }
 .goal-meta {
     display: flex;
@@ -272,15 +272,15 @@ const unit = computed(() => props.goal.unit || '万');
 /* 类型徽章：类名带 type- 前缀，不能直接用类型名——`.progress` 会撞上进度条那条规则。 */
 .goal-badge.type-money {
     color: var(--gold);
-    border-color: #a67c2e73;
+    border-color: color-mix(in srgb, var(--gold) 45%, transparent);
 }
 .goal-badge.type-progress {
     color: var(--blue);
-    border-color: #3d5a6c73;
+    border-color: color-mix(in srgb, var(--blue) 45%, transparent);
 }
 .goal-badge.type-gear {
-    color: #8a5a2b;
-    border-color: #8a5a2b73;
+    color: light-dark(#8a5a2b, #c49a6a);
+    border-color: color-mix(in srgb, light-dark(#8a5a2b, #c49a6a) 45%, transparent);
 }
 .goal-overdue {
     color: var(--red);
@@ -339,7 +339,7 @@ const unit = computed(() => props.goal.unit || '万');
     gap: 10px;
     padding: 4px 0;
     font-size: 12.5px;
-    border-top: 1px solid #d9cfb680;
+    border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
 }
 .goal-member-name {
     color: var(--ink);
@@ -352,7 +352,7 @@ const unit = computed(() => props.goal.unit || '万');
     white-space: nowrap;
 }
 .goal-member-unknown {
-    color: #9a917e;
+    color: color-mix(in srgb, var(--muted) 78%, var(--paper));
 }
 .goal-member-state {
     min-width: 66px;

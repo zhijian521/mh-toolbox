@@ -746,6 +746,10 @@ onBeforeUnmount(() => {
     object-fit: cover;
     object-position: top left;
 }
+/*
+ * 这几处底色故意不跟主题：角标和删除按钮叠在用户的游戏截图上看，
+ * 截图本身的明暗不可控，浮层只有固定深底浅字才保证在任何截图上都读得出来。
+ */
 .shot-badge {
     position: absolute;
     left: 0;

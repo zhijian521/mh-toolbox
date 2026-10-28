@@ -185,12 +185,12 @@ async function onSearch() {
 }
 .select-trigger[aria-expanded='true'] {
     border-color: var(--gold);
-    box-shadow: inset 0 0 0 1px #a67c2e33;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 20%, transparent);
 }
 .select-trigger:focus-visible {
     outline: none;
     border-color: var(--gold);
-    box-shadow: 0 0 0 1px #a67c2e40;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 25%, transparent);
 }
 .select-trigger:disabled {
     opacity: 0.65;
@@ -205,7 +205,7 @@ async function onSearch() {
     white-space: nowrap;
 }
 .select-value.placeholder {
-    color: #9a917e;
+    color: color-mix(in srgb, var(--muted) 78%, var(--paper));
 }
 /* 弹层通过 Teleport 挂到 body，作用域属性仍随组件节点保留。 */
 .select-popover {

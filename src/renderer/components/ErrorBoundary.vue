@@ -121,7 +121,7 @@ function backToCharacters() {
     gap: 10px;
     max-width: 680px;
     padding: 18px 20px;
-    border: 1px solid #b33a3a40;
+    border: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
     border-radius: 5px;
     background: var(--paper);
 }
@@ -131,7 +131,7 @@ function backToCharacters() {
 .boundary-message {
     padding: 9px 11px;
     border-radius: 4px;
-    background: #b33a3a0a;
+    background: color-mix(in srgb, var(--red) 5%, transparent);
     color: var(--red);
     font-size: 13px;
     line-height: 1.6;

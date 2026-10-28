@@ -11,7 +11,7 @@ const { createEquipmentOcr } = require('./equipment-ocr.cjs');
  * 数据文件一旦无法解析，正常路径全都在设置页之后，而设置页在主界面失败时根本不可达。
  * 这些通道让启动错误屏能自救，不再只有一条必然失败的「重试」。
  */
-function registerIpc({ app, store, logger, getWindow }) {
+function registerIpc({ app, store, logger, theme, getWindow }) {
     const handle = (channel, fn) =>
         ipcMain.handle('mhv2:' + channel, (event, ...args) => {
             const win = getWindow();
@@ -64,6 +64,19 @@ function registerIpc({ app, store, logger, getWindow }) {
     handle('windowState', () => {
         const win = getWindow();
         return { maximized: win ? win.isMaximized() : false };
+    });
+    /*
+     * 主题：主进程持有偏好，切换时同时改 nativeTheme.themeSource（渲染层的
+     * prefers-color-scheme 随之变）与窗口底色，两处必须一起动——只改一个会
+     * 出现「界面已经变暗、缩放窗口时闪一下浅底」。
+     */
+    handle('getTheme', () => theme.snapshot());
+    handle('setTheme', (value) => {
+        const state = theme.set(value);
+        const win = getWindow();
+        if (win && !win.isDestroyed()) win.setBackgroundColor(state.background);
+        logger.info('主题切换为 ' + state.theme + '（当前' + (state.dark ? '深色' : '浅色') + '）');
+        return state;
     });
     /**
      * 装备截图识别。

@@ -407,6 +407,17 @@ export interface WindowState {
     maximized: boolean;
 }
 
+/** 外观三档：跟随系统、固定浅色、固定深色。 */
+export type ThemePreference = 'auto' | 'light' | 'dark';
+
+export interface ThemeState {
+    theme: ThemePreference;
+    /** 当前实际是不是深色（`auto` 档下由系统决定）。 */
+    dark: boolean;
+    /** 窗口底色，主进程用它填首帧与缩放时露出的那层。 */
+    background: string;
+}
+
 export interface DesktopGateway {
     loadData(): Promise<Result>;
     saveData(data: AppData, options?: { backupReason?: string }): Promise<Result>;
@@ -416,6 +427,8 @@ export interface DesktopGateway {
     window(action: 'minimize' | 'maximize' | 'close'): Promise<void>;
     getWindowState(): Promise<WindowState>;
     onWindowStateChanged(listener: (state: WindowState) => void): () => void;
+    getTheme(): Promise<ThemeState>;
+    setTheme(theme: ThemePreference): Promise<ThemeState>;
     // 装备截图识别：图片只在内存里过一遍，识别完不保留。
     recognizeEquipment(
         image: string,

@@ -1,8 +1,9 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, nativeTheme } = require('electron');
 const path = require('node:path');
 const { configureProfile } = require('./profile.cjs');
 const { createDataStore } = require('./data-store.cjs');
 const { createLogger } = require('./logger.cjs');
+const { createTheme } = require('./theme.cjs');
 const { registerIpc } = require('./ipc.cjs');
 
 const profile = configureProfile(app); // Before ready or creating any Chromium session.
@@ -19,6 +20,7 @@ process.on('unhandledRejection', (reason) => {
 app.disableHardwareAcceleration();
 if (process.platform === 'win32') app.setAppUserModelId('com.zhijian.mhtool.v2');
 let window;
+let theme;
 
 function createWindow() {
     window = new BrowserWindow({
@@ -27,7 +29,7 @@ function createWindow() {
         minWidth: 1024,
         minHeight: 680,
         title: '梦幻养老助手 V2',
-        backgroundColor: '#f2ecdd',
+        backgroundColor: theme.background(),
         frame: false,
         show: false,
         icon: path.join(__dirname, '../../build/icon.ico'),
@@ -89,8 +91,24 @@ else {
             const store = createDataStore(app.getPath('userData'));
             // 上次异常退出可能留下半写文件，启动时先清掉，避免它被误当成有效数据。
             store.clearTemporary();
-            logger.info('应用启动，版本 ' + app.getVersion() + '，数据文件 ' + store.file);
-            registerIpc({ app, store, logger, getWindow: () => window });
+            // 主题要在建窗口之前定下来：渲染层靠 prefers-color-scheme 取值，晚一步就会闪一帧浅底。
+            theme = createTheme({
+                nativeTheme,
+                directory: app.getPath('userData'),
+                logger,
+            });
+            nativeTheme.on('updated', () => {
+                if (window && !window.isDestroyed()) window.setBackgroundColor(theme.background());
+            });
+            logger.info(
+                '应用启动，版本 ' +
+                    app.getVersion() +
+                    '，数据文件 ' +
+                    store.file +
+                    '，主题 ' +
+                    theme.snapshot().theme,
+            );
+            registerIpc({ app, store, logger, theme, getWindow: () => window });
             await createWindow();
         })
         .catch((error) => {
