@@ -156,6 +156,35 @@ const quick = computed(() => {
     void app.data;
     return rules.state.quickSettings || { accounts: 5, cardPrice: 15000 };
 });
+/**
+ * 速记记给谁：正在计时的号优先，没开计时才退回当前筛选（再退回第一个角色）。
+ *
+ * 之前恒定取「角色列表第一个」，于是上了第二个号做师门、收益仍记在第一个号头上，
+ * 第二个号只剩一条点卡支出。归属现在由领域 `onlineRoster` 给，页面不再自己猜；
+ * 多开时这几个号各记一份均分金额（物品整条归主角色）。
+ */
+const quickRoster = computed(() => {
+    void app.data;
+    const online = rules.onlineRoster();
+    if (online.length) return online;
+    if (character.value !== 'all') return [character.value];
+    return app.characters.length ? [app.characters[0].id] : [];
+});
+/** 「这笔记给谁」要在界面上看得见，否则归属又变回看不见的隐式行为。 */
+const quickRosterText = computed(() => {
+    const names = quickRoster.value.map((id) => rules.charName(id)).filter(Boolean);
+    if (!names.length) return '未选择角色';
+    const text = names.join('、');
+    return rules.onlineRoster().length ? text : text + '（未计时）';
+});
+/** 收益记录行的副标题：归属角色 + 计价方式，多开时一眼分出是哪个号的那份。 */
+function lootMeta(tx: Transaction) {
+    const detail =
+        tx.recordType === 'item'
+            ? U.fmtMoney(Number(tx.unitPrice) || 0) + ' × ' + (tx.quantity ?? 0)
+            : '金额记录';
+    return rules.charName(tx.characterId) + ' · ' + detail;
+}
 /** 四张统计卡：时长与点卡在前，物品与梦幻币在后，口径都来自 `earningsStats`。 */
 const statCards = computed(() => {
     const s = stats.value;
@@ -223,9 +252,6 @@ function holding(tx: Transaction) {
     return tx.recordType === 'item'
         ? (Number(tx.quantity) || 0) * (Number(tx.unitPrice) || 0)
         : Number(tx.amount) || 0;
-}
-function currentCharacter() {
-    return character.value === 'all' ? app.characters[0]?.id || '' : character.value;
 }
 /** 一段计时覆盖的日期，跨夜时拆成多天；上限 8 天纯粹是防坏数据。 */
 function dayList(from: number, to: number) {
@@ -327,12 +353,18 @@ async function recordLoot(item: CatalogItem, price: number) {
     // 领域里单价存的是游戏币原值，记录金额用「万」，保留两位。
     const wan = Math.round(price / 100) / 100;
     const money = item.id === QUICK_MONEY_ITEM;
+    const targets = quickRoster.value;
+    if (!targets.length) {
+        app.notify('请先创建角色', true);
+        return;
+    }
     try {
         await app.execute((domain) =>
-            domain.saveTransaction({
+            domain.saveQuickLoot({
                 ledger: 'earnings',
                 recordType: money ? 'money' : 'item',
-                characterId: currentCharacter(),
+                /* 记给谁由领域按在线角色拆：单开一份原金额，多开均分，物品整条归主角色。 */
+                characterIds: targets,
                 date: U.today(),
                 kind: 'income',
                 currency: 'cash',
@@ -349,7 +381,17 @@ async function recordLoot(item: CatalogItem, price: number) {
                     : { itemName: item.name, quantity: 1, unitPrice: wan, status: 'held' }),
             }),
         );
-        app.notify('已记录 ' + item.name + ' · ' + U.fmtMoney(wan));
+        app.notify(
+            '已记录 ' +
+                item.name +
+                ' · ' +
+                U.fmtMoney(wan) +
+                (!money && targets.length > 1
+                    ? ' · ' + quickRosterText.value + ' 均分'
+                    : targets.length > 1
+                      ? ' · ' + targets.length + ' 个角色各 ' + U.fmtMoney(wan / targets.length)
+                      : ''),
+        );
         await syncAccount([U.today()]);
     } catch (failure) {
         app.notify(failure instanceof Error ? failure.message : String(failure), true);
@@ -484,9 +526,12 @@ async function onlineSaved(dates: string[]) {
                 <section class="card">
                     <header class="card-title">
                         物品速记
-                        <small>点一下记一条 · 固定价格可右键改价</small>
+                        <small class="loot-target">
+                            记给
+                            <b>{{ quickRosterText }}</b>
+                        </small>
                     </header>
-                    <p class="section-label">固定价格</p>
+                    <p class="section-label">固定价格 · 点一下记一条，右键改价</p>
                     <div class="item-grid">
                         <button
                             v-for="item in quickItems"
@@ -542,11 +587,7 @@ async function onlineSaved(dates: string[]) {
                                 </span>
                                 <span class="loot-name" :title="tx.note">
                                     {{ tx.itemName || tx.note || '物品' }}
-                                    <small v-if="tx.recordType === 'item'">
-                                        {{ U.fmtMoney(Number(tx.unitPrice) || 0) }} ×
-                                        {{ tx.quantity ?? 0 }}
-                                    </small>
-                                    <small v-else>金额记录</small>
+                                    <small>{{ lootMeta(tx) }}</small>
                                 </span>
                                 <span class="loot-price">{{ U.fmtMoney(holding(tx)) }}</span>
                                 <button
@@ -770,6 +811,11 @@ async function onlineSaved(dates: string[]) {
     color: var(--muted);
     font-size: 11.5px;
     font-weight: 400;
+}
+/* 「记给谁」是这张卡最容易出错的一处，别让它比操作提示还弱。 */
+.loot-target b {
+    color: var(--ink);
+    font-weight: 600;
 }
 .section-label {
     margin: 14px 0 8px;

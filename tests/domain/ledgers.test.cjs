@@ -553,3 +553,123 @@ test('同步按角色分开算，跨天会话只补自己那一天', async () =>
         '亏的那天记支出，不塞进收入',
     );
 });
+
+test('多开计时把点卡按在线角色平摊，合计仍等于整段成本', async () => {
+    const D = onlineDomain();
+    D.state.characters.push({ id: 'c3' });
+    // 7 分钟 × 3 个号 × 13777 游戏币/点 = 2.89 万，除不尽，正好验证尾差守恒。
+    const session = await D.saveSession({
+        characterId: 'c1',
+        roster: ['c1', 'c2', 'c3'],
+        mode: 'duration',
+        date: '2020-02-28',
+        minutes: 7,
+        cardPrice: 13777,
+    });
+    assert.equal(session.cost, 2.89);
+    assert.equal(session.accounts, 3, '角色数取勾选人数');
+    const cards = D.state.transactions.filter((t) => t.sessionId === session.id);
+    assert.equal(cards.length, 3, '每个在线角色各一条点卡');
+    const sum = cards.reduce((total, t) => total + Math.round(t.amount * 100), 0);
+    assert.equal(sum, 289, '分摊后合计与整段成本一致，不多不少一分');
+    assert.equal(new Set(cards.map((t) => t.characterId)).size, 3, '三个角色都拿到了点卡');
+    // 单角色视角只看自己那一份，「全部角色」看整段——不能按人头翻倍。
+    assert.equal(D.onlineStats('c2', '2020-02-28', '2020-02-28').cost, 0.96);
+    assert.equal(D.onlineStats('c2', '2020-02-28', '2020-02-28').minutes, 7);
+    const all = D.onlineStats('all', '2020-02-28', '2020-02-28');
+    assert.equal(all.cost, 2.89);
+    assert.equal(all.minutes, 7);
+});
+
+test('速记按在线角色均分，尾差守恒；物品整条归主角色', async () => {
+    const D = onlineDomain();
+    D.state.characters.push({ id: 'c3' });
+    const base = {
+        ledger: 'earnings',
+        date: '2026-10-28',
+        kind: 'income',
+        currency: 'cash',
+        category: '物品掉落',
+        channel: '游戏内',
+        minutes: 0,
+        note: '金币',
+        source: 'quick',
+        itemId: 99,
+    };
+    const money = await D.saveQuickLoot(
+        Object.assign({}, base, {
+            recordType: 'money',
+            characterIds: ['c1', 'c2', 'c3'],
+            amount: 30.01,
+        }),
+    );
+    assert.equal(money.length, 3, '三个在线角色各一条');
+    assert.equal(
+        money.reduce((total, t) => total + Math.round(t.amount * 100), 0),
+        3001,
+        '均分后合计与原金额一致',
+    );
+    assert.deepEqual(
+        money.map((t) => t.amount),
+        [10.01, 10, 10],
+        '尾差落在第一份',
+    );
+    const item = await D.saveQuickLoot(
+        Object.assign({}, base, {
+            recordType: 'item',
+            characterIds: ['c2', 'c3'],
+            amount: 5,
+            itemName: '光芒石',
+            quantity: 1,
+            unitPrice: 5,
+            status: 'held',
+        }),
+    );
+    assert.equal(item.length, 1, '物品数量不可拆，只写一条');
+    assert.equal(item[0].characterId, 'c2', '归主角色');
+    assert.equal(item[0].amount, 5);
+    await assert.rejects(D.saveQuickLoot(Object.assign({}, base, { characterIds: [] })), /角色/);
+});
+
+test('多开后两个号各自结算出净值，不会一个吃收益、另一个只剩点卡', async () => {
+    const D = onlineDomain();
+    const base = {
+        ledger: 'earnings',
+        recordType: 'money',
+        date: '2026-10-28',
+        kind: 'income',
+        currency: 'cash',
+        category: '物品掉落',
+        channel: '游戏内',
+        minutes: 0,
+        note: '金币',
+        source: 'quick',
+        itemId: 99,
+    };
+    await D.saveQuickLoot(Object.assign({}, base, { characterIds: ['c1'], amount: 30 }));
+    await D.saveQuickLoot(Object.assign({}, base, { characterIds: ['c2'], amount: 20 }));
+    // 两个号同时在线 1 小时：点卡 18 万，各摊 9 万。
+    await D.saveSession({
+        characterId: 'c1',
+        roster: ['c1', 'c2'],
+        mode: 'duration',
+        date: '2026-10-28',
+        minutes: 60,
+        cardPrice: 15000,
+    });
+    assert.equal(D.onlineStats('c1', '2026-10-28', '2026-10-28').cost, 9);
+    const entries = await D.syncAccountEarnings(['2026-10-28']);
+    const byChar = {};
+    entries.forEach((entry) => (byChar[entry.characterId] = entry));
+    assert.equal(entries.length, 2, '两个在线的号各一条');
+    assert.equal(byChar.c1.amount, 21, '30 − 9');
+    assert.equal(byChar.c2.amount, 11, '20 − 9，不再是孤立的一条点卡支出');
+    const rows = D.state.transactions.filter(
+        (t) => t.ledger === 'account' && t.category === '游戏收益',
+    );
+    assert.equal(
+        rows.every((t) => t.kind === 'income'),
+        true,
+        '两个号的净额都是正的',
+    );
+});

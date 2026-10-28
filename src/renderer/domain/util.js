@@ -158,6 +158,26 @@ export function fmtPercent(part, total) {
     return Math.min(999, Math.round((part / total) * 100)) + '%';
 }
 
+/**
+ * 把一笔金额按份数拆开，尾差落在前几份，保证各份之和与原额完全一致。
+ *
+ * 点卡分摊与速记均分都要这条：`30 / 7` 这种除不尽的数如果各自四舍五入，
+ * 分完之后会多出一分或少一分，账号合计就与收益页对不上。
+ *
+ * @param {number} amount 金额（万）
+ * @param {number} count 份数，必须为正整数
+ * @returns {number[]} 每份金额（万），两位小数
+ */
+export function splitAmount(amount, count) {
+    const size = Math.max(1, Math.round(count));
+    const units = Math.round((Number(amount) || 0) * 100);
+    const base = Math.floor(units / size);
+    const rest = units - base * size;
+    return Array.from({ length: size }, function (_value, index) {
+        return (base + (index < rest ? 1 : 0)) / 100;
+    });
+}
+
 /** 领域模块统一通过该对象取工具函数，保持 `U.xxx()` 的调用写法。 */
 export const U = {
     uid,
@@ -173,4 +193,5 @@ export const U = {
     rangeFor,
     daysLeft,
     fmtPercent,
+    splitAmount,
 };

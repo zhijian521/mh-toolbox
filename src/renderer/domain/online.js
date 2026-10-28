@@ -12,6 +12,29 @@
 export const POINTS_PER_HOUR = 6;
 
 /**
+ * 会话的在线角色清单规范化。
+ *
+ * `roster` 是「这段计时同时在线的那几个号」：老数据没有这个字段，只有 `characterId`，
+ * 读取时按单角色处理，口径与改造前完全一致。坏数据（不是数组、混入非字符串、
+ * 指向已删除的角色）在这里无损降级——读取路径不允许抛错。
+ *
+ * 只剩一个角色时字段直接删掉，让单角色会话与老数据同形，往返序列化保持幂等。
+ *
+ * @param {any} session
+ * @returns {any}
+ */
+function normalizeRoster(session) {
+    const next = Object.assign({}, session);
+    const raw = Array.isArray(next.roster) ? next.roster : [];
+    const roster = Array.from(
+        new Set(raw.filter((/** @type {any} */ id) => typeof id === 'string' && id)),
+    );
+    if (roster.length > 1) next.roster = roster;
+    else delete next.roster;
+    return next;
+}
+
+/**
  * @param {Domain} D
  * @param {any} U
  * @param {unknown} _gateway
@@ -36,7 +59,7 @@ export default function install(D, U, _gateway, _localStorage) {
                     (s) => s !== null && typeof s === 'object' && !Array.isArray(s),
                 );
                 state.sessions = state.sessions.map(
-                    /** @param {any} s */ (s) => Object.assign({}, s),
+                    /** @param {any} s */ (s) => normalizeRoster(s),
                 );
                 const active =
                     data.activeSession &&
@@ -47,7 +70,7 @@ export default function install(D, U, _gateway, _localStorage) {
                 state.activeSession =
                     active &&
                     state.characters.some(/** @param {any} c */ (c) => c.id === active.characterId)
-                        ? Object.assign({}, active)
+                        ? normalizeRoster(active)
                         : null;
                 state.transactions.forEach(function (/** @type {any} */ tx) {
                     if (
@@ -76,6 +99,43 @@ export default function install(D, U, _gateway, _localStorage) {
                     tx.sessionId = id;
                 });
                 return state;
+            },
+
+            /**
+             * 一段会话覆盖的在线角色。
+             *
+             * 老数据只有 `characterId`，`roster` 缺省时退化成单元素数组；指向已删除角色的
+             * 成员在这里被丢掉，避免已删角色的 id 继续出现在点卡流水和结算里。
+             *
+             * @this {Domain}
+             * @param {any} session
+             * @returns {string[]}
+             */
+            rosterOf(session) {
+                if (!session) return [];
+                const roster = Array.isArray(session.roster)
+                    ? session.roster.filter(
+                          /** @param {any} id */ (id) =>
+                              typeof id === 'string' && this.charById(id),
+                      )
+                    : [];
+                if (roster.length) return roster;
+                return session.characterId && this.charById(session.characterId)
+                    ? [String(session.characterId)]
+                    : [];
+            },
+
+            /**
+             * 当前正在计时的角色清单；没有计时返回空数组。
+             *
+             * 速记按它决定「这笔收益记给谁」：单开时就是那一个号，多开时按人数均分。
+             * 页面不再自行猜测归属——归属跑偏会让另一个号只剩点卡。
+             *
+             * @this {Domain}
+             * @returns {string[]}
+             */
+            onlineRoster() {
+                return this.rosterOf(this.state.activeSession);
             },
 
             /**
@@ -161,14 +221,17 @@ export default function install(D, U, _gateway, _localStorage) {
                         ? [Object.assign({}, active, { mode: 'range', endAt: Date.now() })]
                         : [],
                 );
+                /* 重叠按「在线角色」判：两个号同时在线时，它们各自的时段本来就会撞在一起，
+                   只看主角色的话，第二个号永远加不进同一段计时。 */
+                const mine = this.rosterOf(session);
                 const overlap = others.find(
                     /** @param {any} s */
                     (s) =>
                         s.id !== session.id &&
-                        s.characterId === session.characterId &&
                         s.mode === 'range' &&
                         session.startAt < s.endAt &&
-                        session.endAt > s.startAt,
+                        session.endAt > s.startAt &&
+                        this.rosterOf(s).some(/** @param {string} id */ (id) => mine.includes(id)),
                 );
                 return overlap ? '该角色已有重叠的在线时段，请先编辑原记录或调整时间' : '';
             },
@@ -180,6 +243,16 @@ export default function install(D, U, _gateway, _localStorage) {
              */
             makeSession(input) {
                 const session = Object.assign({}, input);
+                /* 勾了几个号在线，点卡就该按几个号乘：`accounts` 直接取清单长度，
+                   避免「勾了 3 个角色、参数还停在 5」时费用与分摊人数对不上。 */
+                const roster = Array.isArray(session.roster)
+                    ? session.roster.filter(/** @param {any} id */ (id) => this.charById(id))
+                    : [];
+                if (roster.length > 1) {
+                    session.roster = roster;
+                    if (!roster.includes(session.characterId)) session.characterId = roster[0];
+                    session.accounts = roster.length;
+                } else delete session.roster;
                 if (session.mode === 'range') {
                     session.minutes = (session.endAt - session.startAt) / 60000;
                     session.date = U.fmtDate(new Date(session.startAt));
@@ -218,31 +291,62 @@ export default function install(D, U, _gateway, _localStorage) {
                 const transactions = this.state.transactions.filter(
                     /** @param {any} t */ (t) => t.sessionId !== session.id,
                 );
-                this.sessionSlices(session).forEach(function (/** @type {any} */ slice) {
-                    const old = previous.find(/** @param {any} t */ (t) => t.date === slice.date);
-                    transactions.push({
-                        id: old ? old.id : 'online-' + session.id + '-' + slice.date,
-                        ledger: 'earnings',
-                        recordType: 'money',
-                        characterId: session.characterId,
-                        date: slice.date,
-                        kind: 'expense',
-                        currency: 'cash',
-                        category: '点卡',
-                        amount: slice.cost,
-                        minutes: 0,
-                        fee: 0,
-                        source: 'online',
-                        sessionId: session.id,
-                        createdAt: session.createdAt,
-                        note:
-                            '在线 ' +
-                            (slice.minutes / 60).toFixed(2) +
-                            ' 小时' +
-                            (session.accounts ? ' × ' + session.accounts + ' 角色' : '') +
-                            (session.note ? ' · ' + session.note : ''),
-                    });
-                });
+                const roster = this.rosterOf(session);
+                /* 一个角色都没匹配上（角色被删光）时仍按原归属记一条，别让这段成本凭空消失。 */
+                const owners = roster.length ? roster : [session.characterId];
+                this.sessionSlices(session).forEach(
+                    /** @param {any} slice */ (slice) => {
+                        /* 多开时点卡按人头平摊：每个在线的号各有一条「点卡」，金额之和仍等于
+                           这段会话的总价。全挂在一个号上会让另一个号零成本、结算成纯负数。 */
+                        const shares = U.splitAmount(slice.cost, owners.length);
+                        owners.forEach(
+                            /**
+                             * @param {string} characterId
+                             * @param {number} index
+                             */
+                            (characterId, index) => {
+                                const old = previous.find(
+                                    /** @param {any} t */ (t) =>
+                                        t.date === slice.date && t.characterId === characterId,
+                                );
+                                transactions.push({
+                                    /* 单角色沿用旧 id（历史数据里可能来自迁移），多角色按
+                                       「日期 + 角色」各自稳定，重复结算不会新增行。 */
+                                    id:
+                                        old && owners.length === 1
+                                            ? old.id
+                                            : 'online-' +
+                                              session.id +
+                                              '-' +
+                                              slice.date +
+                                              (owners.length > 1 ? '-' + characterId : ''),
+                                    ledger: 'earnings',
+                                    recordType: 'money',
+                                    characterId,
+                                    date: slice.date,
+                                    kind: 'expense',
+                                    currency: 'cash',
+                                    category: '点卡',
+                                    amount: shares[index],
+                                    minutes: 0,
+                                    fee: 0,
+                                    source: 'online',
+                                    sessionId: session.id,
+                                    createdAt: session.createdAt,
+                                    note:
+                                        '在线 ' +
+                                        (slice.minutes / 60).toFixed(2) +
+                                        ' 小时' +
+                                        (session.accounts
+                                            ? ' × ' + session.accounts + ' 角色'
+                                            : '') +
+                                        (owners.length > 1 ? ' · 分摊 1/' + owners.length : '') +
+                                        (session.note ? ' · ' + session.note : ''),
+                                });
+                            },
+                        );
+                    },
+                );
                 this.state.transactions = transactions;
             },
 
@@ -320,15 +424,31 @@ export default function install(D, U, _gateway, _localStorage) {
             },
 
             /**
+             * 开始计时。`roster` 是这次同时在线的角色清单，缺省时只记 `characterId` 一个，
+             * 与改造前完全一致；多开时点卡由 `syncSession` 按清单平摊。
+             *
              * @this {Domain}
              * @param {string} characterId
+             * @param {string[]} [roster]
              * @returns {Promise<any>}
              */
-            async startSession(characterId) {
+            async startSession(characterId, roster) {
                 if (this.state.activeSession) throw new Error('已有未结束的在线记录，请先处理');
-                if (!this.charById(characterId)) throw new Error('请先选择归属角色');
+                const members = (Array.isArray(roster) ? roster : []).filter(
+                    /** @param {any} id */ (id) => this.charById(id),
+                );
+                if (!members.length && this.charById(characterId)) members.push(characterId);
+                if (!members.length) throw new Error('请先选择归属角色');
+                /* 主角色仍取页面手上的那个（筛选/勾选第一项），保证会话的归属显示与旧数据同构。 */
+                const primary = members.includes(characterId) ? characterId : members[0];
                 const active = Object.assign(
-                    { id: U.uid(), characterId, startAt: Date.now(), createdAt: Date.now() },
+                    {
+                        id: U.uid(),
+                        characterId: primary,
+                        startAt: Date.now(),
+                        createdAt: Date.now(),
+                    },
+                    members.length > 1 ? { roster: members } : {},
                     this.state.quickSettings,
                 );
                 return this.commitOnline(() => {
@@ -392,7 +512,11 @@ export default function install(D, U, _gateway, _localStorage) {
                 sessions.forEach(
                     /** @param {any} session */
                     (session) => {
-                        if (charId && charId !== 'all' && session.characterId !== charId) return;
+                        const roster = this.rosterOf(session);
+                        const single = !!charId && charId !== 'all';
+                        if (single && !roster.includes(charId)) return;
+                        /* 单角色视角只看自己那一份点卡；「全部角色」看整段，不能按人头翻倍。 */
+                        const share = single ? 1 / Math.max(1, roster.length) : 1;
                         const slices = this.sessionSlices(session).filter(
                             (s) => (!from || s.date >= from) && (!to || s.date <= to),
                         );
@@ -400,8 +524,9 @@ export default function install(D, U, _gateway, _localStorage) {
                         result.count++;
                         slices.forEach((slice) => {
                             result.minutes += slice.minutes;
-                            result.cost += slice.cost;
-                            if (active && session.id === active.id) result.liveCost += slice.cost;
+                            result.cost += slice.cost * share;
+                            if (active && session.id === active.id)
+                                result.liveCost += slice.cost * share;
                         });
                     },
                 );
@@ -439,16 +564,18 @@ export default function install(D, U, _gateway, _localStorage) {
             includeActiveEarnings(settled, charId, from, to) {
                 const stats = Object.assign({}, settled);
                 const active = this.state.activeSession;
-                if (!active || (charId && charId !== 'all' && active.characterId !== charId))
-                    return stats;
+                const roster = this.rosterOf(active);
+                const single = !!charId && charId !== 'all';
+                if (!active || (single && !roster.includes(charId))) return stats;
+                const share = single ? 1 / Math.max(1, roster.length) : 1;
                 const session = this.makeSession(
                     Object.assign({}, active, { mode: 'range', endAt: Date.now() }),
                 );
                 this.sessionSlices(session).forEach((slice) => {
                     if ((from && slice.date < from) || (to && slice.date > to)) return;
                     stats.onlineMinutes += slice.minutes;
-                    stats.cardCost += slice.cost;
-                    stats.expense += slice.cost;
+                    stats.cardCost += slice.cost * share;
+                    stats.expense += slice.cost * share;
                 });
                 stats.net = stats.income - stats.expense;
                 stats.hourly =

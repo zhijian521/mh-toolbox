@@ -69,6 +69,8 @@ const draft = computed(() =>
     rules.makeSession({
         id: 'draft',
         characterId: characterId.value,
+        /* 勾选的角色就是这次的在线名单：点卡按人头乘，结算与速记也都按它分摊。 */
+        roster: selected.value,
         mode: 'duration',
         date: date.value,
         minutes: span.value,
@@ -144,7 +146,7 @@ async function save() {
             // 分成两次就会出现「参数存了、会话没开」的中间态。
             await app.execute(async (domain) => {
                 domain.setQuickSettings({ accounts: accounts.value, cardPrice: priceValue });
-                return domain.startSession(characterId.value);
+                return domain.startSession(characterId.value, selected.value);
             });
             app.notify('开始记录游戏时间 · ' + accounts.value + ' 个角色在线');
             // 刚开始没有点卡流水，不需要重算任何日期的收益。

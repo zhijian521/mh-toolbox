@@ -251,8 +251,11 @@ interface Domain {
     syncAccountEquipment: (tx: any) => void;
     removeTransaction: (id: string) => Promise<any>;
     syncAccountEarnings: (dates: string[]) => Promise<any[]>;
+    quickShares: (ids: string[], total: number) => Array<{ characterId: string; amount: number }>;
     settleItem: (item: any, data: any) => Promise<any>;
     saveTransaction: (input: any, id?: string) => Promise<any>;
+    saveQuickLoot: (input: any) => Promise<any[]>;
+    writeTransaction: (input: any, id?: string) => any;
 
     // ---- export.js：CSV 导出 ----
     recordsCsv: (records: any[]) => string;
@@ -346,7 +349,9 @@ interface Domain {
     normalizeOnline: (state: any, data: any) => any;
     saveSession: (input: any, finishActiveId?: string) => Promise<any>;
     removeSession: (id: string) => void;
-    startSession: (charId: string) => Promise<any>;
+    startSession: (charId: string, roster?: string[]) => Promise<any>;
+    rosterOf: (session: any) => string[];
+    onlineRoster: () => string[];
     setQuickSettings: (input: { accounts?: number; cardPrice?: number }) => void;
     adjustSessionStart: (startAt: number) => Promise<any>;
     commitOnline: (change: () => any) => Promise<any>;
