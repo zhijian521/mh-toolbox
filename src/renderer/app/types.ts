@@ -483,6 +483,8 @@ export interface Domain {
     charById(id: string): Character | undefined;
     charName(id: string): string;
     characterNumber(value: unknown): number | null;
+    /** 卡片排序的唯一实现：`sortOrder` 缺省或非法时按「未记录」排到末尾。 */
+    orderedCards(items: Character[]): Character[];
     characterProgressMetric(
         character: Character | undefined,
         category: string,
@@ -610,7 +612,7 @@ export interface Domain {
      * 单事务全部落盘，避免半截账。
      */
     saveQuickLoot(input: unknown): Promise<Transaction[]>;
-    removeTransaction(id: string): Promise<unknown>;
+    removeTransaction(id: string): void;
     /**
      * 把指定日期的日常产出同步成账号账本里的一条「游戏收益」（一天一条，
      * 后写覆盖先写，金额为 0 时删掉）。自己 commit，可直接放进 `app.execute`。

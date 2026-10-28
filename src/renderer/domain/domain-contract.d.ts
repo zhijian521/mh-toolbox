@@ -249,10 +249,10 @@ interface Domain {
     syncItem: (id: string) => void;
     syncEquipmentStatus: (id: string) => void;
     syncAccountEquipment: (tx: any) => void;
-    removeTransaction: (id: string) => Promise<any>;
+    removeTransaction: (id: string) => void;
     syncAccountEarnings: (dates: string[]) => Promise<any[]>;
     quickShares: (ids: string[], total: number) => Array<{ characterId: string; amount: number }>;
-    settleItem: (item: any, data: any) => Promise<any>;
+    settleItem: (item: any, data: any) => any;
     saveTransaction: (input: any, id?: string) => Promise<any>;
     saveQuickLoot: (input: any) => Promise<any[]>;
     writeTransaction: (input: any, id?: string) => any;

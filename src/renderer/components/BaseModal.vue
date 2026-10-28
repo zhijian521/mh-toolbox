@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue';
 import AppIcon from './AppIcon.vue';
 import { tabbable } from './focus';
 import { closeLayer, isTopLayer, onLayerChange, openLayer } from './modal-layer';
@@ -18,6 +18,17 @@ const overlay = ref<HTMLElement>(),
     panel = ref<HTMLElement>(),
     discard = ref<HTMLElement>();
 const confirming = ref(false);
+/**
+ * 每个实例独立的标题 ID。
+ *
+ * 以前写死 `modal-title`，而弹窗挂到 body 后可以叠层（见 `modal-layer.ts`）：
+ * 两层同时存在时文档里会出现两个同名 ID，内层的 `aria-labelledby` 会解析到外层标题，
+ * 读屏念出的标题与内容不符。`useId()` 保证同一份模板渲染多次也不重名。
+ */
+const uid = useId();
+const titleId = 'modal-title-' + uid;
+const discardTitleId = 'discard-title-' + uid;
+const discardDescriptionId = 'discard-description-' + uid;
 /** 是否是最上层弹窗：叠层时只有它响应 Escape、Tab 与遮罩点击，其余整块 inert。 */
 const top = ref(true);
 let previous: HTMLElement | null, editingFocus: HTMLElement | null;
@@ -98,13 +109,13 @@ onBeforeUnmount(() => {
                 :class="{ wide, medium }"
                 :role="confirming ? undefined : 'dialog'"
                 :aria-modal="confirming ? undefined : true"
-                :aria-labelledby="confirming ? undefined : 'modal-title'"
+                :aria-labelledby="confirming ? undefined : titleId"
                 :inert="top ? undefined : true"
                 tabindex="-1"
             >
                 <div class="modal-content" :inert="confirming || undefined">
                     <header class="modal-head">
-                        <h2 id="modal-title">{{ title }}</h2>
+                        <h2 :id="titleId">{{ title }}</h2>
                         <button
                             class="icon-button"
                             aria-label="关闭"
@@ -128,12 +139,12 @@ onBeforeUnmount(() => {
                     class="discard-overlay"
                     role="alertdialog"
                     aria-modal="true"
-                    aria-labelledby="discard-title"
-                    aria-describedby="discard-description"
+                    :aria-labelledby="discardTitleId"
+                    :aria-describedby="discardDescriptionId"
                 >
                     <div class="discard-panel">
-                        <h3 id="discard-title">放弃未保存的修改？</h3>
-                        <p id="discard-description">本次修改尚未保存，关闭后将丢失。</p>
+                        <h3 :id="discardTitleId">放弃未保存的修改？</h3>
+                        <p :id="discardDescriptionId">本次修改尚未保存，关闭后将丢失。</p>
                         <div class="actions">
                             <button class="btn primary" @click="continueEditing">继续编辑</button>
                             <button class="btn danger" @click="emit('close')">放弃修改</button>

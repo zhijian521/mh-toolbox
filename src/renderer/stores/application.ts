@@ -24,14 +24,10 @@ export const useApplication = defineStore('application', () => {
         toastError = ref(false);
     let toastTimer: ReturnType<typeof setTimeout>;
     const busy = computed(() => pending.value > 0);
+    // 排序规则只在领域层维护一份（`orderedCards`）：`sortOrder` 缺省、空串与非法值时
+    // 的落位由 `characterNumber` 统一裁决，门店端不再自行解释这些值。
     const characters = computed(() =>
-        data.value
-            ? [...data.value.characters].sort(
-                  (a, b) =>
-                      Number(a.sortOrder ?? Infinity) - Number(b.sortOrder ?? Infinity) ||
-                      Number(b.createdAt ?? 0) - Number(a.createdAt ?? 0),
-              )
-            : [],
+        data.value ? rules().orderedCards(data.value.characters) : [],
     );
     // 急救面板用到的状态；只在启动失败时填充。
     const diagnostics = shallowRef<Diagnostics | null>(null);
@@ -157,7 +153,14 @@ export const useApplication = defineStore('application', () => {
         if (!domain) throw new Error('数据尚未就绪');
         return domain;
     }
-    async function execute<T>(operation: (domain: Domain) => Promise<T>): Promise<T> {
+    /**
+     * 串行执行一次数据修改并发布快照。
+     *
+     * 返回值可以是 Promise，也可以直接是值：领域里有一批方法只改内存、同步返回
+     * （`removeTransaction`、`settleItem` 就是），它们通常由调用方用 `commit` 包一层，
+     * 但 `commit` 之外的同步方法同样可以交给这里，不必再套一层 `async`。
+     */
+    async function execute<T>(operation: (domain: Domain) => T | Promise<T>): Promise<T> {
         pending.value++;
         try {
             return plain(await operation(rules()));
