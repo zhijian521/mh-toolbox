@@ -112,8 +112,9 @@ const sparkPoints = computed(() => {
         :aria-label="item.name + ' 的物价'"
         :style="{ '--tone': tone }"
     >
-        <!-- 吊牌的挂绳孔：一排卡片看过去就是一片挂签，比纯矩形有实体感。 -->
+        <!-- 吊牌两侧的挂绳孔：一排卡片看过去就是一片挂签，比纯矩形有实体感。 -->
         <span class="tag-hole" aria-hidden="true"></span>
+        <span class="tag-hole right" aria-hidden="true"></span>
 
         <header class="card-top">
             <span class="card-category">{{ item.category }}</span>
@@ -240,12 +241,13 @@ const sparkPoints = computed(() => {
     stroke: var(--muted);
 }
 /*
- * 挂绳孔不开在正中：名称一行从左起，孔留在中间会和长名称撞。
- * 放在左上角、分类标签左侧，符合「标签挂在孔上」的直觉，孔与标签间距 6px。
+ * 两个挂绳孔：左右上角各一个，同行于分类小签与涨跌徽章。
+ * 圆心落在第一行的垂直中线上（卡片 padding-top 9 + 行高 16 / 2 = 17，孔 10 高即 top 12），
+ * 所以孔、小签、徽章三者的中心是一条线，不会一个偏高一个偏低。
  */
 .tag-hole {
     position: absolute;
-    top: 6px;
+    top: 12px;
     left: 12px;
     width: 10px;
     height: 10px;
@@ -256,14 +258,18 @@ const sparkPoints = computed(() => {
         inset 0 -1px 0 color-mix(in srgb, #fff 70%, transparent);
     pointer-events: none;
 }
+.tag-hole.right {
+    left: auto;
+    right: 12px;
+}
 .card-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 6px;
     min-height: 16px;
-    /* 让开挂绳孔（12 + 10 + 6，相对卡片左侧 12 的内边距）。 */
-    padding-left: 16px;
+    /* 两侧各让开一个挂绳孔（12 + 10 + 6，相对卡片 12px 的内边距）。 */
+    padding: 0 16px;
 }
 /* 分类做成小标签：价签左上角那块「品类」的标，两端圆头，像贴在卡面上的纸签。 */
 .card-category {
