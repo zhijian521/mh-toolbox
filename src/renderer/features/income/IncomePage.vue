@@ -680,7 +680,7 @@ async function onlineSaved(dates: string[]) {
                                 aria-label="导出单价表"
                                 @click="exportPriceCsv"
                             >
-                                <AppIcon name="download" :size="13" />
+                                <AppIcon name="download" :size="16" />
                             </button>
                             <button
                                 class="icon-btn"
@@ -690,7 +690,7 @@ async function onlineSaved(dates: string[]) {
                                 aria-label="导入单价表"
                                 @click="importPriceCsv"
                             >
-                                <AppIcon name="upload" :size="13" />
+                                <AppIcon name="upload" :size="16" />
                             </button>
                         </span>
                     </p>
@@ -1036,12 +1036,13 @@ async function onlineSaved(dates: string[]) {
 /*
  * 单价表的两颗图标：低频操作，贴着分组标题右侧，不占主界面的按钮位置。
  *
- * 22px 的可点区比 13px 的图形大一圈，鼠标不用瞄准；hover 才显边框，
- * 静止时只留两个灰图标，读起来仍是「一行说明 + 两个附注」而不是一排按钮。
+ * 常驻浅底与细边框，和物品卡片同一档（`--paper-2` + `--line`），一眼能认出「这是能点的」；
+ * hover 换成金色边框，与筛选栏那颗 chip 同一套反馈。图标 16px——纸加箭头在 13px 下
+ * 线条会糊成一块。
  */
 .price-csv {
     display: inline-flex;
-    gap: 2px;
+    gap: 6px;
     margin-left: auto;
     align-self: center;
 }
@@ -1049,22 +1050,22 @@ async function onlineSaved(dates: string[]) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 24px;
     padding: 0;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    background: none;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--paper-2);
     color: var(--muted);
     cursor: pointer;
     transition:
-        color 0.15s,
-        border-color 0.15s,
-        background-color 0.15s;
+        color 120ms ease,
+        border-color 120ms ease,
+        background-color 120ms ease;
 }
 .icon-btn:hover:not(:disabled) {
-    border-color: var(--line);
-    background: var(--paper-2);
+    border-color: var(--gold);
+    background: var(--paper);
     color: var(--ink);
 }
 .icon-btn:focus-visible {
@@ -1072,7 +1073,7 @@ async function onlineSaved(dates: string[]) {
     color: var(--ink);
 }
 .icon-btn:disabled {
-    opacity: 0.4;
+    opacity: 0.45;
     cursor: default;
 }
 .item-grid {
