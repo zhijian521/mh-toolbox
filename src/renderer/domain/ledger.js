@@ -88,6 +88,174 @@ export default function install(D, U, _gateway, _localStorage) {
                 }
             },
 
+            /**
+             * 把指定日期的日常产出同步成账号账本里的「游戏收益」。
+             *
+             * 收益页与账号页是两本独立的账，唯一打通的就是这一步：每天每角色在账号里留
+             * 一条「游戏收益」，金额 = 速记金币 + 物品估值 − 点卡（含正在计时的那一段）。
+             * 速记、删记录、补/删在线时长之后随时调用，所以不需要等到结束游戏。
+             *
+             * 同一天同角色只留一条：命中已有记录就原地改写，金额为 0 时把那条删掉——
+             * 留着一条 0 元记录只会让人以为当天记过账。`source` 统一为 settle，方便和
+             * 账号页手记的收支区分；`note` 记当时的在线时长，便于回看。
+             *
+             * 只算 `source === 'quick'` 的速记：摆摊卖货那类成交收入属于账号里另记的账，
+             * 混进来会和用户自己记的「装备交易」重复。
+             *
+             * 写操作自己 commit，可直接放进 `app.execute`。
+             *
+             * @this {Domain}
+             * @param {string[]} dates
+             * @returns {Promise<Array<{ date: string, characterId: string, amount: number }>>}
+             */
+            syncAccountEarnings(dates) {
+                const list = Array.from(
+                    new Set(
+                        (dates || []).filter(
+                            /** @param {string} date */
+                            (date) => /^\d{4}-\d{2}-\d{2}$/.test(String(date)),
+                        ),
+                    ),
+                );
+                if (!list.length) return Promise.resolve([]);
+                const round2 = (/** @type {number} */ value) => Math.round(value * 100) / 100;
+                return this.commit(() => {
+                    /** @type {Array<{ date: string, characterId: string, amount: number }>} */
+                    const entries = [];
+                    list.forEach(
+                        /** @param {string} date */ (date) => {
+                            /** @type {Set<string>} */
+                            const owners = new Set();
+                            this.state.transactions.forEach(
+                                /** @param {any} tx */ (tx) => {
+                                    if (tx.date !== date) return;
+                                    if (tx.ledger === 'earnings' || tx.source === 'settle')
+                                        owners.add(tx.characterId);
+                                },
+                            );
+                            /* 计时中的会话也要算进来：它还没有流水，但当天的点卡已经在涨，
+                               实时同步要把它算成负数，否则账号里的数字会比收益页好看。 */
+                            const active = this.state.activeSession;
+                            this.state.sessions
+                                .concat(
+                                    active
+                                        ? [
+                                              this.makeSession(
+                                                  Object.assign({}, active, {
+                                                      mode: 'range',
+                                                      endAt: Date.now(),
+                                                  }),
+                                              ),
+                                          ]
+                                        : [],
+                                )
+                                .forEach(
+                                    /** @param {any} session */ (session) => {
+                                        if (
+                                            this.sessionSlices(session).some(
+                                                (/** @type {any} */ slice) =>
+                                                    slice.date === date && slice.minutes > 0,
+                                            )
+                                        )
+                                            owners.add(session.characterId);
+                                    },
+                                );
+                            owners.forEach(
+                                /** @param {string} characterId */ (characterId) => {
+                                    let cash = 0;
+                                    let items = 0;
+                                    this.state.transactions.forEach(
+                                        /** @param {any} tx */ (tx) => {
+                                            if (
+                                                tx.ledger !== 'earnings' ||
+                                                tx.characterId !== characterId ||
+                                                tx.date !== date ||
+                                                tx.source !== 'quick' ||
+                                                tx.kind !== 'income'
+                                            )
+                                                return;
+                                            if (tx.recordType === 'item')
+                                                items +=
+                                                    (Number(tx.quantity) || 0) *
+                                                    (Number(tx.unitPrice) || 0);
+                                            else cash += Number(tx.amount) || 0;
+                                        },
+                                    );
+                                    const online = this.onlineStats(characterId, date, date, true);
+                                    const amount = round2(cash + items - online.cost);
+                                    const note =
+                                        online.minutes > 0
+                                            ? '在线 ' +
+                                              (online.minutes / 60).toFixed(2) +
+                                              ' 小时产出'
+                                            : '游戏日常产出';
+                                    /* 按分类匹配而不是按 source：用户可能在账号页手记过一条
+                                       「游戏收益」，再按 source 找就会并存两条、汇总翻倍。 */
+                                    const matches = this.state.transactions.filter(
+                                        /** @param {any} tx */
+                                        (tx) =>
+                                            tx.ledger === 'account' &&
+                                            tx.date === date &&
+                                            tx.characterId === characterId &&
+                                            tx.category === '游戏收益' &&
+                                            tx.recordType !== 'item' &&
+                                            !tx.itemRecordId &&
+                                            !tx.equipmentId,
+                                    );
+                                    const existing = matches[0] || null;
+                                    // 已经并存的多条（手记一条 + 早先同步一条）顺手收成一条。
+                                    if (matches.length > 1) {
+                                        const extras = matches.slice(1);
+                                        this.state.transactions = this.state.transactions.filter(
+                                            /** @param {any} tx */ (tx) => !extras.includes(tx),
+                                        );
+                                    }
+                                    if (amount === 0) {
+                                        if (existing)
+                                            this.state.transactions =
+                                                this.state.transactions.filter(
+                                                    /** @param {any} tx */ (tx) => tx !== existing,
+                                                );
+                                        return;
+                                    }
+                                    const kind = amount > 0 ? 'income' : 'expense';
+                                    const value = Math.abs(amount);
+                                    if (existing) {
+                                        // 金额没变就不动它，省掉一次无意义的改写。
+                                        existing.kind = kind;
+                                        existing.amount = value;
+                                        existing.currency = 'cash';
+                                        existing.fee = 0;
+                                        existing.minutes = 0;
+                                        existing.source = 'settle';
+                                        if (existing.note !== note) existing.note = note;
+                                    } else
+                                        this.state.transactions.push({
+                                            id: U.uid(),
+                                            ledger: 'account',
+                                            recordType: 'money',
+                                            characterId,
+                                            date,
+                                            kind,
+                                            currency: 'cash',
+                                            category: '游戏收益',
+                                            channel: '游戏内',
+                                            amount: value,
+                                            fee: 0,
+                                            minutes: 0,
+                                            source: 'settle',
+                                            note,
+                                            createdAt: Date.now(),
+                                        });
+                                    entries.push({ date, characterId, amount });
+                                },
+                            );
+                        },
+                    );
+                    return entries;
+                });
+            },
+
             /** 收益、账号和速记共用写入口，事务中重新取档案，避免失败重试引用旧对象。 */
             /**
              * @this {Domain}

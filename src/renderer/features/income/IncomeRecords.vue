@@ -13,15 +13,18 @@ import RangeFilter from '../../components/RangeFilter.vue';
  *
  * 打开时继承页面的时间范围与角色，点「重置」回到全部时间。
  *
- * 物品记录与物品成交记录只读：它们的编辑属于物品模块（分次出售、剩余数量、
- * 库存状态都要一起校验），在这里改一个金额会绕过 `syncItem` 的约束，所以不提供入口。
+ * 物品记录可以删（记错了一件、数量填错），但不能在这里改：金额是
+ * `数量 × 单价` 算出来的，改一个数字会绕过 `syncItem` 的约束。物品记录删掉时，
+ * 它的成交记录会一起消失——成交是挂在物品上的，留着就是无主收入。
  *
- * 点卡流水可以删，但必须连着会话一起删：那条流水是 `syncSession` 按会话切片生成的，
+ * 点卡流水也可以删，但必须连着会话一起删：那条流水是 `syncSession` 按会话切片生成的，
  * 只删流水会留下「时长还在、费用没了」的错账。删除走 `removeSession`，它同时清掉
  * 该会话的会话记录与全部日期的流水。
+ *
+ * 删完通过 `changed` 把受影响的日期交给页面，好让账号账本里的「游戏收益」立刻重算。
  */
 const props = defineProps<{ range?: DateRangeValue; character?: string }>();
-const emit = defineEmits<{ close: []; edit: [tx: Transaction] }>();
+const emit = defineEmits<{ close: []; edit: [tx: Transaction]; changed: [dates: string[]] }>();
 const app = useApplication();
 const rules = app.rules();
 const PER_PAGE = 20;
@@ -119,14 +122,19 @@ watch(
 function isItem(tx: Transaction) {
     return tx.recordType === 'item';
 }
-/**
- * 物品与成交记录归物品模块，这里只读。
- *
- * 点卡流水不在此列：它是计时算出来的成本，记错时（补记重复、角色数填错）需要能就地删掉，
- * 删除时会连带对应会话一起移除，见 `remove()`。
- */
-function lockedText(tx: Transaction) {
-    return isItem(tx) || tx.itemRecordId ? '物品内管理' : '';
+/** 只有速记产生的金额记录能改；物品与成交的金额是算出来的，不在这里动。 */
+function canEdit(tx: Transaction) {
+    return !tx.sessionId && !isItem(tx) && !tx.itemRecordId;
+}
+/** 物品记录挂着的成交记录：删物品时它们会一起消失，确认窗要说清楚。 */
+function salesOf(tx: Transaction) {
+    return all.value.filter((item) => item.itemRecordId === tx.id);
+}
+function deleteTitle(tx: Transaction) {
+    if (tx.sessionId) return '删除点卡记录';
+    if (isItem(tx)) return '删除物品记录';
+    if (tx.itemRecordId) return '删除成交记录';
+    return '删除记录';
 }
 /** 点卡流水对应的会话；找不到说明是历史遗留流水，删它就只删流水。 */
 function sessionOf(tx: Transaction) {
@@ -151,6 +159,26 @@ function sessionDeleteNote(tx: Transaction) {
         '）会一并删除：点卡由在线记录算出来，只删费用会让时长和成本对不上' +
         (rows > 1 ? '；跨天拆出的 ' + rows + ' 行点卡也会一起消失' : '') +
         '。'
+    );
+}
+/**
+ * 删物品与成交记录的补充说明。
+ *
+ * 成交记录挂着物品（`itemRecordId`），物品一删它们就成了无主收入，所以一起删；
+ * 反过来删成交时，物品要退回「持有」，否则会出现「一件已卖出却还在手里」的假账。
+ */
+function itemDeleteNote(tx: Transaction) {
+    if (tx.itemRecordId) return '这件物品会回到「持有」，成交收入从汇总里扣除。';
+    if (!isItem(tx)) return '';
+    const sales = salesOf(tx);
+    if (!sales.length) return '物品估值与汇总会重新计算，且无法恢复。';
+    const total = sales.reduce((sum, sale) => sum + (Number(sale.amount) || 0), 0);
+    return (
+        '它已有 ' +
+        sales.length +
+        ' 条成交记录（合计 ' +
+        U.fmtMoney(total) +
+        '），会一并删除：成交挂在物品上，单独留着就是无主收入。'
     );
 }
 function kindText(tx: Transaction) {
@@ -191,6 +219,10 @@ async function remove() {
     deleteError.value = '';
     // 先取出来：删除后 pendingDelete 会清空，闭包里不能再读它。
     const sessionId = tx.sessionId;
+    // 受影响的日期：点卡行跨天会拆成多行，删一段会话就要重算它覆盖的每一天。
+    const dates = sessionId
+        ? [...new Set(all.value.filter((item) => item.sessionId === sessionId).map((t) => t.date))]
+        : [tx.date];
     try {
         // removeTransaction / removeSession 都只改内存，必须自己套一层 commit 才会落盘。
         await app.execute((domain) =>
@@ -200,6 +232,7 @@ async function remove() {
         );
         pendingDelete.value = null;
         app.notify(sessionId ? '点卡与对应在线记录已删除' : '记录已删除');
+        emit('changed', dates);
         await nextTick();
         const target =
             listEl.value?.querySelector<HTMLButtonElement>('button') ?? closeButton.value;
@@ -305,27 +338,22 @@ async function remove() {
                         <small v-if="isItem(tx)">估值</small>
                     </span>
                     <span class="cell-ops">
-                        <span v-if="lockedText(tx)" class="hint cell-locked">
-                            {{ lockedText(tx) }}
-                        </span>
-                        <template v-else>
-                            <button
-                                v-if="!tx.sessionId"
-                                class="btn compact"
-                                :disabled="app.busy"
-                                @click="emit('edit', tx)"
-                            >
-                                编辑
-                            </button>
-                            <button
-                                class="btn compact danger"
-                                :disabled="app.busy"
-                                :title="tx.sessionId ? '同时删除对应的在线记录' : ''"
-                                @click="pendingDelete = tx"
-                            >
-                                删除
-                            </button>
-                        </template>
+                        <button
+                            v-if="canEdit(tx)"
+                            class="btn compact"
+                            :disabled="app.busy"
+                            @click="emit('edit', tx)"
+                        >
+                            编辑
+                        </button>
+                        <button
+                            class="btn compact danger"
+                            :disabled="app.busy"
+                            :title="tx.sessionId ? '同时删除对应的在线记录' : ''"
+                            @click="pendingDelete = tx"
+                        >
+                            删除
+                        </button>
                     </span>
                 </li>
             </ul>
@@ -346,22 +374,30 @@ async function remove() {
     </BaseModal>
     <BaseModal
         v-if="pendingDelete"
-        :title="pendingDelete.sessionId ? '删除点卡记录' : '删除记录'"
+        :title="deleteTitle(pendingDelete)"
         :busy="app.busy"
         @close="cancelDelete"
     >
         <p>
             确定删除 {{ pendingDelete.date }} 的「{{
-                pendingDelete.note || pendingDelete.category
+                pendingDelete.note || pendingDelete.itemName || pendingDelete.category
             }}」吗？
         </p>
-        <p>
+        <p v-if="isItem(pendingDelete)">
+            按速记单价折算
+            <b>{{ U.fmtMoney(pendingDelete.amount) }}</b>
+            ，删除后物品估值与汇总会重新计算，且无法恢复。
+        </p>
+        <p v-else>
             金额
             <b>{{ signedAmount(pendingDelete) }}</b>
             ，删除后汇总与笔数会重新计算，且无法恢复。
         </p>
         <p v-if="pendingDelete.sessionId" class="hint">
             {{ sessionDeleteNote(pendingDelete) }}
+        </p>
+        <p v-if="itemDeleteNote(pendingDelete)" class="hint">
+            {{ itemDeleteNote(pendingDelete) }}
         </p>
         <p v-if="deleteError" class="error" role="alert">{{ deleteError }}</p>
         <template #footer="{ close }">
@@ -541,10 +577,6 @@ async function remove() {
     display: flex;
     gap: 6px;
     justify-content: flex-end;
-}
-.cell-locked {
-    font-size: 11.5px;
-    white-space: nowrap;
 }
 .pager {
     display: flex;

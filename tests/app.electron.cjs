@@ -97,6 +97,19 @@ const chooseStatus = async (text) => {
 };
 let file;
 const disk = () => JSON.parse(fs.readFileSync(file, 'utf8'));
+/**
+ * 在 Node 侧轮询磁盘。
+ *
+ * `until` 是把函数序列化丢进页面执行，闭包里的 `disk()` 之类根本看不见；账号同步是
+ * 异步落盘的，只能读文件等它写完。
+ */
+async function untilDisk(check, label) {
+    for (let index = 0; index < 200; index++) {
+        if (check()) return;
+        await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+    throw new Error('等待失败：' + label);
+}
 app.on('browser-window-created', (_event, win) => {
     window = win;
     win.hide();
@@ -1029,50 +1042,37 @@ app.on('browser-window-created', (_event, win) => {
                 '会话结算出点卡流水',
             );
 
-            // ---- 结算窗：把这一局的盈亏记进账号账本（两本账唯一的交集） ----
-            await until(() => !!document.querySelector('[id^="settle-form"]'), '结算弹窗');
+            // ---- 实时同步：结束游戏不再弹结算窗，账号里那条「游戏收益」自己跟着走 ----
             assert.equal(
-                await read(() => document.querySelector('.settle-subject').textContent.trim()),
-                '轻舟 · 在线 1 秒',
-                '结算窗说明本段时长',
+                await read(() => !!document.querySelector('[id^="settle-form"]')),
+                false,
+                '结束游戏不再弹结算窗',
             );
-            // 默认金额 = 本段速记（金币 1200 + 物品 43.5）− 本段点卡。
+            // 速记一次就会同步一次，所以第一次速记（金币 1200）之后账号里已有记录。
+            const settleRows = () =>
+                disk().transactions.filter(
+                    (item) => item.ledger === 'account' && item.category === '游戏收益',
+                );
+            await untilDisk(() => settleRows().length === 1, '账号里已同步一条游戏收益');
+            const merged = settleRows();
+            assert.equal(merged.length, 1, '同一天只留一条游戏收益');
+            assert.equal(merged[0].source, 'settle');
+            assert.equal(merged[0].currency, 'cash');
+            assert.equal(merged[0].kind, 'income');
             assert.ok(
-                await read(() => {
-                    const input = document.querySelector('[name^="amount-"]');
-                    return Math.abs(Number(input.value) - 1243.5) < 0.02;
-                }),
-                '默认金额按本段速记折算',
+                Math.abs(merged[0].amount - 1243.5) < 0.05,
+                '金额 = 速记金币 1200 + 物品 43.5 − 点卡，实际 ' + merged[0].amount,
             );
-            const accountBefore = disk().transactions.filter((item) => item.ledger === 'account');
-            await field('[name^="amount-"]', '200');
-            await click('记入账号');
-            await until(() => !document.querySelector('[id^="settle-form"]'), '结算完成');
-            const accountAfter = disk().transactions.filter((item) => item.ledger === 'account');
-            assert.equal(accountAfter.length, accountBefore.length + 1, '账号账本多一条');
-            const settled = accountAfter.at(-1);
-            assert.equal(settled.kind, 'income');
-            assert.equal(settled.amount, 200);
-            assert.equal(settled.category, '游戏收益');
-            assert.equal(settled.currency, 'cash');
-            assert.equal(settled.ledger, 'account', '记的是账号账本，不是收益账本');
-            assert.equal(disk().sessions.length, 1, '结算不额外产生会话');
 
-            // ---- 同一天再打一局：后面的覆盖前面的，账号里仍然只有一条 ----
+            // ---- 同一天再打一局：覆盖那条，不新增 ----
+            const firstSettleId = merged[0].id;
             await click('▶ 开始游戏');
             await until(() => !!document.querySelector('.live'), '第二局计时中');
             await new Promise((resolve) => setTimeout(resolve, 1100));
             await click('■ 结束游戏');
-            await until(() => !!document.querySelector('[id^="settle-form"]'), '第二局结算');
-            await field('[name^="amount-"]', '300');
-            await click('记入账号');
-            await until(() => !document.querySelector('[id^="settle-form"]'), '第二局结算完成');
-            const merged = disk().transactions.filter(
-                (item) => item.ledger === 'account' && item.source === 'settle',
-            );
-            assert.equal(merged.length, 1, '同一天第二次结算覆盖当天那条');
-            assert.equal(merged[0].amount, 300, '金额被后一次覆盖');
-            assert.equal(merged[0].id, settled.id, '改的是原来那条，不是新增');
+            await until(() => !document.querySelector('.live'), '第二局计时结束');
+            await untilDisk(() => settleRows().length === 1, '第二局同步完成');
+            assert.equal(settleRows()[0].id, firstSettleId, '改的是原来那条，不是新增');
             assert.equal(disk().sessions.length, 2, '第二局落一条会话');
 
             // ---- 补在线时长：默认全选在线角色，角色数就是点卡的乘数 ----
@@ -1111,8 +1111,13 @@ app.on('browser-window-created', (_event, win) => {
                 1,
                 '补记也结算点卡流水',
             );
+            // 补记的 90 分钟点卡（唯一角色 13.5）要立刻从账号那条收益里扣掉。
+            await untilDisk(
+                () => Math.abs(settleRows()[0].amount - 1230) < 0.05,
+                '补记后账号金额扣掉点卡',
+            );
 
-            // ---- 收益记录弹窗：区间继承、点卡行只读、删除速记的金额记录 ----
+            // ---- 收益记录弹窗：区间继承、物品与点卡行都能删 ----
             await click('查看全部');
             await until(() => !!document.querySelector('.record-head'), '收益记录弹窗');
             assert.equal(
@@ -1134,7 +1139,23 @@ app.on('browser-window-created', (_event, win) => {
                 3,
                 '筛选只剩收支、分类、角色',
             );
-            // ---- 点卡行也能删：按钮就在行内，确认窗说明连带删除在线记录 ----
+            // 物品行记错时也能删：只有删除，没有编辑（金额是算出来的）。
+            assert.equal(
+                await read(() => {
+                    const row = [...document.querySelectorAll('.record-row')].find((element) =>
+                        element.textContent.includes('60武器'),
+                    );
+                    return (
+                        !!row?.querySelector('.btn.danger') &&
+                        ![...row.querySelectorAll('.btn')].some(
+                            (button) => button.textContent.trim() === '编辑',
+                        )
+                    );
+                }),
+                true,
+                '物品行可以删但不可编辑',
+            );
+            // 点卡行同样有删除按钮，确认窗说明连带删除在线记录。
             assert.equal(
                 await read(() =>
                     [...document.querySelectorAll('.record-row')]
@@ -1164,6 +1185,14 @@ app.on('browser-window-created', (_event, win) => {
                 disk().transactions.filter((item) => item.itemId === 99).length,
                 0,
                 '金币记录已删除',
+            );
+            // 删掉 1200 的金币之后，账号那条要跟着降到 43.5 − 13.5 = 30。
+            await untilDisk(
+                () =>
+                    settleRows().length === 1 &&
+                    settleRows()[0].kind === 'income' &&
+                    Math.abs(settleRows()[0].amount - 30) < 0.05,
+                '删金币后账号金额跟着降',
             );
 
             // 再删一段点卡：会话与它的流水一起消失，时长不会还在、成本却没了。
@@ -1198,6 +1227,50 @@ app.on('browser-window-created', (_event, win) => {
                 disk().transactions.filter((item) => item.sessionId === backfill.id).length,
                 0,
                 '该会话的点卡流水一并删除',
+            );
+            // 点卡没了，账号那条回到 43.5 的收入。
+            await untilDisk(
+                () =>
+                    settleRows().length === 1 &&
+                    settleRows()[0].kind === 'income' &&
+                    Math.abs(settleRows()[0].amount - 43.5) < 0.05,
+                '删点卡后账号金额回到物品估值',
+            );
+
+            // ---- 最后删一件物品：记错了就地去掉，账号金额跟着降 ----
+            await read(() => {
+                const row = [...document.querySelectorAll('.record-row')].find((element) =>
+                    element.textContent.includes('60武器'),
+                );
+                row.querySelector('.btn.danger').click();
+            });
+            await until(
+                () =>
+                    [...document.querySelectorAll('.modal h2')].some(
+                        (heading) => heading.textContent.trim() === '删除物品记录',
+                    ),
+                '物品删除确认',
+            );
+            assert.ok(
+                await read(() => {
+                    const modal = [...document.querySelectorAll('.modal')].find(
+                        (element) =>
+                            element.querySelector('h2')?.textContent.trim() === '删除物品记录',
+                    );
+                    return modal.textContent.includes('物品估值');
+                }),
+                '确认窗说明会影响物品估值',
+            );
+            await click('确认删除');
+            await until(() => document.querySelectorAll('.record-row').length === 3, '物品行减少');
+            assert.equal(
+                disk().transactions.filter((item) => item.itemId === 1).length,
+                0,
+                '物品记录已删除',
+            );
+            await untilDisk(
+                () => settleRows().length === 1 && Math.abs(settleRows()[0].amount - 35) < 0.05,
+                '删物品后账号金额只剩兽决',
             );
             await click('关闭');
             await until(() => !document.querySelector('.modal'), '关闭收益记录');

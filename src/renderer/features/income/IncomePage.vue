@@ -20,7 +20,6 @@ import IncomeRecords from './IncomeRecords.vue';
 import ItemPriceDialog from './ItemPriceDialog.vue';
 import OnlineDialog from './OnlineDialog.vue';
 import QuickSettings from './QuickSettings.vue';
-import SettleDialog from './SettleDialog.vue';
 
 /**
  * 收益账本。
@@ -38,10 +37,14 @@ import SettleDialog from './SettleDialog.vue';
  * 物品记录不计入收支——每件按记下来时的单价算出价值，不区分卖没卖（不记库存），
  * 卖出时才由成交记录产生梦幻币收入。顶部两张卡因此是两条平行的口径：
  * 物品值多少、梦幻币净赚多少。
+ *
+ * **账号那条「游戏收益」是实时同步的**：速记、删记录、补/删在线时长之后，当天每角色的
+ * 「速记金币 + 物品估值 − 点卡」会立刻改写账号账本里那条记录（同一天只留一条）。
+ * 所以不需要等结束游戏再结算，账号里的余额随时是准的。
  */
 type CatalogItem = { id: number; name: string; img: string; icon: string };
-/** 一局结束后用于结算的会话摘要。 */
-type SettledSession = {
+/** 刚结束的一段计时，用来在提示里报时长与点卡。 */
+type StoppedSession = {
     characterId: string;
     startAt: number;
     endAt: number;
@@ -61,8 +64,6 @@ const onlineMode = ref<'backfill' | 'adjust' | null>(null);
 const settingsOpen = ref(false);
 const removing = ref<Transaction | null>(null);
 const removeError = ref('');
-/** 刚结束的计时：弹结算窗，问要不要把这一局的盈亏记进账号账本。 */
-const settle = ref<SettledSession | null>(null);
 /** 打开弹窗的那个按钮：保存后把焦点还回去。 */
 const opener = ref<HTMLElement | null>(null);
 
@@ -173,6 +174,26 @@ const statCards = computed(() => {
     ];
 });
 
+/** 账号账本里本范围的「游戏收益」：同步后就在这儿，看得见比说一句「已同步」有用。 */
+const accountSettled = computed(() => {
+    void app.data;
+    const { from, to } = range.value;
+    const txs = rules.state.transactions.filter(
+        (tx) =>
+            tx.ledger === 'account' &&
+            tx.category === '游戏收益' &&
+            (character.value === 'all' || tx.characterId === character.value) &&
+            (!from || tx.date >= from) &&
+            (!to || tx.date <= to),
+    );
+    const net = txs.reduce(
+        (sum, tx) =>
+            sum + (tx.kind === 'income' ? Number(tx.amount) || 0 : -(Number(tx.amount) || 0)),
+        0,
+    );
+    return { count: txs.length, net: Math.round(net * 100) / 100 };
+});
+
 function priceText(id: number) {
     const price = rules.itemPrice(id);
     return price ? U.fmtMoney(price / 10000) : '未设价';
@@ -189,6 +210,36 @@ function holding(tx: Transaction) {
 function currentCharacter() {
     return character.value === 'all' ? app.characters[0]?.id || '' : character.value;
 }
+/** 一段计时覆盖的日期，跨夜时拆成多天；上限 8 天纯粹是防坏数据。 */
+function dayList(from: number, to: number) {
+    const list: string[] = [];
+    let cursor = U.fmtDate(new Date(from || Date.now()));
+    const end = U.fmtDate(new Date(to || Date.now()));
+    while (cursor <= end && list.length < 8) {
+        list.push(cursor);
+        cursor = U.addDays(cursor, 1);
+    }
+    return list;
+}
+/**
+ * 把这几天的日常产出同步成账号里的「游戏收益」。
+ *
+ * 同步失败不当作记账失败：速记本身已经落盘，硬要抛出只会让用户以为没记上，
+ * 所以单独提示一句，账本照旧。真正要重试时按下一次速记就会再同步一遍。
+ */
+async function syncAccount(dates: string[]) {
+    const list = [...new Set(dates.filter(Boolean))];
+    if (!list.length) return;
+    try {
+        await app.execute((domain) => domain.syncAccountEarnings(list));
+    } catch (failure) {
+        app.notify(
+            '收益已记录，但同步到账号失败：' +
+                (failure instanceof Error ? failure.message : String(failure)),
+            true,
+        );
+    }
+}
 /** 开始计时：参数取「点卡参数」里的角色数与单价，结算时按每小时 6 点算成本。 */
 async function startGame() {
     if (app.busy || active.value) return;
@@ -200,7 +251,7 @@ async function startGame() {
         app.notify(failure instanceof Error ? failure.message : String(failure), true);
     }
 }
-/** 结束计时：把进行中的会话结算成 sessions 与点卡流水，然后问要不要记进账号账本。 */
+/** 结束计时：落会话与点卡流水，顺手把涉及的那几天同步进账号账本。 */
 async function stopGame() {
     const session = active.value;
     if (!session || app.busy) return;
@@ -210,14 +261,15 @@ async function stopGame() {
                 { ...session, mode: 'range', endAt: Date.now(), source: 'timer' },
                 String(session.id),
             ),
-        )) as unknown as SettledSession;
+        )) as unknown as StoppedSession;
+        await syncAccount(dayList(Number(done.startAt), Number(done.endAt)));
         app.notify(
             '本段在线 ' +
                 U.fmtMinutes(Number(done.minutes)) +
                 '，点卡 −' +
-                U.fmtMoney(Number(done.cost)),
+                U.fmtMoney(Number(done.cost)) +
+                '，账号收益已更新',
         );
-        settle.value = done;
     } catch (failure) {
         app.notify(failure instanceof Error ? failure.message : String(failure), true);
     }
@@ -280,6 +332,7 @@ async function recordLoot(item: CatalogItem, price: number) {
             }),
         );
         app.notify('已记录 ' + item.name + ' · ' + U.fmtMoney(wan));
+        await syncAccount([U.today()]);
     } catch (failure) {
         app.notify(failure instanceof Error ? failure.message : String(failure), true);
     }
@@ -312,6 +365,7 @@ async function confirmRemove() {
         await app.execute((domain) => domain.commit(() => domain.removeTransaction(tx.id)));
         removing.value = null;
         app.notify('已移除该记录');
+        await syncAccount([tx.date]);
         await nextTick();
         restore();
     } catch (failure) {
@@ -325,9 +379,20 @@ function editFromList(tx: Transaction) {
     editing.value = plain(tx) as Transaction;
 }
 async function saved() {
+    const tx = editing.value;
     editing.value = null;
+    await syncAccount([tx?.date || U.today()]);
     await nextTick();
     restore();
+}
+/** 「全部记录」里删掉了什么，就同步那几天——那边能删到往日的记录。 */
+async function recordsChanged(dates: string[]) {
+    await syncAccount(dates);
+}
+/** 补记在线时长、回拨开始时间之后，涉及的那几天都要重新同步。 */
+async function onlineSaved(dates: string[]) {
+    onlineMode.value = null;
+    await syncAccount(dates || []);
 }
 </script>
 <template>
@@ -380,6 +445,14 @@ async function saved() {
                     <small class="stat-note">{{ item.note }}</small>
                 </article>
             </div>
+            <p v-if="accountSettled.count" class="sync-note">
+                账号「游戏收益」随记录自动更新 · 本范围
+                <b>{{ accountSettled.count }}</b>
+                条 · 净
+                <b :class="accountSettled.net >= 0 ? 'money-in' : 'money-out'">
+                    {{ U.fmtMoney(accountSettled.net) }}
+                </b>
+            </p>
             <div class="quick-main">
                 <section class="card">
                     <header class="card-title">
@@ -491,6 +564,7 @@ async function saved() {
         :character="character"
         @close="recordsOpen = false"
         @edit="editFromList"
+        @changed="recordsChanged"
     />
     <ItemPriceDialog
         v-if="priceTarget"
@@ -506,14 +580,13 @@ async function saved() {
         :mode="onlineMode"
         :character="character"
         @close="onlineMode = null"
-        @saved="onlineMode = null"
+        @saved="onlineSaved"
     />
     <QuickSettings
         v-if="settingsOpen"
         @close="settingsOpen = false"
         @saved="settingsOpen = false"
     />
-    <SettleDialog v-if="settle" :session="settle" @close="settle = null" @saved="settle = null" />
     <BaseModal v-if="removing" title="移除收益记录" :busy="app.busy" @close="removing = null">
         <p>确定移除「{{ removing.itemName || removing.note || '物品' }}」这一条吗？</p>
         <p v-if="removing.saleId">它已经关联了成交收入，移除后成交记录也会一起删除，且无法恢复。</p>
@@ -621,6 +694,26 @@ async function saved() {
     color: var(--muted);
     font-size: 11px;
     line-height: 1.4;
+}
+/* 同步状态：一行小字，回答「钱到哪去了」，不占卡位。 */
+.sync-note {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 12px;
+}
+.sync-note b {
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+.sync-note .money-in {
+    color: var(--green);
+}
+.sync-note .money-out {
+    color: var(--red);
 }
 /* 右栏固定 288px：收益记录是速记的辅助视图，不该跟着窗口一起变宽。 */
 .quick-main {

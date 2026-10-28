@@ -458,6 +458,13 @@ export interface Domain {
     removeSession(id: string): void;
     saveTransaction(input: unknown, id?: string): Promise<Transaction>;
     removeTransaction(id: string): Promise<unknown>;
+    /**
+     * 把指定日期的日常产出同步成账号账本里的一条「游戏收益」（一天一条，
+     * 后写覆盖先写，金额为 0 时删掉）。自己 commit，可直接放进 `app.execute`。
+     */
+    syncAccountEarnings(
+        dates: string[],
+    ): Promise<Array<{ date: string; characterId: string; amount: number }>>;
 }
 declare global {
     interface Window {

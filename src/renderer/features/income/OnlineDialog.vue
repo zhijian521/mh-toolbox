@@ -18,7 +18,8 @@ import BaseNumber from '../../components/BaseNumber.vue';
  * 否则「6 点 / 小时 × 角色数 × 单价」的公式就有第二份实现。
  */
 const props = defineProps<{ mode: 'backfill' | 'adjust'; character?: string }>();
-const emit = defineEmits<{ close: []; saved: [] }>();
+/** `saved` 带出受影响的那几天，页面据此把账号里的「游戏收益」重新同步一遍。 */
+const emit = defineEmits<{ close: []; saved: [dates: string[]] }>();
 const app = useApplication();
 const rules = app.rules();
 const quick = rules.state.quickSettings || { accounts: 5, cardPrice: 15000 };
@@ -115,7 +116,7 @@ async function save() {
                     ' 小时，点卡 −' +
                     U.fmtMoney(record.cost),
             );
-            emit('saved');
+            emit('saved', [String(record.date || date.value)]);
         } catch (failure) {
             error.value = failure instanceof Error ? failure.message : String(failure);
         }
@@ -128,10 +129,22 @@ async function save() {
     try {
         await app.execute((domain) => domain.adjustSessionStart(startAt.value));
         app.notify('已把开始时间改到 ' + date.value + ' ' + timeText());
-        emit('saved');
+        // 起点往回拨可能跨到昨天，那天的点卡（以及当天收益）也要跟着重算。
+        emit('saved', daysFrom(startAt.value));
     } catch (failure) {
         error.value = failure instanceof Error ? failure.message : String(failure);
     }
+}
+/** 起点到现在覆盖的日期，最多 8 天，纯属防坏数据。 */
+function daysFrom(start: number) {
+    const list: string[] = [];
+    let cursor = U.fmtDate(new Date(start || Date.now()));
+    const today = U.today();
+    while (cursor <= today && list.length < 8) {
+        list.push(cursor);
+        cursor = U.addDays(cursor, 1);
+    }
+    return list;
 }
 function timeText() {
     const pad = (value: number) => String(value).padStart(2, '0');

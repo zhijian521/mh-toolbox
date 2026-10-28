@@ -248,6 +248,7 @@ interface Domain {
     syncEquipmentStatus: (id: string) => void;
     syncAccountEquipment: (tx: any) => void;
     removeTransaction: (id: string) => Promise<any>;
+    syncAccountEarnings: (dates: string[]) => Promise<any[]>;
     settleItem: (item: any, data: any) => Promise<any>;
     saveTransaction: (input: any, id?: string) => Promise<any>;
 

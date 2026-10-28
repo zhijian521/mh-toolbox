@@ -432,3 +432,122 @@ test('计时保存参数快照、调整开始时间；结束失败可恢复重�
     D.state = D.normalize(JSON.parse(JSON.stringify(D.state)));
     assert.equal(D.state.sessions[0].id, session.id);
 });
+
+test('收益实时同步成账号「游戏收益」：一天一条、覆盖前值、为 0 时删掉', async () => {
+    const D = onlineDomain();
+    const date = '2020-02-28';
+    const quick = (id, patch) =>
+        Object.assign(
+            {
+                id,
+                ledger: 'earnings',
+                recordType: 'money',
+                source: 'quick',
+                characterId: 'c1',
+                date,
+                kind: 'income',
+                currency: 'cash',
+                category: '物品掉落',
+                amount: 0,
+            },
+            patch,
+        );
+    const findSettle = () =>
+        D.state.transactions.filter((t) => t.ledger === 'account' && t.category === '游戏收益');
+    // 180 分钟 × 5 角色 × 15000 / 点 = 135 万，与收益账本里的点卡流水一致。
+    await D.saveSession(onlineInput);
+    D.state.transactions.push(
+        quick('q1', { amount: 300 }),
+        quick('q2', {
+            recordType: 'item',
+            itemName: '金刚石',
+            quantity: 2,
+            unitPrice: 50,
+            status: 'held',
+        }),
+    );
+    let entries = await D.syncAccountEarnings([date]);
+    assert.deepEqual(entries, [{ date, characterId: 'c1', amount: 265 }]);
+    let settled = findSettle();
+    assert.equal(settled.length, 1, '一天一条');
+    assert.equal(settled[0].kind, 'income');
+    assert.equal(settled[0].source, 'settle');
+    assert.equal(settled[0].currency, 'cash');
+    assert.equal(settled[0].amount, 265, '300 + 2 × 50 − 135');
+
+    // 再速记一笔，改的是原来那条，不新增。
+    const firstId = settled[0].id;
+    D.state.transactions.push(quick('q3', { amount: 35 }));
+    await D.syncAccountEarnings([date]);
+    settled = findSettle();
+    assert.equal(settled.length, 1);
+    assert.equal(settled[0].id, firstId);
+    assert.equal(settled[0].amount, 300);
+
+    // 账号页手记过同分类的「游戏收益」也被接管，不会并存第二条。
+    D.state.transactions.push({
+        id: 'manual',
+        ledger: 'account',
+        recordType: 'money',
+        characterId: 'c1',
+        date,
+        kind: 'income',
+        currency: 'cash',
+        category: '游戏收益',
+        amount: 999,
+    });
+    await D.syncAccountEarnings([date]);
+    assert.equal(findSettle().length, 1, '手记的那条被接管而不是并存');
+    assert.equal(findSettle()[0].amount, 300);
+
+    // 去掉速记与在线，金额归零，那条记录也要消失，不留 0 元空账。
+    D.state.transactions = D.state.transactions.filter(
+        (t) => t.ledger !== 'earnings' && t.id !== 'manual',
+    );
+    D.state.sessions.forEach((session) => D.removeSession(session.id));
+    entries = await D.syncAccountEarnings([date]);
+    assert.deepEqual(entries, []);
+    assert.equal(findSettle().length, 0, '金额为 0 时删掉那条');
+});
+
+test('同步按角色分开算，跨天会话只补自己那一天', async () => {
+    const D = onlineDomain();
+    const c2 = await D.saveSession(
+        Object.assign({}, onlineInput, {
+            characterId: 'c2',
+            mode: 'range',
+            startAt: new Date(2020, 1, 28, 23, 30).getTime(),
+            endAt: new Date(2020, 1, 29, 1, 30).getTime(),
+        }),
+    );
+    assert.equal(c2.cost, 90, '两小时 × 5 角色 × 15000 / 点');
+    D.state.transactions.push({
+        id: 'q1',
+        ledger: 'earnings',
+        recordType: 'money',
+        source: 'quick',
+        characterId: 'c1',
+        date: '2020-02-29',
+        kind: 'income',
+        currency: 'cash',
+        category: '物品掉落',
+        amount: 80,
+    });
+    const entries = await D.syncAccountEarnings(['2020-02-28', '2020-02-29']);
+    const byKey = {};
+    entries.forEach((entry) => (byKey[entry.date + entry.characterId] = entry.amount));
+    // 28 日：c2 有半小时在线（22.5 万），没有速记，所以是亏损。
+    assert.equal(byKey['2020-02-28c2'], -22.5);
+    // 29 日：c2 还有 90 分钟在线（67.5 万），c1 只有一笔速记。
+    assert.equal(byKey['2020-02-29c2'], -67.5);
+    assert.equal(byKey['2020-02-29c1'], 80);
+    const rows = D.state.transactions.filter(
+        (t) => t.ledger === 'account' && t.category === '游戏收益',
+    );
+    assert.equal(rows.length, 3, '三天次、两个角色各一条');
+    assert.equal(
+        rows.find((t) => t.date === '2020-02-28').kind,
+        'expense',
+        '亏的那天记支出，不塞进收入',
+    );
+});
