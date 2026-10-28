@@ -374,9 +374,9 @@ const sparkPoints = computed(() => {
  */
 .act {
     padding: 2px 10px;
-    border: 1px solid color-mix(in srgb, var(--tone) 52%, transparent);
+    border: 1px solid color-mix(in srgb, var(--tone) 40%, transparent);
     border-radius: 3px;
-    background: color-mix(in srgb, var(--tone) 24%, var(--paper));
+    background: color-mix(in srgb, var(--tone) 13%, var(--paper));
     font-size: 12px;
     line-height: 17px;
     font-weight: 600;
@@ -389,8 +389,8 @@ const sparkPoints = computed(() => {
 }
 /* 全局 .text-button:hover 会画下划线并转金色，chip 上不需要。 */
 .act:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--tone) 78%, transparent);
-    background: color-mix(in srgb, var(--tone) 36%, var(--paper));
+    border-color: color-mix(in srgb, var(--tone) 66%, transparent);
+    background: color-mix(in srgb, var(--tone) 24%, var(--paper));
     color: var(--ink);
     text-decoration: none;
 }
