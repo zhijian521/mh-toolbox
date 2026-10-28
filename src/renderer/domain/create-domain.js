@@ -14,6 +14,7 @@ import equipment from './equipment.js';
 import equipmentFields from './equipment-fields.js';
 import equipmentImport from './equipment-import.js';
 import online from './online.js';
+import prices from './prices.js';
 
 /**
  * 安装顺序有实际意义：后者会覆盖或复用前者混入的成员，
@@ -34,6 +35,7 @@ const installations = [
     equipmentFields,
     equipmentImport,
     online,
+    prices,
 ];
 
 // Plain domain state stays outside Vue proxies. A gateway is mandatory for persistence.

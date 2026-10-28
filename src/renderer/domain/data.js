@@ -1,5 +1,6 @@
 // @ts-check
 import { schools } from '../game-data/schools.js';
+import { priceCategories } from '../game-data/price-catalog.js';
 import {
     characterTraining,
     petTraining,
@@ -19,9 +20,9 @@ export function createData(localStorage) {
     /* 数据层：状态、常量、持久化 */
     /** @type {Domain} */
     const data = /** @type {any} */ ({
-        schemaVersion: 6,
+        schemaVersion: 7,
         state: {
-            schemaVersion: 6,
+            schemaVersion: 7,
             characters: [],
             transactions: [],
             sessions: [],
@@ -29,6 +30,8 @@ export function createData(localStorage) {
             goals: [],
             equipment: [],
             gearLogs: [],
+            /* 物价卡片的独立集合，与账本、角色、装备都没有外键。 */
+            prices: [],
         },
         charFilter: localStorage.getItem('mh.charFilter') || 'all',
 
@@ -144,6 +147,8 @@ export function createData(localStorage) {
             '其他',
         ],
         schools: [...schools],
+        /* 物价分类只作下拉选项，用户仍可手填自定义分类。 */
+        priceCategories: [...priceCategories],
         characterTraining: characterTraining.map((field) => ({ ...field })),
         petTraining: petTraining.map((field) => ({ ...field })),
         auxiliarySkillNames: [...auxiliarySkillNames],

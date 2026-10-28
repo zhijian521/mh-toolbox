@@ -295,6 +295,10 @@ export default function install(D, _U, _gateway, _localStorage) {
                     cardPrice: number(quick.cardPrice) || 15000,
                 };
                 s.itemPrices = plain(data.itemPrices) ? Object.assign({}, data.itemPrices) : {};
+                // 物价卡片是独立集合：只做逐条降级，坏数据不动其余字段，也不抛错。
+                s.prices = objects(data.prices).map(
+                    /** @param {any} item */ (item) => this.normalizePriceItem(item),
+                );
                 s.transactions
                     .filter(/** @param {any} tx */ (tx) => tx.itemRecordId)
                     .forEach(

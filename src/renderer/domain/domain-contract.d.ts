@@ -28,6 +28,8 @@ interface DomainState {
     goals: any[];
     equipment: any[];
     gearLogs: any[];
+    /** 物价卡片，与账本、角色、装备都没有外键。 */
+    prices: any[];
     /** 物品参考单价，键为物品名，值以原始梦幻币计价（不是万）。 */
     itemPrices?: Record<string, number>;
     quickSettings?: Record<string, any>;
@@ -144,6 +146,7 @@ interface Domain {
     itemStatuses: Record<string, string>;
     slots: string[];
     schools: string[];
+    priceCategories: string[];
     auxiliarySkillNames: string[];
     goalTypes: Array<{ v: string; t: string }>;
     gearActions: Array<{ v: string; t: string; dir: number }>;
@@ -350,4 +353,23 @@ interface Domain {
     _saleList?: any[];
     _saleCount?: number;
     _salesIndex?: Map<string, any>;
+
+    // ---- prices.js：物价卡片（独立集合，不受角色筛选影响） ----
+    orderedPrices: (items?: any[]) => any[];
+    priceItemById: (id: string) => any;
+    /** 价格历史按日期倒序，同一天后记的在前。 */
+    priceLogsSorted: (item: any) => any[];
+    /** 当前价 = 最新一条历史；没有记录返回 null。 */
+    priceCurrent: (item: any) => any;
+    /** 与上一条不同日期的记录比较；不足两条返回 null。 */
+    priceChange: (item: any) => any;
+    /** 价格显示口径：满万/满亿折算，卡片与历史共用。 */
+    priceLabel: (value: any) => { value: string; unit: string };
+    normalizePriceItem: (raw: any) => any;
+    savePriceItem: (input: any, id?: string) => Promise<any>;
+    savePriceLog: (itemId: string, input: any, logId?: string) => Promise<any>;
+    removePriceLog: (itemId: string, logId: string) => Promise<void>;
+    removePriceItem: (id: string) => Promise<void>;
+    priceItemInput: (input: any) => { name: string; category: string; unit: string; note: string };
+    priceLogInput: (input: any) => { date: string; price: number; note: string };
 }

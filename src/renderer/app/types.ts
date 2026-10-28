@@ -191,6 +191,53 @@ export interface GoalEntry {
     goal: Goal;
     summary: GoalSummary;
 }
+/** 一条价格记录。`price` 存原始游戏币，15000 表示 1.5 万。 */
+export interface PriceLog {
+    id: string;
+    date: string;
+    price: number;
+    note: string;
+    createdAt: number;
+}
+/**
+ * 物价卡片。
+ *
+ * 只有 `logs` 是价格真值，当前价由最新一条历史派生（领域 `priceCurrent`）——
+ * 卡片上再存一份 `price` 就会出现「显示价与历史最后一条不一致」。
+ */
+export interface PriceItem {
+    id: string;
+    name: string;
+    category: string;
+    unit: string;
+    note: string;
+    logs: PriceLog[];
+    createdAt: number;
+    updatedAt: number;
+}
+/** 与上一次不同日期的记录比出的涨跌；`pct` 为 null 表示基准价为 0。 */
+export interface PriceChange {
+    delta: number;
+    pct: number | null;
+    from: number;
+    to: number;
+    since: string;
+}
+/** 物品表单草稿：新建时 `price` / `date` 作为初始价，编辑时被忽略。 */
+export interface PriceItemInput {
+    name: string;
+    category: string;
+    unit: string;
+    note: string;
+    price?: number | string | null;
+    date?: string;
+}
+/** 价格记录表单草稿。 */
+export interface PriceLogInput {
+    date: string;
+    price: number | string;
+    note: string;
+}
 /** 进行中的在线会话：`startAt` 是本地毫秒时间戳，其余字段来自速记参数。 */
 export interface ActiveSession extends RecordEntry {
     startAt?: number;
@@ -205,6 +252,8 @@ export interface AppData {
     goals: Goal[];
     sessions: RecordEntry[];
     gearLogs: RecordEntry[];
+    /** 物价卡片，独立集合，与账本、角色、装备都没有外键。 */
+    prices: PriceItem[];
     activeSession: ActiveSession | null;
     /** 速记参数：同时在线角色数与每点单价（游戏币）。 */
     quickSettings: { accounts: number; cardPrice: number };
@@ -465,6 +514,17 @@ export interface Domain {
     syncAccountEarnings(
         dates: string[],
     ): Promise<Array<{ date: string; characterId: string; amount: number }>>;
+    // 物价卡片（独立功能，不参与角色筛选与账本统计）
+    priceCategories: string[];
+    orderedPrices(items?: PriceItem[]): PriceItem[];
+    priceLogsSorted(item: PriceItem): PriceLog[];
+    priceCurrent(item: PriceItem): PriceLog | null;
+    priceChange(item: PriceItem): PriceChange | null;
+    priceLabel(value: number | string | null): { value: string; unit: string };
+    savePriceItem(input: PriceItemInput, id?: string): Promise<PriceItem>;
+    savePriceLog(itemId: string, input: PriceLogInput, logId?: string): Promise<PriceLog>;
+    removePriceLog(itemId: string, logId: string): Promise<void>;
+    removePriceItem(id: string): Promise<void>;
 }
 declare global {
     interface Window {
