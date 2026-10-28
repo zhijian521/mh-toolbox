@@ -321,7 +321,7 @@ async function remove() {
                 <li v-for="tx in visible" :key="tx.id" class="record-row">
                     <span class="cell-date">
                         {{ tx.date }}
-                        <small>{{ rules.charName(tx.characterId) }}</small>
+                        <small>· {{ rules.charName(tx.characterId) }}</small>
                     </span>
                     <span class="cell-type">
                         <span class="badge" :class="isItem(tx) ? 'item' : tx.kind">
@@ -476,10 +476,10 @@ async function remove() {
 .record-row {
     display: grid;
     grid-template-columns:
-        88px 132px minmax(110px, 1fr) 96px
-        132px auto;
+        124px 132px minmax(110px, 1fr) 96px
+        104px auto;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 .record-head {
     margin-top: 10px;
@@ -501,10 +501,13 @@ async function remove() {
     border-bottom: 1px solid var(--line);
     font-size: 13px;
 }
+/* 一行摆完：日期 + 角色、金额 + 估值都在同一行，行高一致，扫读不跳。 */
 .cell-date {
     display: flex;
-    flex-direction: column;
-    gap: 1px;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
@@ -513,6 +516,11 @@ async function remove() {
 .cell-amount small {
     color: var(--muted);
     font-size: 11.5px;
+}
+.cell-date small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .cell-type {
     display: flex;
@@ -558,9 +566,9 @@ async function remove() {
 }
 .cell-amount {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 1px;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 6px;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
@@ -571,6 +579,7 @@ async function remove() {
     color: var(--red);
 }
 .cell-amount small {
+    flex: none;
     color: var(--muted);
 }
 .cell-ops {
