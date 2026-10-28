@@ -476,6 +476,8 @@ export interface Domain {
     itemRemaining(tx: Transaction): number;
     /** 剩余数量 × 单价；已售罄的物品为 0。 */
     itemHoldingValue(tx: Transaction): number;
+    /** 数量 × 单价（默认用记录自己的数量），保留两位；物品价值的唯一口径。 */
+    itemValue(tx: Transaction, quantity?: number): number;
     /** 速记物品的参考单价，单位是游戏币（15000 = 1.5 万）。 */
     itemPrice(id: number | string): number;
     setItemPrice(id: string, price: number): void;

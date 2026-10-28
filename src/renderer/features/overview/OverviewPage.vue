@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { DateRangeValue, Transaction } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import { U } from '../../domain/util.js';
@@ -37,6 +37,20 @@ const characterOptions = computed(() => [
 ]);
 const blank = computed(() => !app.characters.length && !(app.data?.transactions?.length ?? 0));
 const charId = computed(() => character.value);
+/**
+ * 计时中时长与点卡在涨，而总览没有明细页那种每秒节拍。半分钟对一次表就够——
+ * 这个页面是「扫一眼」，不是秒表；只在真的在计时时才重算，平时一个周期都不跑。
+ */
+const tick = ref(Date.now());
+let clock: ReturnType<typeof setInterval> | null = null;
+onMounted(() => {
+    clock = setInterval(() => {
+        if (rules.state.activeSession) tick.value = Date.now();
+    }, 30000);
+});
+onBeforeUnmount(() => {
+    if (clock) clearInterval(clock);
+});
 
 const earningsTx = computed<Transaction[]>(() => {
     void app.data;
@@ -44,6 +58,7 @@ const earningsTx = computed<Transaction[]>(() => {
 });
 const earnings = computed(() => {
     void app.data;
+    void tick.value;
     const { from, to } = earningsRange.value;
     return rules.earningsStats(charId.value, from, to, true);
 });
@@ -56,9 +71,15 @@ const accounts = computed(() => ({
     rmb: rules.accountStats(accountTx.value, 'rmb'),
     cash: rules.accountStats(accountTx.value, 'cash'),
 }));
+/** 只算「现金收入」的笔数：物品与点卡也是记录，混进来会让这个数字对不上金额。 */
+const incomeCount = computed(
+    () => earningsTx.value.filter((tx) => tx.recordType !== 'item' && tx.kind === 'income').length,
+);
 const rangeText = (value: DateRangeValue) => {
     if (!value.from && !value.to) return '全部时间';
-    return value.to ? value.from + ' 至 ' + value.to : value.from + ' 起';
+    if (!value.to) return value.from + ' 起';
+    // 单日区间（默认的「本日」）写成「X 至 X」纯属自找阅读负担。
+    return value.from === value.to ? value.from : value.from + ' 至 ' + value.to;
 };
 
 /** 五张卡：净收益领头，后面是构成它的三块与一个效率指标。 */
@@ -76,7 +97,7 @@ const statCards = computed(() => {
             key: 'income',
             label: '游戏币收入',
             value: U.fmtMoney(s.income),
-            note: s.count + ' 笔记录',
+            note: incomeCount.value + ' 笔收入',
             tone: '',
         },
         {
@@ -103,18 +124,24 @@ const statCards = computed(() => {
     ];
 });
 
-/** 趋势窗口：截至区间结束日的 14 天。结束日晚于今天时按今天算。 */
-const trendDays = computed(() => {
+/**
+ * 趋势窗口：截至该区间结束日的 14 天，结束日晚于今天时按今天算。
+ *
+ * 两个账本各算各的——收益图和账号图用的是各自区间的结束日。共用一份窗口的话，
+ * 改账号的日期会莫名其妙地把收益图挪走，两次改动互相牵连。
+ */
+function trendDaysOf(range: DateRangeValue) {
     const today = U.today();
-    const end =
-        accountRange.value.to && accountRange.value.to < today ? accountRange.value.to : today;
+    const end = range.to && range.to < today ? range.to : today;
     const days: string[] = [];
     for (let index = 13; index >= 0; index--) days.push(U.addDays(end, -index));
     return days;
-});
-const trendSpan = computed(() => ({
-    from: trendDays.value[0],
-    to: trendDays.value[trendDays.value.length - 1],
+}
+const earningsDays = computed(() => trendDaysOf(earningsRange.value));
+const accountDays = computed(() => trendDaysOf(accountRange.value));
+const earningsSpan = computed(() => ({
+    from: earningsDays.value[0],
+    to: earningsDays.value[earningsDays.value.length - 1],
 }));
 const round2 = (value: number) => Math.round(value * 100) / 100;
 /**
@@ -123,11 +150,7 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
  * 一次遍历分桶再对齐日期，避免「14 天 × 全表过滤」那种平方级的写法；窗口外的流水
  * 直接跳过，几千条流水也只有一遍。
  */
-function dailySeries(
-    list: Transaction[],
-    net: (tx: Transaction) => number,
-    days = trendDays.value,
-) {
+function dailySeries(list: Transaction[], net: (tx: Transaction) => number, days: string[]) {
     const window = new Set(days);
     const bucket = new Map<string, number>();
     list.forEach((tx) => {
@@ -135,25 +158,30 @@ function dailySeries(
         bucket.set(tx.date, (bucket.get(tx.date) || 0) + net(tx));
     });
     const values = days.map((date) => round2(bucket.get(date) || 0));
-    const peak = Math.max(1, ...values.map((value) => Math.abs(value)));
+    const peak = Math.max(...values.map((value) => Math.abs(value))) || 1;
     return days.map((date, index) => ({ date, value: values[index], ratio: values[index] / peak }));
 }
 /** 日常收益只看现金：物品是「打了多少东西」，不是当天到手的币。 */
 const earningsTrend = computed(() => {
     void app.data;
-    const list = rules.txIn(charId.value, trendSpan.value.from, trendSpan.value.to);
-    return dailySeries(list, (tx) =>
-        tx.recordType === 'item'
-            ? 0
-            : tx.kind === 'income'
-              ? Number(tx.amount) || 0
-              : -(Number(tx.amount) || 0),
+    void tick.value;
+    const list = rules.txIn(charId.value, earningsSpan.value.from, earningsSpan.value.to);
+    return dailySeries(
+        list,
+        (tx) =>
+            tx.recordType === 'item'
+                ? 0
+                : tx.kind === 'income'
+                  ? Number(tx.amount) || 0
+                  : -(Number(tx.amount) || 0),
+        earningsDays.value,
     );
 });
 /** 账号两本账各自一条趋势，与 `accountStats` 同口径（收入扣费、支出加费）。 */
 const accountTrend = computed(() => {
     void app.data;
-    const list = rules.txIn(charId.value, trendSpan.value.from, trendSpan.value.to, 'account');
+    const days = accountDays.value;
+    const list = rules.txIn(charId.value, days[0], days[days.length - 1], 'account');
     const net = (tx: Transaction) => {
         const fee = Number(tx.fee) || 0;
         return tx.kind === 'income'
@@ -164,10 +192,12 @@ const accountTrend = computed(() => {
         rmb: dailySeries(
             list.filter((tx) => tx.currency === 'rmb'),
             net,
+            days,
         ),
         cash: dailySeries(
             list.filter((tx) => tx.currency !== 'rmb'),
             net,
+            days,
         ),
     };
 });
@@ -190,11 +220,14 @@ const recentAccounts = computed(() =>
 /** 进行中的目标，最多四张——总览是提醒「还有什么事」，不是目标列表。 */
 const goals = computed(() => {
     void app.data;
-    return rules
-        .orderedGoals(rules.goalsFor())
-        .map((goal) => ({ goal, summary: rules.goalSummary(goal) }))
-        .filter((entry) => entry.summary.status === 'active')
-        .slice(0, 4);
+    return (
+        rules
+            // 传角色：不传的话领域会退回自己的全局筛选（恒为 all），切角色时这块就不跟着变了。
+            .orderedGoals(rules.goalsFor(character.value))
+            .map((goal) => ({ goal, summary: rules.goalSummary(goal) }))
+            .filter((entry) => entry.summary.status === 'active')
+            .slice(0, 4)
+    );
 });
 function goalText(entry: {
     goal: { tracking?: unknown; target?: number; unit?: string };
@@ -216,10 +249,14 @@ function goalText(entry: {
         (goal.unit || '万')
     );
 }
+/** 目标适用谁：共同目标与角色专属目标混在一屏，不标出来会看不懂在攒谁的钱。 */
+function goalScope(goal: { characterId: string }) {
+    return goal.characterId === 'all' ? '共同' : rules.charName(goal.characterId);
+}
 
 function amountText(tx: Transaction) {
-    if (tx.recordType === 'item')
-        return '估值 ' + U.fmtMoney((Number(tx.quantity) || 0) * (Number(tx.unitPrice) || 0));
+    // 物品价值走领域的 `itemValue`：页面上再乘一遍就是第二份口径，改算法时必漏。
+    if (tx.recordType === 'item') return '估值 ' + U.fmtMoney(rules.itemValue(tx));
     const fee = Number(tx.fee) || 0;
     const value =
         tx.kind === 'income' ? (Number(tx.amount) || 0) - fee : (Number(tx.amount) || 0) + fee;
@@ -236,7 +273,7 @@ function rowTone(tx: Transaction) {
 }
 </script>
 <template>
-    <PageHeader title="总览" description="今天的收益、这个月的账，以及还没达成的目标">
+    <PageHeader title="总览" description="收益、账号与目标的状态一览">
         <template #actions>
             <div class="overview-character">
                 <BaseSelect v-model="character" label="总览角色筛选" :options="characterOptions" />
@@ -252,7 +289,7 @@ function rowTone(tx: Transaction) {
         </div>
         <template v-else>
             <!-- 日常收益 -->
-            <section class="board" aria-label="日常收益">
+            <section class="board">
                 <header class="board-head">
                     <div class="board-title">
                         <h2>日常收益</h2>
@@ -304,25 +341,21 @@ function rowTone(tx: Transaction) {
                                         class="chart-bar"
                                         :class="point.value > 0 ? 'up' : 'down'"
                                         :style="{
-                                            height:
-                                                Math.max(
-                                                    2,
-                                                    Math.round(Math.abs(point.ratio) * 42),
-                                                ) + 'px',
+                                            height: Math.abs(point.ratio) * 50 + '%',
                                         }"
                                     ></i>
                                 </div>
                             </div>
                         </div>
                         <footer class="chart-foot">
-                            <span>{{ trendSpan.from.slice(5) }}</span>
+                            <span>{{ earningsSpan.from.slice(5) }}</span>
                             <span class="chart-legend">
-                                <i class="dot up"></i>
+                                <i class="dot up" aria-hidden="true"></i>
                                 盈利
-                                <i class="dot down"></i>
+                                <i class="dot down" aria-hidden="true"></i>
                                 亏损
                             </span>
-                            <span>{{ trendSpan.to.slice(5) }}</span>
+                            <span>{{ earningsSpan.to.slice(5) }}</span>
                         </footer>
                     </section>
                     <section class="panel">
@@ -351,7 +384,7 @@ function rowTone(tx: Transaction) {
             </section>
 
             <!-- 账号账本 -->
-            <section class="board" aria-label="账号账本">
+            <section class="board">
                 <header class="board-head">
                     <div class="board-title">
                         <h2>账号账本</h2>
@@ -500,7 +533,7 @@ function rowTone(tx: Transaction) {
             </section>
 
             <!-- 进行中的目标 -->
-            <section class="board" aria-label="进行中的目标">
+            <section class="board">
                 <header class="board-head">
                     <div class="board-title">
                         <h2>进行中的目标</h2>
@@ -523,7 +556,10 @@ function rowTone(tx: Transaction) {
                                 }"
                             ></i>
                         </div>
-                        <p>{{ goalText(entry) }}</p>
+                        <p>
+                            {{ goalText(entry) }}
+                            <span class="goal-scope">{{ goalScope(entry.goal) }}</span>
+                        </p>
                     </article>
                 </div>
                 <p v-else class="panel-empty no-goal">
@@ -644,9 +680,6 @@ function rowTone(tx: Transaction) {
     background: var(--paper);
     min-width: 0;
 }
-.panel-wide {
-    margin-top: 0;
-}
 .panel-head {
     display: flex;
     align-items: baseline;
@@ -714,6 +747,8 @@ function rowTone(tx: Transaction) {
     position: absolute;
     left: 8%;
     right: 8%;
+    /* 比例很小时至少留一截，否则那一根等于没画。 */
+    min-height: 2px;
     border-radius: 2px;
     transition: height 140ms ease;
 }
@@ -891,26 +926,35 @@ function rowTone(tx: Transaction) {
     font-variant-numeric: tabular-nums;
 }
 .goal-mini p:last-child {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
     margin: 0;
+}
+.goal-scope {
+    color: var(--line-2);
+    font-size: 11px;
 }
 .no-goal {
     display: flex;
     align-items: center;
     gap: 6px;
 }
-@media (max-width: 980px) {
+/* 窗口最小宽度是 1024（main.cjs），断点放在它上面才真的会命中。 */
+@media (max-width: 1080px) {
     .stat-strip {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    .stat:nth-child(3) {
+    /* 两列排布：行首（1/3/5）不要左边框，第二行起补上边框。 */
+    .stat:nth-child(odd) {
         border-left: 0;
     }
     .stat:nth-child(n + 3) {
         border-top: 1px solid var(--line);
     }
-    .board-grid,
-    .account-grid {
-        grid-template-columns: minmax(0, 1fr);
+    /* 五格挤两列时最后一行只有一格，横跨整行，别在右下留半块空白。 */
+    .stat:nth-child(5) {
+        grid-column: 1 / -1;
     }
 }
 @media (max-width: 750px) {
