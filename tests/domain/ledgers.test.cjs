@@ -367,6 +367,38 @@ test('角色数上限写不进参数表，但历史超范围的会话仍能结�
     assert.equal(D.state.activeSession, null);
 });
 
+test('删掉一段在线记录会带走它按天拆出的全部点卡流水，不影响别的会话', async () => {
+    const D = onlineDomain();
+    // 23:00 打到次日 02:00：跨天会拆成两行点卡，删一行等于整段删掉。
+    const first = await D.saveSession({
+        characterId: 'c1',
+        mode: 'range',
+        startAt: new Date(2020, 1, 28, 23, 0).getTime(),
+        endAt: new Date(2020, 1, 29, 2, 0).getTime(),
+        accounts: 5,
+        cardPrice: 15000,
+        source: 'timer',
+    });
+    const second = await D.saveSession(Object.assign({}, onlineInput, { date: '2020-02-27' }));
+    assert.equal(D.state.transactions.filter((t) => t.sessionId === first.id).length, 2);
+    D.removeSession(first.id);
+    assert.equal(
+        D.state.sessions.some((s) => s.id === first.id),
+        false,
+        '会话一并删除',
+    );
+    assert.equal(
+        D.state.transactions.filter((t) => t.sessionId === first.id).length,
+        0,
+        '该会话的点卡流水全部删除',
+    );
+    assert.equal(
+        D.state.transactions.filter((t) => t.sessionId === second.id).length,
+        1,
+        '别的会话不受影响',
+    );
+});
+
 test('计时保存参数快照、调整开始时间；结束失败可恢复重试且不重复结算', async () => {
     const D = onlineDomain();
     const active = await D.startSession('c1');

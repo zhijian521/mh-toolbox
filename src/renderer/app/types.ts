@@ -451,6 +451,11 @@ export interface Domain {
     }): Array<{ date: string; minutes: number; cost: number }>;
     adjustSessionStart(startAt: number): Promise<unknown>;
     saveSession(input: RecordEntry, finishActiveId?: string): Promise<RecordEntry>;
+    /**
+     * 删掉一段在线记录与它结算出的全部点卡流水（同步方法，只改内存，
+     * 必须自己套 `commit` 才会落盘）。删点卡行时用它，避免时长与成本脱节。
+     */
+    removeSession(id: string): void;
     saveTransaction(input: unknown, id?: string): Promise<Transaction>;
     removeTransaction(id: string): Promise<unknown>;
 }

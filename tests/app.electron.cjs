@@ -1134,7 +1134,26 @@ app.on('browser-window-created', (_event, win) => {
                 3,
                 '筛选只剩收支、分类、角色',
             );
-            await click('删除');
+            // ---- 点卡行也能删：按钮就在行内，确认窗说明连带删除在线记录 ----
+            assert.equal(
+                await read(() =>
+                    [...document.querySelectorAll('.record-row')]
+                        .filter((row) => {
+                            const state = row.querySelector('.cell-state').textContent;
+                            return state.includes('计时') || state.includes('补记');
+                        })
+                        .every((row) => !!row.querySelector('.btn.danger')),
+                ),
+                true,
+                '点卡行也有删除按钮',
+            );
+            // 先删速记的金币行：只在那一行里点删除。
+            await read(() => {
+                const row = [...document.querySelectorAll('.record-row')].find((element) =>
+                    element.textContent.includes('金币'),
+                );
+                row.querySelector('.btn.danger').click();
+            });
             await until(() => document.querySelectorAll('.modal').length === 2, '收益删除确认');
             await click('确认删除');
             await until(
@@ -1145,6 +1164,40 @@ app.on('browser-window-created', (_event, win) => {
                 disk().transactions.filter((item) => item.itemId === 99).length,
                 0,
                 '金币记录已删除',
+            );
+
+            // 再删一段点卡：会话与它的流水一起消失，时长不会还在、成本却没了。
+            const sessionsBefore = disk().sessions.length;
+            await read(() => {
+                const row = [...document.querySelectorAll('.record-row')].find((element) =>
+                    element.querySelector('.cell-state').textContent.includes('补记'),
+                );
+                row.querySelector('.btn.danger').click();
+            });
+            await until(
+                () =>
+                    [...document.querySelectorAll('.modal h2')].some(
+                        (heading) => heading.textContent.trim() === '删除点卡记录',
+                    ),
+                '点卡删除确认',
+            );
+            assert.ok(
+                await read(() => {
+                    const modal = [...document.querySelectorAll('.modal')].find(
+                        (element) =>
+                            element.querySelector('h2')?.textContent.trim() === '删除点卡记录',
+                    );
+                    return modal.textContent.includes('一并删除');
+                }),
+                '确认窗说明会连带删除在线记录',
+            );
+            await click('确认删除');
+            await until(() => document.querySelectorAll('.record-row').length === 4, '点卡行减少');
+            assert.equal(disk().sessions.length, sessionsBefore - 1, '会话随点卡一起删除');
+            assert.equal(
+                disk().transactions.filter((item) => item.sessionId === backfill.id).length,
+                0,
+                '该会话的点卡流水一并删除',
             );
             await click('关闭');
             await until(() => !document.querySelector('.modal'), '关闭收益记录');

@@ -341,7 +341,7 @@ interface Domain {
     syncSession: (session: any) => void;
     normalizeOnline: (state: any, data: any) => any;
     saveSession: (input: any, finishActiveId?: string) => Promise<any>;
-    removeSession: (id: string) => Promise<any>;
+    removeSession: (id: string) => void;
     startSession: (charId: string) => Promise<any>;
     setQuickSettings: (input: { accounts?: number; cardPrice?: number }) => void;
     adjustSessionStart: (startAt: number) => Promise<any>;

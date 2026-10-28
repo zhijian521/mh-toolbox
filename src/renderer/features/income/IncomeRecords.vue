@@ -15,6 +15,10 @@ import RangeFilter from '../../components/RangeFilter.vue';
  *
  * 物品记录与物品成交记录只读：它们的编辑属于物品模块（分次出售、剩余数量、
  * 库存状态都要一起校验），在这里改一个金额会绕过 `syncItem` 的约束，所以不提供入口。
+ *
+ * 点卡流水可以删，但必须连着会话一起删：那条流水是 `syncSession` 按会话切片生成的，
+ * 只删流水会留下「时长还在、费用没了」的错账。删除走 `removeSession`，它同时清掉
+ * 该会话的会话记录与全部日期的流水。
  */
 const props = defineProps<{ range?: DateRangeValue; character?: string }>();
 const emit = defineEmits<{ close: []; edit: [tx: Transaction] }>();
@@ -116,15 +120,38 @@ function isItem(tx: Transaction) {
     return tx.recordType === 'item';
 }
 /**
- * 除了速记产生的金额记录，其余这里都只读。
+ * 物品与成交记录归物品模块，这里只读。
  *
- * 物品与成交记录归物品模块；点卡流水由在线计时生成，在这里删掉一条会和对应会话对不上
- * （时长仍算在汇总里，流水却没了），要动就回计时那边改。
+ * 点卡流水不在此列：它是计时算出来的成本，记错时（补记重复、角色数填错）需要能就地删掉，
+ * 删除时会连带对应会话一起移除，见 `remove()`。
  */
 function lockedText(tx: Transaction) {
-    if (isItem(tx) || tx.itemRecordId) return '物品内管理';
-    if (tx.sessionId) return '在线计时内管理';
-    return '';
+    return isItem(tx) || tx.itemRecordId ? '物品内管理' : '';
+}
+/** 点卡流水对应的会话；找不到说明是历史遗留流水，删它就只删流水。 */
+function sessionOf(tx: Transaction) {
+    if (!tx.sessionId) return null;
+    return rules.state.sessions.find((item) => item.id === tx.sessionId) ?? null;
+}
+/**
+ * 删点卡行的补充说明。
+ *
+ * 点卡是「会话 × 参数」算出来的成本，只删费用会留下时长还在、成本消失的错账，
+ * 所以删除连带会话；跨天计时按天拆成多行流水，那些行也会一起消失。
+ */
+function sessionDeleteNote(tx: Transaction) {
+    if (!tx.sessionId) return '';
+    const minutes = Number(sessionOf(tx)?.minutes);
+    const rows = all.value.filter((item) => item.sessionId === tx.sessionId).length;
+    const when =
+        Number.isFinite(minutes) && minutes > 0 ? '在线 ' + U.fmtMinutes(minutes) : '这段计时';
+    return (
+        '这段计时（' +
+        when +
+        '）会一并删除：点卡由在线记录算出来，只删费用会让时长和成本对不上' +
+        (rows > 1 ? '；跨天拆出的 ' + rows + ' 行点卡也会一起消失' : '') +
+        '。'
+    );
 }
 function kindText(tx: Transaction) {
     if (isItem(tx)) return '物品';
@@ -162,11 +189,17 @@ async function remove() {
     const tx = pendingDelete.value;
     if (!tx || app.busy) return;
     deleteError.value = '';
+    // 先取出来：删除后 pendingDelete 会清空，闭包里不能再读它。
+    const sessionId = tx.sessionId;
     try {
-        // removeTransaction 只改内存，必须自己套一层 commit 才会落盘。
-        await app.execute((domain) => domain.commit(() => domain.removeTransaction(tx.id)));
+        // removeTransaction / removeSession 都只改内存，必须自己套一层 commit 才会落盘。
+        await app.execute((domain) =>
+            domain.commit(() =>
+                sessionId ? domain.removeSession(sessionId) : domain.removeTransaction(tx.id),
+            ),
+        );
         pendingDelete.value = null;
-        app.notify('记录已删除');
+        app.notify(sessionId ? '点卡与对应在线记录已删除' : '记录已删除');
         await nextTick();
         const target =
             listEl.value?.querySelector<HTMLButtonElement>('button') ?? closeButton.value;
@@ -277,6 +310,7 @@ async function remove() {
                         </span>
                         <template v-else>
                             <button
+                                v-if="!tx.sessionId"
                                 class="btn compact"
                                 :disabled="app.busy"
                                 @click="emit('edit', tx)"
@@ -286,6 +320,7 @@ async function remove() {
                             <button
                                 class="btn compact danger"
                                 :disabled="app.busy"
+                                :title="tx.sessionId ? '同时删除对应的在线记录' : ''"
                                 @click="pendingDelete = tx"
                             >
                                 删除
@@ -309,7 +344,12 @@ async function remove() {
             <button ref="closeButton" class="btn" @click="close">关闭</button>
         </template>
     </BaseModal>
-    <BaseModal v-if="pendingDelete" title="删除记录" :busy="app.busy" @close="cancelDelete">
+    <BaseModal
+        v-if="pendingDelete"
+        :title="pendingDelete.sessionId ? '删除点卡记录' : '删除记录'"
+        :busy="app.busy"
+        @close="cancelDelete"
+    >
         <p>
             确定删除 {{ pendingDelete.date }} 的「{{
                 pendingDelete.note || pendingDelete.category
@@ -319,6 +359,9 @@ async function remove() {
             金额
             <b>{{ signedAmount(pendingDelete) }}</b>
             ，删除后汇总与笔数会重新计算，且无法恢复。
+        </p>
+        <p v-if="pendingDelete.sessionId" class="hint">
+            {{ sessionDeleteNote(pendingDelete) }}
         </p>
         <p v-if="deleteError" class="error" role="alert">{{ deleteError }}</p>
         <template #footer="{ close }">
