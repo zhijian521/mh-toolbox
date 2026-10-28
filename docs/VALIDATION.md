@@ -1013,3 +1013,60 @@ CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都�
 **粘贴导入的切块是启发式，因此核对界面不能省。** `splitEquipmentBlocks` 按空行与「名称：」行开头切；其余情况整段当一件（按空格或标点猜分隔会把一件拆坏）。核对列表允许改名称、改部位、逐条移除，整批入库是一条事务：一条非法就整批回滚，所以入库前先把每条的错误摆出来。玉魄在核对表里补不了三条属性，会额外提示去装备编辑器新增，而不是只丢一句报错。
 
 **验证：** 端到端跑完——填主要属性/附加属性/锻炼等级、勾特效与宝石、保存后断言 `details.base` 两条、`extra[0].key` 为 `strength`、`effects` 为 `["永不磨损"]`、`gems` 为太阳石 8 级、快照文本同步成 `伤害 +480\n命中 +530\n力量 +32`；方案改名三条落盘且标签跟着变；复制后方案二拿到同一件武器的引用且档案数不变；粘贴两件文本解析出两件、零待补齐、入库后 `流云履` 按名称后缀认出「鞋子」、`霜寒剑` 的属性文本解析成两条主要属性、`ocrText` 保留原文、导入后自动切到仓库。截图核对：武器/玉魄/灵饰三种编辑器、方案标签行的「改名 / 复制方案」、改名弹窗、导入核对列表（含一件部位未识别时的报错样式）。
+
+## 装备第三批：截图识别接上本地 OCR
+
+日期：2026-10-28。范围：新增 `src/main/equipment-ocr.cjs`、`src/main/equipment-ocr-worker.cjs`、`features/equipment/EquipmentScreenshotDialog.vue`、`tests/fixtures/equipment-jade.png`；改 `src/main/ipc.cjs`（三通道）、`src/preload/preload.cjs`、`app/types.ts`、`EquipmentPage.vue`（工具栏入口）、`domain/equipment-fields.js`（`±` 容错）、`package.json`（三个依赖）、`electron-builder.config.cjs`（原生包与模型进 files）、`tests/domain/equipment.test.cjs`、`tests/app.electron.cjs`、`.prettierignore`、`eslint.config.js`（排除 `.workbuddy/`）、`ROADMAP.md`。
+
+| 检查              | 结果                                                   |
+| ----------------- | ------------------------------------------------------ |
+| 格式化            | `prettier --check .` 通过                              |
+| ESLint            | 0 错误 0 警告                                          |
+| 类型检查          | `vue-tsc --noEmit` 0 错误                              |
+| 领域与隔离测试    | 114 项通过 0 失败（新增 2 项：`±` 容错、真实文本回归） |
+| Vite 生产构建     | 通过                                                   |
+| Electron 集成流程 | PASS，新增「截图 → OCR → 解析 → 落盘」整段断言         |
+
+**OCR 只多一个文本来源，不是第二套导入。** 识别出的文本原样喂给 `parseEquipmentText`，后面与粘贴导入完全相同：同一套部位推断、同一套词条解析、同一个核对界面、同一个 `importEquipment` 事务。这样「哪条规则算部位」「玉魄三条属性怎么摆」只写一遍，两条入口不会各说各话。
+
+**推理放在独立 utility 进程。** ONNX 一跑就占满几个核，放主进程会卡住窗口消息与保存；原生库万一崩也只死一个子进程，主进程还能给一句「请重试或裁剪后再试」。子进程只认「图片 → 文本」，不认识部位与词条；空闲 60 秒自动退出，模型不常驻。单张 45 秒超时、一次只认一张（并发只会让进度条失真、出错误也分不清是哪张）。
+
+**图片不落盘。** 渲染层给 dataURL，主进程用 `nativeImage` 解码校验（格式、16 MB、16 MP、最小 16×16）后把字节丢进子进程，全程在内存里；关掉弹窗即释放。
+
+**裁剪以原图为底。** 队列里存 `original` 与 `image` 两份，框选后只替换 `image`；再裁一次时按 `naturalWidth / clientWidth` 换算回原图像素，不会越裁越小。
+
+**三个实测坑：**
+
+1. **`fetch(dataURL)` 被 CSP 拒绝。** 剪贴板拿到的已经是 dataURL，本想 `fetch` 转 `Blob` 再包成 `File`，但页面 CSP 是 `connect-src 'self'`，直接报 "Failed to fetch"。改成 `atob` 转字节。
+2. **`+` 被识别成 `±`。** 真实截图上 `治疗能力+10 [+12]` 出来是 `治疗能力±10[+12]`，`parseEquipmentStats` 的 `[+-]?` 匹配不上，整行退化成「原有属性」，那条词条就丢了。游戏文本里不存在正负号，所以把 `±` 当加号读不会误解真实数据；正则符号位与取值同时放宽。
+3. **打包后原生库与模型不在 asar 里。** 三个依赖走 `asarUnpack`，子进程用 `require.resolve` 拿到路径后把 `app.asar` 换成 `app.asar.unpacked`，ESM 只能从真实路径加载。
+
+**真实截图实跑。** 12 张游戏内截图（头盔/武器/衣服/鞋子/腰带/项链/戒指/耳饰/手镯/佩饰/玉魄阴阳）逐张识别：单张 350～700 ms，模型加载后整批 7.3 秒，平均置信度 98～99。结构化结果全部正确——`黑魔冠` 认出头盔（防御 45 + 魔法 80 进主要属性、太阳石带来的伤害 40 进宝石增加）、`芙蓉戒` 三条附加属性带 `[+16]` 强化加成、`上古玉魄·阳` 的 `奇袭法术 +0.5%` 正确识别为奇袭而不是附加属性、`奇袭特技：[空]` 算出 1 个开光孔、`明月档` 按生僻字规则纠正成 `明月珰`。12 张全部一次通过 `equipmentImportError`，无需手工补齐。
+
+**取舍：仓库列表只显示前两行属性。** 灵饰有「一条主要 + 三条附加」，裁到两行后看不到后两条，要展开详情。已记入待拍板事项，未擅自改列宽与裁断策略。
+
+**验证：** 领域新增两条断言——`parseEquipmentStats('治疗能力±10 [+12]')` 得到 `healing = 10 / boost = 12` 且 `unknown` 为空；`玉魄阳.png` 的实际识别文本走完 `parseEquipmentText → equipmentImportRecord`，断言基础属性、两条附加属性（含 boost 12 与 9）、灵尘 2 级、奇袭法术 0.5%、开光 1 孔、耐久 205、`legacy` 为空、`equipmentImportError` 返回空串。端到端把 `tests/fixtures/equipment-jade.png` 的字节塞进弹窗的 file input，等缩略图进度角标消失后断言名称是 `上古玉魄·阳`，点「入库 1 件」后读磁盘：部位 `玉魄·阳`、`details.jade.dust = 2`、`chance = 0.5`、`holes = 1`、`extra` 两条值 `[5, 4]` 与加成 `[12, 9]`、`ocrText` 含「灵尘等级」。截图核对：空状态（虚线拖放区 + 底部「本地识别，图片不会上传」）、单张识别态（左原图右表单，六组字段与数值全对）、两张队列（缩略图裁到左上角、选中态金框）、入库后仓库两行档案。
+
+## 速记归属跟人走：多开按时点卡平摊、收益均分
+
+日期：2026-10-28。起因：用户上了第二个号做师门，账号里出现两处错位——第一个号的「游戏收益」把第二个号的收益也算进去了，第二个号只剩一条孤立的点卡支出。范围：`domain/online.js`（`roster`、`syncSession`、`onlineStats`、`includeActiveEarnings`、`sessionError`、`makeSession`、`startSession`）、`domain/ledger.js`（`syncAccountEarnings` 的结算对象、`quickShares`、`saveQuickLoot`、`writeTransaction` 拆分）、`domain/util.js`（`splitAmount`）、`features/income/IncomePage.vue`、`features/income/OnlineDialog.vue`、`domain-contract.d.ts`、`app/types.ts`、`tests/domain/ledgers.test.cjs`。
+
+| 检查           | 结果                                                         |
+| -------------- | ------------------------------------------------------------ |
+| 格式化         | `prettier --check .` 通过                                    |
+| ESLint         | 0 错误 0 警告                                                |
+| 类型检查       | `vue-tsc --noEmit` 0 错误                                    |
+| 领域与隔离测试 | 117 项通过 0 失败（新增 3 项：点卡平摊、速记均分、多开结算） |
+| Vite 生产构建  | 通过                                                         |
+
+**根因在页面而不是结算。** `IncomePage.vue` 原来的 `currentCharacter()` 在筛选为「全部角色」时恒取 `app.characters[0]`，与「哪个号在计时」毫无关系；而计时归属走的是弹窗勾选（`OnlineDialog` → `startSession(characterId)`）。两条路各自取号，于是第二个号的收益写到了第一个号名下。实际数据（`data.json`，2026-10-28）三条速记全在第一个角色，第一个角色结算 `48.52`（30 + 3 + 20 − 4.48），第二个角色结算 `支出 3.62`（只有点卡）。
+
+**归属改成领域说了算。** 新增 `onlineRoster()` 取当前计时会话的在线角色，页面用它决定速记记给谁：单开就是那一个号。界面上把「记给 某某」写在物品速记标题右侧（`IncomePage.vue` 的 `.loot-target`），未开计时时补一句「（未计时）」，归属不再是看不见的隐式行为。
+
+**多开按人头平摊，两边对称。** `session.roster` 记这段计时同时在线的角色（老数据没有该字段，读取时退化成 `[characterId]`，口径与改造前完全一致，且在 `normalizeRoster` 里无损降级、单角色时删掉字段保持往返幂等）。`syncSession` 为每个成员各写一条点卡，`U.splitAmount` 保证各份之和与整段成本分毫不差；`onlineStats` / `includeActiveEarnings` 在单角色视角只计自己那一份，「全部角色」仍看整段，不按人头翻倍。收益侧对称：`quickShares` 把金额按在线人数均分（尾差落在前几份），`saveQuickLoot` 在**同一个事务**里写完多条——分几次 `saveTransaction` 会让「写了两条、第三条失败」留下半截账。物品数量不可拆，整条归主角色。
+
+**结算对象跟着 roster 走。** `syncAccountEarnings` 原来只把会话的 `characterId` 记进 owners，多开时其余号当天的点卡成了无主账，结算只能出一条纯负数。现在整份 roster 都进 owners，每个在线的号都能拿自己的收益抵掉自己那一份点卡。
+
+**顺手拆了一层。** `saveTransaction` 的事务体抽成 `writeTransaction`（只改内存、不 commit），供 `saveQuickLoot` 复用——校验逻辑因此只有一份，不会出现「批量入口少校验一条」。
+
+**验证：** 领域新增三条断言——三号开黑 7 分钟按 `2.89` 万平摊，三条点卡合计仍是 289 分且三人都拿到；速记 `30.01` 万按三人分得 `[10.01, 10, 10]`，物品只写一条归主角色；两个号各记 30 / 20 万、同段在线 1 小时（点卡 18 万各摊 9 万），结算出 `21` 与 `11` 且两条都是收入，不再出现「一个吃收益、另一个只剩点卡」。

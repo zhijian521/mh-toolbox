@@ -3,11 +3,11 @@
 ## 目录与职责
 
 ```text
-src/main/                   Electron 窗口、独立 profile、文件保存、对话框和 IPC
+src/main/                   Electron 窗口、独立 profile、文件保存、对话框和 IPC，以及装备截图识别的子进程调度
 src/preload/                只暴露 mhV2 白名单接口
 src/renderer/app/           Vue 入口、Hash 路由、桌面布局、类型
 src/renderer/components/    弹窗、图标、数字单位、变更类型、页面错误边界，可聚焦判定 focus.ts，以及 popover / drag-sort / section-nav 组合式函数
-src/renderer/features/      按业务模块划分的页面：总览、收益、账号、目标、角色、物价、设置，以及待迁移占位页与页内组件
+src/renderer/features/      按业务模块划分的页面：总览、收益、账号、目标、装备、角色、物价、设置，以及待迁移占位页与页内组件
 src/renderer/game-data/     按主题独立维护的梦幻游戏资料，供页面和领域规则引用
 src/renderer/domain/        从基线迁入的领域规则，ES 模块工厂
 src/renderer/stores/        Pinia 应用状态、完成或回滚后的界面快照
@@ -17,6 +17,7 @@ migration/baseline/         原 V1 完整工程，作为迁移参考
 migration/initial-baseline/ 不可变初始文本快照
 migration/baseline.json     初始快照的采集信息与文件哈希
 tests/domain/               从基线复制的领域回归用例
+tests/fixtures/             集成流程要读的二进制素材（如装备截图），只留最小必要样本
 tests/isolation.test.mjs    profile、磁盘失败、导出边界与基线完整性
 tests/app.electron.cjs      Electron 真实窗口与 IPC 集成流程
 scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单文件脚本
@@ -64,6 +65,16 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 - V2 主工程位于仓库根目录，脚本仅监听自身源码。所有输出均位于根目录的 `dist/` 和 `release/`。
 - 打包使用本工程已安装的 Electron 分发目录，避免打包时重复下载另一份运行时。
 - `.github/workflows/ci.yml` 中的 V2 job 在根目录依次执行 `npm ci`、`npm run check`、`npm run build`、`npm run test:electron`；V1 的 legacy job 在 `migration/baseline/` 执行原有检查。
+
+## 本地 OCR 的边界
+
+装备截图识别把「图片 → 文本」锁在主进程侧，渲染层不认识 OCR：
+
+- 渲染层只发 dataURL（`mhV2.recognizeEquipment`），主进程用 `nativeImage` 解码并校验格式/体积/像素后交给子进程，图片不落盘；识别结果只回一段文本。
+- 推理跑在 `utilityProcess` 里（`src/main/equipment-ocr-worker.cjs`），一次一张、单张 45 秒超时、空闲 60 秒退出。ONNX 会长时间占满 CPU，放主进程会卡住消息循环与保存；原生库崩溃时也只死子进程。
+- 子进程只认「图片 → 文本」，部位、词条、玉魄一律由渲染层的 `parseEquipmentText` 解析——与粘贴导入是同一条链路，所以两处规则不会漂移。
+- 三个依赖（`@gutenye/ocr-node`、`onnxruntime-node`、`sharp`）与模型文件走 `asarUnpack`，子进程按 `require.resolve` 取真实路径再动态 `import`。
+- `.workbuddy/` 是本地工作数据（探针脚本、截图、记忆），不参与格式化与静态检查。
 
 ## 界面与样式
 

@@ -13,6 +13,7 @@ import EquipmentEditor from './EquipmentEditor.vue';
 import EquipmentImportDialog from './EquipmentImportDialog.vue';
 import EquipmentPickDialog from './EquipmentPickDialog.vue';
 import EquipmentPlanDialog from './EquipmentPlanDialog.vue';
+import EquipmentScreenshotDialog from './EquipmentScreenshotDialog.vue';
 import EquipmentWarehouse from './EquipmentWarehouse.vue';
 import GearLogDialog from './GearLogDialog.vue';
 import SoulJadeDialog from './SoulJadeDialog.vue';
@@ -46,6 +47,7 @@ const soulOpen = ref(false);
 /** 改名 / 复制：都作用于「正在查看的那一套」，入口在方案标签旁边。 */
 const planDialog = ref<'rename' | 'copy' | null>(null);
 const importOpen = ref(false);
+const shotOpen = ref(false);
 
 const characterOptions = computed(() =>
     app.characters.map((item) => ({ value: item.id, label: item.name })),
@@ -133,6 +135,10 @@ function imported() {
     importOpen.value = false;
     tab.value = 'warehouse';
 }
+function shotImported() {
+    shotOpen.value = false;
+    tab.value = 'warehouse';
+}
 </script>
 
 <template>
@@ -149,6 +155,15 @@ function imported() {
                 @click="importOpen = true"
             >
                 粘贴导入
+            </button>
+            <button
+                class="btn"
+                type="button"
+                :disabled="app.busy || !app.characters.length"
+                title="从装备属性截图本地识别，可一次放多张"
+                @click="shotOpen = true"
+            >
+                截图识别
             </button>
             <button
                 class="btn primary"
@@ -266,6 +281,12 @@ function imported() {
         :profile="profile"
         @close="importOpen = false"
         @saved="imported"
+    />
+    <EquipmentScreenshotDialog
+        v-if="shotOpen && profile"
+        :profile="profile"
+        @close="shotOpen = false"
+        @saved="shotImported"
     />
     <BaseModal v-if="removing" title="删除装备档案" :busy="app.busy" @close="cancelRemove">
         <p>确定删除「{{ removing.name }}」吗？</p>

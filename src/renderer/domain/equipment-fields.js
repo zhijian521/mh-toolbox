@@ -256,14 +256,28 @@ export default function install(D, _U, _gateway, _localStorage) {
                     ),
                     aliases,
                 );
+                /**
+                 * 符号位要容得下 `±`。
+                 *
+                 * 截图识别会把 `治疗能力+10` 读成 `治疗能力±10`——`+` 上下各多一横就成了
+                 * `±`，这一条的数值也就整行解析不出来、退化成「原有属性」。游戏文本里
+                 * 不存在正负号，所以把 `±` 当加号读不会误解任何真实数据。
+                 */
+                const value = '([+\\-±]?\\s*\\d+(?:\\.\\d+)?)';
                 const pattern = new RegExp(
                     '(' +
                         Object.keys(labels)
                             .sort((a, b) => b.length - a.length)
                             .join('|') +
-                        ')\\s*[:：]?\\s*([+-]?\\s*\\d+(?:\\.\\d+)?)(?:\\s*\\[\\s*([+-]?\\s*\\d+(?:\\.\\d+)?)\\s*\\])?',
+                        ')\\s*[:：]?\\s*' +
+                        value +
+                        '(?:\\s*\\[\\s*' +
+                        value +
+                        '\\s*\\])?',
                     'g',
                 );
+                /** @param {string} text @returns {number} */
+                const number = (text) => Number(text.replace(/\s/g, '').replace(/±/g, '+'));
                 /** @type {EquipmentRow[]} */
                 const rows = [];
                 /** @type {string[]} */
@@ -274,11 +288,11 @@ export default function install(D, _U, _gateway, _localStorage) {
                     .filter((line) => line.trim())) {
                     let matched = false;
                     const rest = line
-                        .replace(pattern, (_match, label, value, boost) => {
+                        .replace(pattern, (_match, label, main, boost) => {
                             rows.push({
                                 key: labels[label],
-                                value: Number(value.replace(/\s/g, '')),
-                                boost: boost == null ? null : Number(boost.replace(/\s/g, '')),
+                                value: number(main),
+                                boost: boost == null ? null : number(boost),
                             });
                             matched = true;
                             return '';

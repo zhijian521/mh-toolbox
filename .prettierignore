@@ -5,3 +5,5 @@ dist/
 release/
 .runtime/
 test-results/
+# 本地工作数据：探针脚本、截图、记忆，不参与格式化。
+.workbuddy/

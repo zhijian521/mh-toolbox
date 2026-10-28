@@ -15,6 +15,15 @@ contextBridge.exposeInMainWorld('mhV2', {
         ipcRenderer.on('mhv2:windowStateChanged', handler);
         return () => ipcRenderer.removeListener('mhv2:windowStateChanged', handler);
     },
+    // ---- 装备截图识别（本地 OCR，图片不落盘、不上传）----
+    recognizeEquipment: (image, id) => ipcRenderer.invoke('mhv2:recognizeEquipment', image, id),
+    cancelEquipmentOcr: (id) => ipcRenderer.invoke('mhv2:cancelEquipmentOcr', id),
+    equipmentClipboard: () => ipcRenderer.invoke('mhv2:equipmentClipboard'),
+    onEquipmentOcrProgress: (listener) => {
+        const handler = (_event, data) => listener(data);
+        ipcRenderer.on('mhv2:equipmentOcrProgress', handler);
+        return () => ipcRenderer.removeListener('mhv2:equipmentOcrProgress', handler);
+    },
     // ---- 急救通道 ----
     exportRaw: () => ipcRenderer.invoke('mhv2:exportRaw'),
     quarantineData: () => ipcRenderer.invoke('mhv2:quarantine'),

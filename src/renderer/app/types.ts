@@ -416,6 +416,15 @@ export interface DesktopGateway {
     window(action: 'minimize' | 'maximize' | 'close'): Promise<void>;
     getWindowState(): Promise<WindowState>;
     onWindowStateChanged(listener: (state: WindowState) => void): () => void;
+    // 装备截图识别：图片只在内存里过一遍，识别完不保留。
+    recognizeEquipment(
+        image: string,
+        id: string,
+    ): Promise<{ ok: boolean; text?: string; confidence?: number; error?: string }>;
+    cancelEquipmentOcr(id: string): Promise<void>;
+    /** 剪贴板里的图片（dataURL）；没有图片时返回空串。 */
+    equipmentClipboard(): Promise<string>;
+    onEquipmentOcrProgress(listener: (data: { id: string; progress: number }) => void): () => void;
     // 急救通道：数据文件打不开时使用，不依赖领域实例。
     exportRaw(): Promise<Result>;
     quarantineData(): Promise<Result>;
@@ -552,7 +561,12 @@ export interface Domain {
     setItemPrice(id: string, price: number): void;
     /** 速记参数：同时在线角色数与每点单价。 */
     setQuickSettings(input: { accounts?: number; cardPrice?: number }): void;
-    startSession(characterId: string): Promise<RecordEntry>;
+    /** 开始计时；`roster` 是这次同时在线的角色，多开时点卡按它平摊。 */
+    startSession(characterId: string, roster?: string[]): Promise<RecordEntry>;
+    /** 正在计时的角色清单，没有计时返回空数组；速记按它决定记给谁。 */
+    onlineRoster(): string[];
+    /** 把一次速记的金额按在线角色拆开，尾差守恒；返回空数组表示没有可记的角色。 */
+    quickShares(ids: string[], total: number): Array<{ characterId: string; amount: number }>;
     /** 会话折算：`range` 由起止时间算时长与点卡，`duration` 用给定分钟数。 */
     makeSession(input: RecordEntry): RecordEntry & { minutes: number; cost: number };
     /** 会话校验，空串表示通过；补录与调整起点前先跑一遍领域规则。 */
@@ -576,6 +590,11 @@ export interface Domain {
      */
     removeSession(id: string): void;
     saveTransaction(input: unknown, id?: string): Promise<Transaction>;
+    /**
+     * 一次速记写成若干条（多开时按在线角色均分金额，物品整条归主角色）。
+     * 单事务全部落盘，避免半截账。
+     */
+    saveQuickLoot(input: unknown): Promise<Transaction[]>;
     removeTransaction(id: string): Promise<unknown>;
     /**
      * 把指定日期的日常产出同步成账号账本里的一条「游戏收益」（一天一条，

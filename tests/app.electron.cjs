@@ -21,7 +21,7 @@ const errors = [];
 const watchdog = setTimeout(() => {
     console.error('Electron tests timed out');
     app.exit(1);
-}, 60000);
+}, 120000);
 let window;
 const read = (fn, ...args) =>
     window.webContents.executeJavaScript(
@@ -32,6 +32,19 @@ async function until(fn, label, ...args) {
     for (let index = 0; index < 300; index++) {
         if (await read(fn, ...args)) return;
         await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    throw new Error('等待失败：' + label);
+}
+/**
+ * 等一件要真正花时间的活。
+ *
+ * 本地 OCR 首次要加载 ONNX 模型，几秒钟起步，默认 6 秒的上限不够；轮询间隔也放宽，
+ * 免得几十次 `executeJavaScript` 反过来拖慢推理。
+ */
+async function untilSlow(fn, label, seconds, ...args) {
+    for (let index = 0; index < Math.round((seconds * 1000) / 50); index++) {
+        if (await read(fn, ...args)) return;
+        await new Promise((resolve) => setTimeout(resolve, 50));
     }
     throw new Error('等待失败：' + label);
 }
@@ -1606,6 +1619,60 @@ app.on('browser-window-created', (_event, win) => {
                 '导入后自动切到仓库，包含表头与三件档案',
             );
 
+            // ---- 截图识别：真实截图跑通「图片 → 本地 OCR → 同一套解析 → 落盘」 ----
+            await click('截图识别');
+            await until(() => !!document.querySelector('.shot-drop'), '截图录入弹窗');
+            const shotBytes = fs
+                .readFileSync(path.join(__dirname, 'fixtures', 'equipment-jade.png'))
+                .toString('base64');
+            // 文件读不了、真实拖拽又难模拟，直接把字节塞进 file input，走与选择图片相同的路径。
+            await read((bytes) => {
+                const input = document.querySelector('.modal input[type="file"]');
+                if (!input) throw new Error('截图弹窗里没有文件输入框');
+                const binary = atob(bytes);
+                const pixels = new Uint8Array(binary.length);
+                for (let index = 0; index < binary.length; index++)
+                    pixels[index] = binary.charCodeAt(index);
+                const transfer = new DataTransfer();
+                transfer.items.add(new File([pixels], 'shot.png', { type: 'image/png' }));
+                input.files = transfer.files;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }, shotBytes);
+            // 识别完成时缩略图上的进度角标消失；「待补充」是另一种角标，不会被这里误判成完成。
+            await untilSlow(
+                () =>
+                    !!document.querySelector('.shot-thumb') &&
+                    !document.querySelector('.shot-thumb .shot-badge'),
+                '本地 OCR 识别完成',
+                60,
+            );
+            assert.equal(
+                await read(() => document.querySelector('.shot-meta input')?.value),
+                '上古玉魄·阳',
+                '识别出玉魄名称',
+            );
+            await click('入库 1 件');
+            await untilDisk(() => disk().equipment.length === 4, '识别结果落盘');
+            const shotJade = disk().equipment.find((eq) => eq.slot === '玉魄·阳');
+            assert.ok(shotJade, '按名称认出这是玉魄·阳');
+            assert.equal(shotJade.name, '上古玉魄·阳');
+            assert.equal(shotJade.details.jade.dust, 2, '识别出灵尘等级');
+            assert.equal(shotJade.details.jade.assault, '奇袭法术', '识别出奇袭类型');
+            assert.equal(shotJade.details.jade.chance, 0.5, '识别出奇袭概率');
+            assert.equal(shotJade.details.jade.holes, 1, '「奇袭特技：[空]」算出一个开光孔');
+            assert.equal(shotJade.details.base[0].value, 10, '基础属性进 base');
+            assert.deepEqual(
+                shotJade.details.extra.map((row) => row.value),
+                [5, 4],
+                '两条附加属性按顺序进 extra',
+            );
+            assert.deepEqual(
+                shotJade.details.extra.map((row) => row.boost),
+                [12, 9],
+                '方括号里的灵尘加成存成 boost',
+            );
+            assert.ok(shotJade.ocrText.includes('灵尘等级'), '识别原文留在档案里可回查');
+
             await read(() => document.querySelector('a[href="#/settings"]').click());
             await until(() => !!document.querySelector('.settings-page'), '设置页面');
             fs.writeFileSync(
@@ -1653,7 +1720,7 @@ app.on('browser-window-created', (_event, win) => {
             assert.deepEqual(errors, []);
             clearTimeout(watchdog);
             console.log(
-                'PASS Electron: isolation, character CRUD, drafts, rollback, school change, history, ordering, restart, goals, accounts, income, overview, equipment, import/export/wipe',
+                'PASS Electron: isolation, character CRUD, drafts, rollback, school change, history, ordering, restart, goals, accounts, income, overview, equipment, text import, screenshot OCR, import/export/wipe',
             );
             app.exit(0);
         } catch (error) {

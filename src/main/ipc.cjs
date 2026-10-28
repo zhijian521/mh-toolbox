@@ -1,7 +1,8 @@
-const { ipcMain, dialog, shell } = require('electron');
+const { ipcMain, dialog, shell, clipboard } = require('electron');
 const fs = require('node:fs/promises');
 const nodeFs = require('node:fs');
 const { assertExportPath } = require('./export-path.cjs');
+const { createEquipmentOcr } = require('./equipment-ocr.cjs');
 
 /**
  * IPC 白名单。渲染进程只能调到这里注册过的通道，且调用者必须是主窗口主 frame。
@@ -64,6 +65,31 @@ function registerIpc({ app, store, logger, getWindow }) {
         const win = getWindow();
         return { maximized: win ? win.isMaximized() : false };
     });
+    /**
+     * 装备截图识别。
+     *
+     * 图片从渲染进程以 dataURL 传进来，只在内存里过一遍；进度用事件回推给同一个
+     * 窗口。`recognize` 内部把失败都收敛成 `{ok:false,error}`，因此这里不再抛异常，
+     * 用户看到的是「裁剪一下再试」这种能照着做的提示。
+     */
+    const equipmentOcr = createEquipmentOcr({ logger });
+    guarded('recognizeEquipment', (image, id) =>
+        equipmentOcr.recognize(getWindow().webContents, image, id),
+    );
+    handle('cancelEquipmentOcr', (id) => {
+        const win = getWindow();
+        if (win) equipmentOcr.cancel(win.webContents, id);
+    });
+    handle('equipmentClipboard', () => {
+        // 读剪贴板图片而不是让渲染层调 navigator.clipboard：后者在沙箱里拿不到位图。
+        const image = clipboard.readImage();
+        if (image.isEmpty()) return '';
+        const size = image.getSize();
+        if (size.width * size.height > 16 * 1024 * 1024)
+            throw new Error('图片尺寸过大，请截取单件装备属性');
+        return image.toDataURL();
+    });
+
     guarded('importData', async () => {
         const result = await dialog.showOpenDialog(getWindow(), {
             title: '选择备份副本导入 V2',

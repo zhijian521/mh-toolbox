@@ -405,3 +405,52 @@ test('灵饰词条可带强化加成，超量与重复仍被拦下', () => {
         /附加属性数量/,
     );
 });
+
+test('截图把「+」读成「±」时仍按加号解析：数值与方括号加成都要留下', () => {
+    const D = domain();
+    const parsed = D.parseEquipmentStats('治疗能力±10 [+12]\n伤害+8[+16]\n治疗能力+7[+12]');
+    assert.deepEqual(parsed.rows, [
+        { key: 'healing', value: 10, boost: 12 },
+        { key: 'damage', value: 8, boost: 16 },
+        { key: 'healing', value: 7, boost: 12 },
+    ]);
+    assert.deepEqual(parsed.unknown, [], '没有整行退化成「原有属性」');
+});
+
+test('真实截图识别文本一路解析到玉魄结构化属性', () => {
+    const D = domain();
+    // 取自 E:\zhijian\截图\玉魄阳.png 的实际识别结果，换行也与 OCR 一致。
+    const text = [
+        '上古玉魄·阳',
+        '物理暴击等级+10',
+        '奇袭法术+0.5%',
+        '耐久度205',
+        '灵尘等级2',
+        '伤害+5[+12]',
+        '治疗能力+4[+9]',
+        '奇袭特技：[空]',
+    ].join('\n');
+    const draft = D.parseEquipmentText(text);
+    assert.equal(draft.slot, '玉魄·阳', '名称带「玉魄·阳」时直接定部位');
+    assert.equal(draft.name, '上古玉魄·阳');
+    assert.equal(draft.jadeBase, '物理暴击等级+10');
+    assert.equal(draft.jadeExtra1, '伤害+5[+12]');
+    assert.equal(draft.jadeExtra2, '治疗能力+4[+9]', '「奇袭法术」那行不占附加属性位');
+
+    const record = D.equipmentImportRecord(draft, 'c1');
+    assert.equal(record.attributes, '', '玉魄的属性走 jade 字段，不进自由文本');
+    assert.equal(record.level, '');
+    const details = record.details;
+    assert.deepEqual(details.base, [{ key: 'physicalCrit', value: 10, boost: null }]);
+    assert.deepEqual(details.extra, [
+        { key: 'damage', value: 5, boost: 12 },
+        { key: 'healing', value: 4, boost: 9 },
+    ]);
+    assert.equal(details.jade.dust, 2, '灵尘等级');
+    assert.equal(details.jade.assault, '奇袭法术');
+    assert.equal(details.jade.chance, 0.5);
+    assert.equal(details.jade.holes, 1, '空着的奇袭特技算一个开光孔');
+    assert.equal(details.durability, 205);
+    assert.equal(details.legacy, '', '没有解析残留');
+    assert.equal(D.equipmentImportError(draft, 'c1'), '', '识别结果可以直接入库');
+});
