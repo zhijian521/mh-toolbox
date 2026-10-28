@@ -88,6 +88,11 @@ select,
 textarea {
     -webkit-app-region: no-drag;
 }
+/* 站内链接都套了 .btn / .text-button，不该露出一行蓝字加下划线的默认外观。 */
+a {
+    color: inherit;
+    text-decoration: none;
+}
 button {
     cursor: pointer;
 }

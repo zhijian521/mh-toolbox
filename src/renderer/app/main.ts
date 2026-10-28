@@ -6,6 +6,7 @@ import AccountsPage from '../features/accounts/AccountsPage.vue';
 import CharactersPage from '../features/characters/CharactersPage.vue';
 import GoalsPage from '../features/goals/GoalsPage.vue';
 import IncomePage from '../features/income/IncomePage.vue';
+import OverviewPage from '../features/overview/OverviewPage.vue';
 import PricesPage from '../features/prices/PricesPage.vue';
 import SettingsPage from '../features/settings/SettingsPage.vue';
 import PendingPage from '../features/pending/PendingPage.vue';
@@ -28,6 +29,7 @@ const router = createRouter({
         { path: '/characters', component: CharactersPage },
         { path: '/goals', component: GoalsPage },
         { path: '/income', component: IncomePage },
+        { path: '/overview', component: OverviewPage },
         { path: '/prices', component: PricesPage },
         { path: '/settings', component: SettingsPage },
         { path: '/:pathMatch(.*)*', redirect: '/characters' },
