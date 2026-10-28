@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { PriceChange, PriceItem, PriceLog } from '../../app/types';
+import AppIcon from '../../components/AppIcon.vue';
 import { useApplication } from '../../stores/application';
 
 /**
@@ -12,7 +13,10 @@ import { useApplication } from '../../stores/application';
  *
  * 卡片只负责展示与派发操作：当前价、涨跌与显示口径全部来自领域层
  * （`priceCurrent` / `priceChange` / `priceLabel`），卡片里不重算一遍，
- * 否则卡片与历史弹窗迟早给出两个价。物品的编辑与删除在历史弹窗里。
+ * 否则卡片与历史弹窗迟早给出两个价。
+ *
+ * 编辑与删除物品在卡片底部右侧有两个小图标（默认半透明，不抢眼），历史弹窗里
+ * 也保留同一对入口——只在弹窗里给，卡片上就找不到地方改删了。
  */
 const props = defineProps<{
     item: PriceItem;
@@ -27,6 +31,8 @@ const props = defineProps<{
 const emit = defineEmits<{
     log: [];
     history: [];
+    edit: [];
+    remove: [];
 }>();
 const rules = useApplication().rules();
 
@@ -152,6 +158,26 @@ const sparkPoints = computed(() => {
             >
                 历史
             </button>
+            <span class="card-tools">
+                <button
+                    class="icon-button"
+                    :disabled="busy"
+                    aria-label="编辑物品"
+                    title="编辑物品"
+                    @click="emit('edit')"
+                >
+                    <AppIcon name="edit" :size="13" />
+                </button>
+                <button
+                    class="icon-button danger"
+                    :disabled="busy"
+                    aria-label="删除物品"
+                    title="删除物品"
+                    @click="emit('remove')"
+                >
+                    <AppIcon name="trash" :size="13" />
+                </button>
+            </span>
         </div>
     </article>
 </template>
@@ -295,6 +321,23 @@ const sparkPoints = computed(() => {
     margin-top: auto;
     padding-top: 7px;
     position: relative;
+}
+/* 物品级操作靠右，默认半透明：平时不抢镜，指上去或键盘聚焦才变清楚。 */
+.card-tools {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+    opacity: 0.68;
+    transition: opacity 120ms ease;
+}
+.price-card:hover .card-tools,
+.price-card:focus-within .card-tools {
+    opacity: 1;
+}
+.card-tools .icon-button {
+    width: 22px;
+    height: 22px;
 }
 .act {
     padding: 3px 2px;

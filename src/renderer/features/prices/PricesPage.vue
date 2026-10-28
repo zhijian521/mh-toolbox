@@ -95,6 +95,14 @@ const description = computed(() => {
 const filtered = computed(
     () => !!filters.keyword.trim() || !!filters.category || filters.sort !== 'updated',
 );
+/** 编辑时传一份去代理的副本：弹窗里改的是草稿，不碰快照。 */
+function editItem(item: PriceItem) {
+    editing.value = { item: plain(item) as PriceItem };
+}
+function removeItem(item: PriceItem) {
+    deleting.value = item;
+    deleteError.value = '';
+}
 /** 折线用的近 8 次价格，时间正序。 */
 function trendOf(item: PriceItem) {
     return rules
@@ -126,7 +134,8 @@ async function savedItem(id: string) {
     // 新建的卡片可能落在当前筛选之外，先清掉筛选，否则用户看不到刚建的那张。
     if (filtered.value) resetFilters();
     app.notify('物价卡片已保存');
-    await focusCard(id);
+    // 回到卡片的编辑按钮：用户可能还要接着调分类或备注。
+    await focusCard(id, '编辑物品');
 }
 async function savedLog() {
     const id = logging.value?.item.id;
@@ -147,19 +156,18 @@ function addFromHistory() {
     history.value = null;
     logging.value = { item };
 }
-/** 物品级的编辑与删除挂在历史弹窗上，同样先收起它再开下一个弹窗。 */
+/** 物品级的编辑与删除也能从历史弹窗进去，同样先收起它再开下一个弹窗。 */
 function editItemFromHistory() {
     const item = history.value;
     if (!item) return;
     history.value = null;
-    editing.value = { item: plain(item) as PriceItem };
+    editItem(item);
 }
 function removeFromHistory() {
     const item = history.value;
     if (!item) return;
     history.value = null;
-    deleting.value = item;
-    deleteError.value = '';
+    removeItem(item);
 }
 async function remove() {
     const item = deleting.value;
@@ -235,6 +243,8 @@ async function remove() {
                 :busy="app.busy"
                 @log="logging = { item }"
                 @history="history = item"
+                @edit="editItem(item)"
+                @remove="removeItem(item)"
             />
         </div>
     </div>
