@@ -34,8 +34,9 @@ import QuickSettings from './QuickSettings.vue';
  * - 不固定价格：价格随等级、品类浮动（书、铁、兽决…），每次点击现填一次单价，
  *   只用于那一条记录，不写回单价表。
  *
- * 物品记录不计入收支——持有中的物品只算库存估值，卖出时才由成交记录产生收入，
- * 所以右侧「收益记录」里的金额是估值而不是已入账收益。
+ * 物品记录不计入收支——每件按记下来时的单价算出价值，不区分卖没卖（不记库存），
+ * 卖出时才由成交记录产生梦幻币收入。顶部两张卡因此是两条平行的口径：
+ * 物品值多少、梦幻币净赚多少。
  */
 type CatalogItem = { id: number; name: string; img: string; icon: string };
 
@@ -107,7 +108,7 @@ const elapsedText = computed(() => {
 });
 const stats = computed(() => {
     void app.data;
-    // 计时中每十秒重算一次，否则「在线时长 / 时薪」会停在开始那一刻。
+    // 计时中点卡成本还在累加，十秒重算一次就够；太快没有意义。
     void statTick.value;
     return rules.earningsStats(character.value, range.value.from, range.value.to, true);
 });
@@ -125,44 +126,23 @@ const quick = computed(() => {
     void app.data;
     return rules.state.quickSettings || { accounts: 5, cardPrice: 15000 };
 });
-/** 五张统计卡：口径全部来自 `earningsStats`，没有一项在这里二次计算。 */
+/** 两张统计卡：物品按标价合计，梦幻币按收支相抵，口径都来自 `earningsStats`。 */
 const statCards = computed(() => {
     const s = stats.value;
     return [
         {
-            key: 'online',
-            label: '在线时长',
-            value: U.fmtMinutes(s.onlineMinutes),
-            note: '所选范围 · 含正在计时',
-            tone: '',
-        },
-        {
-            key: 'card',
-            label: '点卡消耗',
-            value: U.fmtMoney(s.cardCost),
-            note: quick.value.accounts + ' 角色 · 每小时 6 点',
-            tone: 'out',
-        },
-        {
-            key: 'loot',
-            label: '持有物品估值',
-            value: U.fmtMoney(s.itemEstimate),
-            note: s.itemCount + ' 件在仓 · 卖出后结算收入',
+            key: 'item',
+            label: '物品估值',
+            value: U.fmtMoney(s.itemValue),
+            note: s.itemQty + ' 件 · 按速记单价计',
             tone: '',
         },
         {
             key: 'net',
-            label: '游戏币净收益',
+            label: '梦幻币净收益',
             value: U.fmtMoney(s.net),
-            note: '收入 − 全部日常成本',
+            note: '收入 ' + U.fmtMoney(s.income) + ' − 支出 ' + U.fmtMoney(s.expense),
             tone: s.net >= 0 ? 'in' : 'out',
-        },
-        {
-            key: 'hourly',
-            label: '在线净时薪',
-            value: s.hourly === null ? '—' : U.fmtMoney(s.hourly) + ' / 时',
-            note: '净收益 ÷ 在线时长',
-            tone: s.hourly !== null && s.hourly < 0 ? 'out' : '',
         },
     ];
 });
@@ -174,9 +154,11 @@ function priceText(id: number) {
 function iconOf(id?: number) {
     return quickItemById(Number(id))?.icon || '';
 }
-/** 物品按剩余数量估值；「金币」这类金额记录直接取金额。 */
+/** 物品按记录时的数量 × 单价；「金币」这类金额记录直接取金额。 */
 function holding(tx: Transaction) {
-    return tx.recordType === 'item' ? rules.itemHoldingValue(tx) : Number(tx.amount) || 0;
+    return tx.recordType === 'item'
+        ? (Number(tx.quantity) || 0) * (Number(tx.unitPrice) || 0)
+        : Number(tx.amount) || 0;
 }
 function currentCharacter() {
     return character.value === 'all' ? app.characters[0]?.id || '' : character.value;
@@ -259,7 +241,7 @@ async function recordLoot(item: CatalogItem, price: number) {
                 note: item.name,
                 source: 'quick',
                 itemId: item.id,
-                // 金币直接记金额，其余进库存：一件、按单价估值、持有。
+                // 金币直接记金额；其余按单价记一件物品。
                 ...(money
                     ? {}
                     : { itemName: item.name, quantity: 1, unitPrice: wan, status: 'held' }),
@@ -429,8 +411,8 @@ async function saved() {
                                 <span class="loot-name" :title="tx.note">
                                     {{ tx.itemName || tx.note || '物品' }}
                                     <small v-if="tx.recordType === 'item'">
-                                        {{ rules.itemStatuses[tx.status ?? ''] || '持有' }} · 剩
-                                        {{ rules.itemRemaining(tx) }} / {{ tx.quantity ?? 0 }}
+                                        {{ U.fmtMoney(Number(tx.unitPrice) || 0) }} ×
+                                        {{ tx.quantity ?? 0 }}
                                     </small>
                                     <small v-else>金额记录</small>
                                 </span>
@@ -455,7 +437,7 @@ async function saved() {
                         <span class="loot-sum">
                             共
                             <b>{{ loot.length }}</b>
-                            条 · 持有估值
+                            条 · 合计
                             <b>{{ U.fmtMoney(lootValue) }}</b>
                         </span>
                         <button
@@ -502,7 +484,7 @@ async function saved() {
     <BaseModal v-if="removing" title="移除收益记录" :busy="app.busy" @close="removing = null">
         <p>确定移除「{{ removing.itemName || removing.note || '物品' }}」这一条吗？</p>
         <p v-if="removing.saleId">它已经关联了成交收入，移除后成交记录也会一起删除，且无法恢复。</p>
-        <p v-else>移除后库存与估值会重新计算，且无法恢复。</p>
+        <p v-else>移除后物品估值会重新计算，且无法恢复。</p>
         <p v-if="removeError" class="error" role="alert">{{ removeError }}</p>
         <template #footer="{ close }">
             <button class="btn" autofocus :disabled="app.busy" @click="close">取消</button>

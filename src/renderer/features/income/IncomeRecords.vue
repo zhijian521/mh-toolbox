@@ -137,11 +137,8 @@ function titleOf(tx: Transaction) {
     return isItem(tx) ? tx.itemName || '物品' : tx.category;
 }
 function stateOf(tx: Transaction) {
-    if (isItem(tx)) {
-        const state = rules.itemStatuses[tx.status ?? ''] || '持有';
-        const remaining = rules.itemRemaining(tx);
-        return remaining > 0 ? state + ' · 剩 ' + remaining + '/' + (tx.quantity ?? 0) : state;
-    }
+    // 不显示「剩 N / N」：收益页不记库存，物品只按标价算价值。
+    if (isItem(tx)) return rules.itemStatuses[tx.status ?? ''] || '持有';
     if (tx.itemRecordId) return '成交 ×' + (tx.saleQuantity ?? 0);
     if (!tx.sessionId) return '速记';
     // 点卡流水由在线计时生成，看对应会话就知道是自动计时还是补记的。
@@ -235,8 +232,8 @@ async function remove() {
                 <b class="money-out">{{ U.fmtMoney(stats.expense) }}</b>
             </span>
             <span class="hint">共 {{ stats.count }} 笔</span>
-            <span v-if="stats.itemCount" class="hint">
-                在仓 {{ stats.itemCount }} 件 · 估值 {{ U.fmtMoney(stats.itemEstimate) }}
+            <span v-if="stats.itemQty" class="hint">
+                物品 {{ stats.itemQty }} 件 · 估值 {{ U.fmtMoney(stats.itemValue) }}
             </span>
         </div>
         <div v-if="!list.length" class="empty compact-empty">
@@ -464,7 +461,7 @@ async function remove() {
     color: var(--red);
     border-color: #b33a3a66;
 }
-/* 物品是库存不是当期收支。 */
+/* 物品按标价算价值，不进当期收支。 */
 .badge.item {
     color: var(--muted);
 }

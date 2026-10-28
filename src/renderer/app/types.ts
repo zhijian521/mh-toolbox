@@ -107,8 +107,9 @@ export interface AccountStats {
 /**
  * 收益账本汇总，来自领域 `earningsStats`。
  *
- * 物品记录不计入收支：持有中的物品只算进 `itemEstimate` / `itemCount`（按剩余数量估值），
- * 卖出时才由成交记录产生收入。`hourly` 为 null 表示当前范围没有在线时长，不能倒推出时薪。
+ * 物品记录不计入收支，走两套口径：`itemValue` / `itemQty` 是范围内物品记录的数量 × 单价
+ * （记了多少东西，卖出不影响）；`itemEstimate` / `itemCount` 只算持有中的剩余数量，
+ * 留给物品库存模块。`hourly` 为 null 表示当前范围没有在线时长，不能倒推出时薪。
  */
 export interface EarningsStats {
     income: number;
@@ -120,6 +121,11 @@ export interface EarningsStats {
     /** 手工记录里填的时长合计；在线计时器的时长算在 `onlineMinutes`。 */
     minutes: number;
     count: number;
+    /** 范围内物品记录的标价合计（数量 × 单价），与卖没卖无关。 */
+    itemValue: number;
+    /** 对应的物品件数。 */
+    itemQty: number;
+    /** 仓库口径：持有中的剩余估值。 */
     itemEstimate: number;
     itemCount: number;
     onlineMinutes: number;

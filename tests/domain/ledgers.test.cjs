@@ -117,6 +117,9 @@ test('实际收益、物品估值、人民币及梦幻币账号收支分别统�
     assert.equal(st.expense, 20);
     assert.equal(st.net, 90);
     assert.equal(st.itemEstimate, 150);
+    // 记账口径：数量 × 单价，和卖没卖无关（旧记录没有单价时按金额折算）。
+    assert.equal(st.itemValue, 150);
+    assert.equal(st.itemQty, 1);
     const rmb = D.accountStats(D.accounts(), 'rmb');
     assert.equal(rmb.income, 285);
     assert.equal(rmb.expense, 102);
@@ -133,6 +136,7 @@ test('出售物品只按成交额计入收入，禁止重复出售，删除成�
     const sale = D.settleItem(item, { date: '2026-10-03', amount: 145 });
     assert.equal(D.stats(D.earnings()).income, 255);
     assert.equal(D.stats(D.earnings()).itemEstimate, 0);
+    assert.equal(D.stats(D.earnings()).itemValue, 150, '卖出不改变物品标价合计');
     assert.throws(() => D.settleItem(item, { date: '2026-10-04', amount: 145 }));
     D.removeTransaction(sale.id);
     assert.equal(item.status, 'held');

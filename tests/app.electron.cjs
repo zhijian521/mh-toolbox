@@ -902,6 +902,21 @@ app.on('browser-window-created', (_event, win) => {
                 '0',
                 '本月还没有收益记录',
             );
+            // 统计只留「物品估值 + 梦幻币净收益」，不再有在仓/时薪这类卡片。
+            assert.equal(
+                await read(() => document.querySelectorAll('.stat-grid .stat').length),
+                2,
+                '统计只剩两张卡',
+            );
+            assert.equal(
+                await read(() =>
+                    [...document.querySelectorAll('.stat-label')]
+                        .map((element) => element.textContent.trim())
+                        .join('|'),
+                ),
+                '物品估值|梦幻币净收益',
+                '统计卡标题',
+            );
             // 收益页不再给「记一笔」：日常收益走物品速记，通用收支去账号页记。
             assert.equal(
                 await read(() =>
@@ -932,7 +947,7 @@ app.on('browser-window-created', (_event, win) => {
             assert.equal(
                 await read(() =>
                     document
-                        .querySelectorAll('.stat-grid .stat')[3]
+                        .querySelectorAll('.stat-grid .stat')[1]
                         .querySelector('.stat-value')
                         .textContent.trim(),
                 ),
@@ -957,7 +972,17 @@ app.on('browser-window-created', (_event, win) => {
             assert.equal(
                 await read(() => document.querySelector('.loot-price').textContent.trim()),
                 '8.50 万',
-                '收益列表显示剩余数量估值',
+                '收益列表按单价显示物品价值',
+            );
+            assert.equal(
+                await read(() =>
+                    document
+                        .querySelectorAll('.stat-grid .stat')[0]
+                        .querySelector('.stat-value')
+                        .textContent.trim(),
+                ),
+                '8.50 万',
+                '物品估值卡合计标价',
             );
 
             // ---- 不固定价格：每次现填单价，且不写回单价表 ----
