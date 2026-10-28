@@ -40,6 +40,9 @@ const paths: Record<string, string> = {
     moon: 'M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z',
     // 外部链接：方框缺口处引出一支箭头，13px 下也能读出「会跳出去」。
     external: 'M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6',
+    // 导入导出：同一套「箭头 + 托盘」，只换方向——13px 下靠箭头指向辨认，不画折角纸。
+    download: 'M12 3v11m0 0 4-4m-4 4-4-4M4 20h16',
+    upload: 'M12 21V10m0 0 4 4m-4-4-4 4M4 4h16',
     'window-minimize': 'M5 12h14',
     'window-maximize': 'M5 5h14v14H5z',
     'window-restore': 'M8 8h11v11H8zM5 15V5h10',

@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { DateRangeValue, Transaction } from '../../app/types';
 import { useApplication } from '../../stores/application';
-import { plain } from '../../services/desktop';
+import { plain, desktop } from '../../services/desktop';
 import { U } from '../../domain/util.js';
 import { POINTS_PER_HOUR } from '../../domain/online.js';
 import {
@@ -19,7 +19,6 @@ import IncomeEditor from './IncomeEditor.vue';
 import IncomeRecords from './IncomeRecords.vue';
 import IncomeDeleteDialog from './IncomeDeleteDialog.vue';
 import ItemPriceDialog from './ItemPriceDialog.vue';
-import PriceBulkDialog from './PriceBulkDialog.vue';
 import OnlineDialog from './OnlineDialog.vue';
 import QuickSettings from './QuickSettings.vue';
 
@@ -67,8 +66,8 @@ const onlineMode = ref<'start' | 'backfill' | 'adjust' | null>(null);
 /** 调整开始时间时，改的是哪一段计时。 */
 const adjustingId = ref('');
 const settingsOpen = ref(false);
-/** 批量设价弹窗：四十个固定价物品逐个右键太费事，给它一条 CSV 通道。 */
-const bulkOpen = ref(false);
+/** 单价表 CSV 正在读写：两颗图标同时置灰，避免边导边存。 */
+const priceCsvBusy = ref(false);
 const removing = ref<Transaction | null>(null);
 /** 打开弹窗的那个按钮：保存后把焦点还回去。 */
 const opener = ref<HTMLElement | null>(null);
@@ -454,6 +453,71 @@ function openPrice(item: CatalogItem) {
     remember();
     priceTarget.value = { item, thenAdd: false, once: false };
 }
+/**
+ * 单价表的两条 CSV 通道：导出改、导入写回。
+ *
+ * 固定价那一组有四十个物品，逐个右键改价太费事，所以留一条表格通道。以前它包在
+ * 一个弹窗里，但那弹窗里除了这两个按钮就是规则说明——规则在设置页的使用帮助里已经
+ * 写过一遍，弹窗成了纯中介。两颗图标挂在分组标题右侧，点完直接看提示。
+ *
+ * 导入的规则由领域解释（留空不改、填 0 清除、单位是万），页面只负责把结果说清楚：
+ * 一条提示里既报「更新了几个」，也报「有几行没导进去」，不分成两条（提示会互相盖掉）。
+ */
+async function exportPriceCsv() {
+    if (priceCsvBusy.value || app.busy) return;
+    priceCsvBusy.value = true;
+    try {
+        const saved = await desktop().saveTextFile(rules.itemPriceCsv(), {
+            title: '导出单价表',
+            defaultName: '物品单价-' + U.today() + '.csv',
+            filterName: 'CSV 表格',
+            ext: 'csv',
+        });
+        if (saved.canceled) return;
+        app.notify(
+            saved.ok ? '单价表已导出，用表格软件打开就能批量改' : saved.error || '导出失败',
+            !saved.ok,
+        );
+    } catch (failure) {
+        app.notify(failure instanceof Error ? failure.message : String(failure), true);
+    } finally {
+        priceCsvBusy.value = false;
+    }
+}
+async function importPriceCsv() {
+    if (priceCsvBusy.value || app.busy) return;
+    priceCsvBusy.value = true;
+    try {
+        const picked = await desktop().openTextFile({
+            title: '导入单价表',
+            filterName: 'CSV 表格',
+            ext: 'csv',
+        });
+        if (picked.canceled) return;
+        if (!picked.ok) {
+            app.notify(picked.error || '读取失败', true);
+            return;
+        }
+        const outcome = await app.execute((domain) =>
+            domain.importItemPriceCsv(String(picked.text || '')),
+        );
+        const parts: string[] = [];
+        if (outcome.updated) parts.push('更新 ' + outcome.updated + ' 个');
+        if (outcome.cleared) parts.push('清除 ' + outcome.cleared + ' 个');
+        if (outcome.skipped) parts.push('跳过 ' + outcome.skipped + ' 行');
+        if (outcome.problems.length)
+            parts.push(outcome.problems.length + ' 行未导入（' + outcome.problems[0] + '）');
+        if (!parts.length) {
+            app.notify('单价表没有可更新的行', true);
+            return;
+        }
+        app.notify('单价表：' + parts.join(' · '), !!outcome.problems.length);
+    } catch (failure) {
+        app.notify(failure instanceof Error ? failure.message : String(failure), true);
+    } finally {
+        priceCsvBusy.value = false;
+    }
+}
 /** 一次性单价不回写单价表，价格必须从弹窗带出来，不能再读 `itemPrice`。 */
 async function priceSaved(price?: number) {
     const target = priceTarget.value;
@@ -607,9 +671,28 @@ async function onlineSaved(dates: string[]) {
                     </header>
                     <p class="section-label">
                         固定价格 · 点一下记一条，右键改价
-                        <button class="link-btn" :disabled="app.busy" @click="bulkOpen = true">
-                            批量设价…
-                        </button>
+                        <span class="price-csv">
+                            <button
+                                class="icon-btn"
+                                type="button"
+                                :disabled="app.busy || priceCsvBusy"
+                                title="导出单价表：存成 CSV，用表格软件批量改"
+                                aria-label="导出单价表"
+                                @click="exportPriceCsv"
+                            >
+                                <AppIcon name="download" :size="13" />
+                            </button>
+                            <button
+                                class="icon-btn"
+                                type="button"
+                                :disabled="app.busy || priceCsvBusy"
+                                title="导入单价表：留空不改，填 0 清除，单位是万"
+                                aria-label="导入单价表"
+                                @click="importPriceCsv"
+                            >
+                                <AppIcon name="upload" :size="13" />
+                            </button>
+                        </span>
                     </p>
                     <div class="item-grid">
                         <button
@@ -757,7 +840,6 @@ async function onlineSaved(dates: string[]) {
         @close="settingsOpen = false"
         @saved="settingsOpen = false"
     />
-    <PriceBulkDialog v-if="bulkOpen" @close="bulkOpen = false" />
 </template>
 <style scoped>
 .income-filters {
@@ -951,22 +1033,46 @@ async function onlineSaved(dates: string[]) {
     font-size: 11px;
     letter-spacing: 0.4px;
 }
-/* 「批量设价」是低频操作，做成小字链接挂在分组标题右侧，不占主界面的按钮位置。 */
-.link-btn {
+/*
+ * 单价表的两颗图标：低频操作，贴着分组标题右侧，不占主界面的按钮位置。
+ *
+ * 22px 的可点区比 13px 的图形大一圈，鼠标不用瞄准；hover 才显边框，
+ * 静止时只留两个灰图标，读起来仍是「一行说明 + 两个附注」而不是一排按钮。
+ */
+.price-csv {
+    display: inline-flex;
+    gap: 2px;
     margin-left: auto;
+    align-self: center;
+}
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
     padding: 0;
-    border: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
     background: none;
-    color: var(--gold);
-    font-size: 11px;
-    letter-spacing: 0.3px;
-    cursor: pointer;
-}
-.link-btn:hover:not(:disabled) {
-    text-decoration: underline;
-}
-.link-btn:disabled {
     color: var(--muted);
+    cursor: pointer;
+    transition:
+        color 0.15s,
+        border-color 0.15s,
+        background-color 0.15s;
+}
+.icon-btn:hover:not(:disabled) {
+    border-color: var(--line);
+    background: var(--paper-2);
+    color: var(--ink);
+}
+.icon-btn:focus-visible {
+    border-color: var(--gold);
+    color: var(--ink);
+}
+.icon-btn:disabled {
+    opacity: 0.4;
     cursor: default;
 }
 .item-grid {
