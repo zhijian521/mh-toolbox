@@ -112,6 +112,9 @@ const sparkPoints = computed(() => {
         :aria-label="item.name + ' 的物价'"
         :style="{ '--tone': tone }"
     >
+        <!-- 吊牌的挂绳孔：一排卡片看过去就是一片挂签，比纯矩形有实体感。 -->
+        <span class="tag-hole" aria-hidden="true"></span>
+
         <header class="card-top">
             <span class="card-category">{{ item.category }}</span>
             <span v-if="badge" class="card-badge" :class="badge.dir" :title="badge.title">
@@ -120,6 +123,9 @@ const sparkPoints = computed(() => {
         </header>
 
         <h2 class="card-name" :title="item.name">{{ item.name }}</h2>
+
+        <!-- 品名区与价格区之间一道虚线：价签上「上半写品名、下半写价钱」的那条分隔。 -->
+        <span class="card-rule" aria-hidden="true"></span>
 
         <div class="card-price">
             <b>{{ label.value }}</b>
@@ -242,17 +248,41 @@ const sparkPoints = computed(() => {
 .price-spark.flat {
     stroke: var(--muted);
 }
+/*
+ * 挂绳孔不开在正中：名称一行从左起，孔留在中间会和长名称撞。
+ * 放在左上角、分类标签左侧，符合「标签挂在孔上」的直觉，孔与标签间距 6px。
+ */
+.tag-hole {
+    position: absolute;
+    top: 6px;
+    left: 13px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--bg);
+    box-shadow:
+        inset 0 1.5px 2px color-mix(in srgb, var(--ink) 34%, transparent),
+        inset 0 -1px 0 color-mix(in srgb, #fff 70%, transparent);
+    pointer-events: none;
+}
 .card-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 6px;
     min-height: 16px;
+    /* 让开挂绳孔（13 + 10 + 4，相对卡片左侧 14 的内边距）。 */
+    padding-left: 13px;
 }
+/* 分类做成小标签：价签左上角那块「品类」的标，两端圆头，像贴在卡面上的纸签。 */
 .card-category {
-    font-size: 11px;
-    letter-spacing: 1px;
-    color: var(--tone);
+    padding: 0 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--tone) 14%, transparent);
+    color: color-mix(in srgb, var(--tone) 88%, var(--ink));
+    font-size: 10.5px;
+    line-height: 15px;
+    letter-spacing: 0.6px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -288,19 +318,28 @@ const sparkPoints = computed(() => {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/*
+ * 品名与价格之间的虚线：价签上「上半写品名、下半写价钱」的那条分隔。
+ * 负外边距把它拉满到卡片两侧，虚线才会顶到边框，而不是缩在内边距里。
+ */
+.card-rule {
+    height: 0;
+    margin: 4px -12px 0 -14px;
+    border-top: 1px dashed color-mix(in srgb, var(--tone) 32%, transparent);
+}
 .card-price {
     display: flex;
     align-items: baseline;
     gap: 3px;
-    margin-top: 3px;
-    padding: 1px 0 2px;
-    border-radius: 3px;
-    /* 价格后面一道分类色的光，从左向右淡出，右侧留给走势线。 */
+    /* 价格带横贯卡片：左右用负外边距顶到边框，上下两条线把这一栏框住。 */
+    margin: 0 -12px 0 -14px;
+    padding: 4px 12px 5px 14px;
+    border-bottom: 1px solid color-mix(in srgb, var(--tone) 22%, transparent);
     background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--tone) 14%, transparent) 0%,
-        color-mix(in srgb, var(--tone) 4%, transparent) 58%,
-        transparent 88%
+        color-mix(in srgb, var(--tone) 16%, transparent) 0%,
+        color-mix(in srgb, var(--tone) 7%, transparent) 55%,
+        color-mix(in srgb, var(--tone) 2%, transparent) 100%
     );
     min-width: 0;
 }
@@ -324,7 +363,7 @@ const sparkPoints = computed(() => {
     display: flex;
     align-items: baseline;
     gap: 4px;
-    margin-top: 1px;
+    margin-top: 3px;
     font-size: 11px;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
