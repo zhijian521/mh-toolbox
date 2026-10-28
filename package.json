@@ -1,7 +1,7 @@
 {
     "name": "mh-tool-v2",
     "productName": "梦幻养老助手 V2",
-    "version": "0.2.0-alpha.1",
+    "version": "0.2.0",
     "private": true,
     "type": "module",
     "main": "src/main/main.cjs",
