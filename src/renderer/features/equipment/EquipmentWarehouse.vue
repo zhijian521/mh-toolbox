@@ -148,7 +148,7 @@ async function equip(eq: EquipmentItem) {
                         {{ eq.name }}
                     </button>
                 </span>
-                <EquipmentProperties :eq="eq" :lines="2" />
+                <EquipmentProperties :eq="eq" :lines="5" />
                 <span class="eq-cell-state">
                     <span class="badge" :class="statusOf(eq)">
                         {{ rules.equipmentStatuses[statusOf(eq)] }}

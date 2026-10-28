@@ -70,7 +70,7 @@ async function assign(id: string) {
                     <b>{{ eq.name }}</b>
                     <span v-if="eq.id === current" class="eq-pick-tag">当前</span>
                 </span>
-                <EquipmentProperties :eq="eq" :lines="2" />
+                <EquipmentProperties :eq="eq" :lines="4" />
                 <small class="eq-pick-refs">
                     {{
                         referencesOf(eq)

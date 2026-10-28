@@ -1673,6 +1673,40 @@ app.on('browser-window-created', (_event, win) => {
             );
             assert.ok(shotJade.ocrText.includes('灵尘等级'), '识别原文留在档案里可回查');
 
+            // ---- 列表只摆装备本身的属性：灵尘、开光这类配置留给详情 ----
+            const warehouseRow = await read(() => {
+                const row = [...document.querySelectorAll('.eq-row')].find((element) =>
+                    element.textContent.includes('上古玉魄·阳'),
+                );
+                return row
+                    ? [...row.querySelectorAll('.eq-prop')].map((line) => line.textContent.trim())
+                    : [];
+            });
+            assert.ok(
+                warehouseRow.some((line) => line.includes('物理暴击等级')),
+                '基础属性在列表里',
+            );
+            assert.ok(
+                !warehouseRow.some((line) => /灵尘|开光/.test(line)),
+                '灵尘与开光不占列表的行',
+            );
+            await read(() => {
+                [...document.querySelectorAll('.eq-row')]
+                    .find((element) => element.textContent.includes('上古玉魄·阳'))
+                    .querySelector('.eq-name-button')
+                    .click();
+            });
+            await until(() => !!document.querySelector('.modal'), '玉魄详情');
+            // 只看属性区：详情里的「识别原文」也含「灵尘等级」，拿整个弹窗断言会假阳性。
+            const detailText = await read(
+                () => document.querySelector('.modal .eq-props')?.textContent || '',
+            );
+            assert.ok(/灵尘/.test(detailText), '详情里能看到灵尘等级');
+            assert.ok(/开光/.test(detailText), '详情里能看到开光孔');
+            assert.ok(/奇袭/.test(detailText), '详情里能看到奇袭法术');
+            await click('关闭');
+            await until(() => !document.querySelector('.modal'), '详情已关闭');
+
             await read(() => document.querySelector('a[href="#/settings"]').click());
             await until(() => !!document.querySelector('.settings-page'), '设置页面');
             fs.writeFileSync(

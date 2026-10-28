@@ -77,7 +77,7 @@ const hint = computed(() => {
             <span v-if="levelText" class="eq-slot-level">{{ levelText }}</span>
         </span>
         <span class="eq-slot-name">{{ nameText }}</span>
-        <EquipmentProperties v-if="eq" :eq="eq" :lines="3" />
+        <EquipmentProperties v-if="eq" :eq="eq" :lines="4" />
     </button>
 </template>
 

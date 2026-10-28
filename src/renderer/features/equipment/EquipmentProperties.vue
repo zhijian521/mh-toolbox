@@ -19,6 +19,19 @@ const props = withDefaults(
 const app = useApplication();
 const rules = app.rules();
 const rows = computed(() => propertyRows(rules, props.eq, props.full));
+/**
+ * 格子与列表里只摆前几行，超出的收成一行「还有 N 条」。
+ *
+ * 提示行**占用**最后一个名额而不是另起一行：灵饰是「一条主要 + 三条附加 + 精炼」，
+ * 属性多的装备本来就长，再加一行提示会把格子高度顶开、整排跟着错位。少显示一行
+ * 属性、换一句「还有 3 条」，比让用户以为属性就这么多要诚实。
+ */
+const shown = computed(() =>
+    props.lines > 0 && rows.value.length > props.lines
+        ? rows.value.slice(0, props.lines - 1)
+        : rows.value,
+);
+const rest = computed(() => rows.value.length - shown.value.length);
 </script>
 
 <template>
@@ -27,10 +40,11 @@ const rows = computed(() => propertyRows(rules, props.eq, props.full));
         :class="{ clamp: lines > 0, aligned }"
         :style="lines > 0 ? { '--eq-lines': lines } : undefined"
     >
-        <p v-for="(row, index) in rows" :key="index" class="eq-prop" :class="'kind-' + row.kind">
+        <p v-for="(row, index) in shown" :key="index" class="eq-prop" :class="'kind-' + row.kind">
             <span class="eq-prop-label">{{ row.label }}</span>
             <span class="eq-prop-value">{{ row.value }}</span>
         </p>
+        <p v-if="rest > 0" class="eq-prop kind-legacy eq-more">还有 {{ rest }} 条属性</p>
         <p v-if="!rows.length" class="eq-prop kind-legacy">未录入属性</p>
     </div>
 </template>
@@ -100,5 +114,10 @@ span 若脱离网格会被当成独立的块，值就贴到最左边，与有标
 .kind-legacy,
 .kind-legacy .eq-prop-value {
     color: var(--muted);
+}
+/* 溢出提示像列表末尾的「更多」，不该被当成一条属性读。 */
+.eq-more {
+    font-size: 11px;
+    letter-spacing: 0.02em;
 }
 </style>
