@@ -5,13 +5,14 @@ import { U } from '../../domain/util.js';
 import BaseModal from '../../components/BaseModal.vue';
 import BaseDate from '../../components/BaseDate.vue';
 import BaseNumber from '../../components/BaseNumber.vue';
-import BaseSelect from '../../components/BaseSelect.vue';
 
 /**
  * 补记在线时长，以及把正在计时那一段的起点改到真实上线时间。
  *
  * 两个模式填的是同一组东西（哪天、几点 / 多久），区别只在落库方式：
  * 补录写一条 `mode: 'duration'` 的会话；调整起点走 `adjustSessionStart`，结束时间仍是现在。
+ *
+ * 在线角色是多选：勾了几个就按几个结算点卡，「同时在线角色数」不再是单独一个输入框。
  *
  * 点卡折算与校验都交给领域（`makeSession` / `sessionError`），页面不另算一遍，
  * 否则「6 点 / 小时 × 角色数 × 单价」的公式就有第二份实现。
@@ -26,20 +27,31 @@ const started = new Date(Number(active?.startAt) || Date.now());
 
 /** 补录：忘记点「开始游戏」后的补救。调整起点：计时已经开始，把起点往回拨。 */
 const backfill = computed(() => props.mode === 'backfill');
-const characterOptions = computed(() =>
-    app.characters.map((item) => ({ value: item.id, label: item.name })),
-);
-const characterId = ref(
-    props.character && props.character !== 'all' ? props.character : app.characters[0]?.id || '',
+/** 在线角色：默认全选，勾了几个就按几个算点卡。 */
+const selected = ref<string[]>(app.characters.map((item) => item.id));
+const accounts = computed(() => selected.value.length);
+/** 点卡流水挂在页面筛选的那个角色上；它被取消勾选时退回第一个选中的。 */
+const characterId = computed(() =>
+    props.character && props.character !== 'all' && selected.value.includes(props.character)
+        ? props.character
+        : selected.value[0] || '',
 );
 const date = ref(backfill.value ? U.today() : U.fmtDate(started));
 const hours = ref<number | string>(backfill.value ? 2 : started.getHours());
 const minutes = ref<number | string>(backfill.value ? 0 : started.getMinutes());
-const accounts = ref<number | string>(quick.accounts);
 const price = ref<number | string>(quick.cardPrice / 10000);
 const note = ref('');
 const dirty = ref(false);
 const error = ref('');
+
+/** 勾选顺序固定按角色页的排序，结算归属才稳定。 */
+function toggle(id: string) {
+    const next = selected.value.includes(id)
+        ? selected.value.filter((item) => item !== id)
+        : [...selected.value, id];
+    selected.value = app.characters.filter((item) => next.includes(item.id)).map((item) => item.id);
+    dirty.value = true;
+}
 
 /** 同一个数字在两种模式下含义不同：补录是时长，调整起点是「几点几分」。 */
 const span = computed(() => (Number(hours.value) || 0) * 60 + (Number(minutes.value) || 0));
@@ -50,7 +62,7 @@ const draft = computed(() =>
         mode: 'duration',
         date: date.value,
         minutes: span.value,
-        accounts: Number(accounts.value),
+        accounts: accounts.value,
         cardPrice: Math.round((Number(price.value) || 0) * 10000),
         note: note.value.trim(),
         source: 'manual',
@@ -67,7 +79,9 @@ const preview = computed(() => {
     return (
         '补记 ' +
         (record.minutes / 60).toFixed(2) +
-        ' 小时 · 点卡 ' +
+        ' 小时 · ' +
+        accounts.value +
+        ' 角色 · 点卡 ' +
         U.fmtMoney(record.cost) +
         (spansToday() ? '' : ' · 跨天请分两次补')
     );
@@ -81,6 +95,10 @@ async function save() {
     if (app.busy) return;
     error.value = '';
     if (backfill.value) {
+        if (!accounts.value) {
+            error.value = '至少选一个在线角色';
+            return;
+        }
         const record = draft.value;
         const problem = rules.sessionError(record);
         if (problem) {
@@ -135,10 +153,26 @@ function timeText() {
             }}
         </p>
         <form id="online-form" class="online-form" @submit.prevent="save">
-            <label v-if="backfill">
-                归属角色
-                <BaseSelect v-model="characterId" label="归属角色" :options="characterOptions" />
-            </label>
+            <div v-if="backfill" class="who">
+                <span class="who-label">
+                    在线角色
+                    <small>{{ accounts }} 个</small>
+                </span>
+                <div class="who-chips">
+                    <button
+                        v-for="item in app.characters"
+                        :key="item.id"
+                        type="button"
+                        class="who-chip"
+                        :class="{ on: selected.includes(item.id) }"
+                        :aria-pressed="selected.includes(item.id)"
+                        :disabled="app.busy"
+                        @click="toggle(item.id)"
+                    >
+                        {{ item.name }}
+                    </button>
+                </div>
+            </div>
             <div class="online-row">
                 <label>
                     {{ backfill ? '日期' : '开始日期' }}
@@ -171,16 +205,6 @@ function timeText() {
             </div>
             <div v-if="backfill" class="online-row two">
                 <label>
-                    同时在线角色数
-                    <BaseNumber
-                        v-model="accounts"
-                        name="accounts"
-                        :min="1"
-                        :max="20"
-                        @update:model-value="dirty = true"
-                    />
-                </label>
-                <label>
                     点卡单价（万 / 点）
                     <BaseNumber
                         v-model="price"
@@ -190,17 +214,17 @@ function timeText() {
                         @update:model-value="dirty = true"
                     />
                 </label>
+                <label>
+                    备注
+                    <input
+                        v-model="note"
+                        name="note"
+                        type="text"
+                        placeholder="选填"
+                        @input="dirty = true"
+                    />
+                </label>
             </div>
-            <label v-if="backfill">
-                备注
-                <input
-                    v-model="note"
-                    name="note"
-                    type="text"
-                    placeholder="选填，会写进点卡流水"
-                    @input="dirty = true"
-                />
-            </label>
         </form>
         <p class="hint preview" aria-live="polite">{{ preview }}</p>
         <p v-if="error" class="error form-error" role="alert">{{ error }}</p>
@@ -227,6 +251,47 @@ function timeText() {
 }
 .online-row.two {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.who {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+.who-label {
+    color: var(--muted);
+    font-size: 13px;
+}
+.who-label small {
+    margin-left: 5px;
+    color: var(--gold);
+    font-variant-numeric: tabular-nums;
+}
+.who-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.who-chip {
+    padding: 6px 12px;
+    border: 1px solid var(--line-2);
+    border-radius: 4px;
+    background: var(--paper);
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 13px;
+    transition:
+        border-color 120ms ease,
+        background 120ms ease,
+        color 120ms ease;
+}
+.who-chip:hover:not(:disabled) {
+    border-color: var(--gold);
+}
+.who-chip.on {
+    border-color: var(--red);
+    background: #f2e6d5;
+    color: var(--red);
+    font-weight: 600;
 }
 .preview {
     margin: 14px 0 0;

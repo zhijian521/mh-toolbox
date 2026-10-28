@@ -887,7 +887,7 @@ app.on('browser-window-created', (_event, win) => {
             await click('关闭');
             await until(() => !document.querySelector('.modal'), '关闭账号记录');
 
-            // ---- 收益页：菜单已迁移、记一笔、汇总、记录弹窗、删除 ----
+            // ---- 收益页：菜单已迁移、速记即收益、汇总、计时与补记 ----
             await read(() => document.querySelector('a[href="#/income"]').click());
             await until(() => !!document.querySelector('.stat-grid'), '收益页');
             assert.equal(
@@ -902,39 +902,33 @@ app.on('browser-window-created', (_event, win) => {
                 '0',
                 '本月还没有收益记录',
             );
-
-            await click('＋ 记一笔');
-            await until(() => !!document.querySelector('#income-form'), '记收益弹窗');
+            // 收益页不再给「记一笔」：日常收益走物品速记，通用收支去账号页记。
             assert.equal(
                 await read(() =>
-                    document.querySelector('[aria-label="记账币种"]').textContent.trim(),
+                    [...document.querySelectorAll('button')].some(
+                        (element) => element.textContent.trim() === '＋ 记一笔',
+                    ),
                 ),
-                '梦幻币 · 万',
-                '收益账本只走梦幻币与储备金',
+                false,
+                '收益页没有记一笔入口',
             );
-            await choose('收益分类', '捉鬼');
-            await field('[name="amount"]', '1200');
-            await submit('#income-form');
-            await until(() => !document.querySelector('#income-form'), '保存收益');
-            let earning = disk().transactions.find((item) => item.ledger === 'earnings');
-            assert.equal(earning.category, '捉鬼');
-            assert.equal(earning.kind, 'income');
-            assert.equal(earning.currency, 'cash');
-            assert.equal(earning.amount, 1200);
-            assert.equal(earning.recordType, 'money');
 
-            await click('＋ 记一笔');
-            await until(() => !!document.querySelector('#income-form'), '记收益支出');
-            await choose('收支方向', '支出');
-            await choose('收益分类', '修理装备');
-            await field('[name="amount"]', '80');
-            await submit('#income-form');
-            await until(() => !document.querySelector('#income-form'), '保存收益支出');
-            earning = disk().transactions.find((item) => item.category === '修理装备');
-            assert.equal(earning.kind, 'expense');
-            assert.equal(earning.ledger, 'earnings');
-
-            // 1200 - 80 = 1120
+            // ---- 金币速记：记成金额收入，其它物品只进库存估值 ----
+            await read(() => document.querySelector('[data-item="99"]').click());
+            await until(() => !!document.querySelector('#item-price-form'), '金币单价弹窗');
+            await field('[name="price"]', '1200');
+            await click('记录');
+            await until(() => !document.querySelector('#item-price-form'), '金币入账');
+            await until(
+                () => document.querySelectorAll('.loot-row').length === 1,
+                '金币出现在收益记录',
+            );
+            const coin = disk().transactions.find((item) => item.itemId === 99);
+            assert.equal(coin.recordType, 'money');
+            assert.equal(coin.kind, 'income');
+            assert.equal(coin.currency, 'cash');
+            assert.equal(coin.ledger, 'earnings');
+            assert.equal(coin.amount, 1200);
             assert.equal(
                 await read(() =>
                     document
@@ -942,46 +936,18 @@ app.on('browser-window-created', (_event, win) => {
                         .querySelector('.stat-value')
                         .textContent.trim(),
                 ),
-                '1120 万',
-                '净收益按收入减支出',
+                '1200 万',
+                '金币计入净收益',
             );
 
-            await click('查看全部');
-            await until(() => !!document.querySelector('.record-head'), '收益记录弹窗');
-            assert.equal(
-                await read(() => document.querySelectorAll('.record-row').length),
-                2,
-                '两笔收益记录',
-            );
-            assert.equal(
-                await read(() =>
-                    document.querySelector('.record-filters .seg-btn.on')?.textContent.trim(),
-                ),
-                '本月',
-                '收益记录继承页面区间',
-            );
-            await click('删除');
-            await until(() => document.querySelectorAll('.modal').length === 2, '收益删除确认');
-            await click('确认删除');
-            await until(
-                () => document.querySelectorAll('.record-row').length === 1,
-                '收益记录减少',
-            );
-            assert.equal(
-                disk().transactions.filter((item) => item.ledger === 'earnings').length,
-                1,
-            );
-            await click('关闭');
-            await until(() => !document.querySelector('.modal'), '关闭收益记录');
-
-            // ---- 物品速记：没设价先弹单价，保存后按单价入库 ----
+            // ---- 固定价格速记：没设价先弹单价，保存后按单价入库并沿用 ----
             await read(() => document.querySelector('[data-item="1"]').click());
             await until(() => !!document.querySelector('#item-price-form'), '单价弹窗');
             await field('[name="price"]', '8.5');
             await click('保存并记录');
             await until(() => !document.querySelector('#item-price-form'), '单价保存');
-            await until(() => document.querySelectorAll('.loot-row').length === 1, '掉落记录出现');
-            const quick = disk().transactions.find((item) => item.source === 'quick');
+            await until(() => document.querySelectorAll('.loot-row').length === 2, '物品入库');
+            const quick = disk().transactions.find((item) => item.itemId === 1);
             assert.equal(quick.recordType, 'item');
             assert.equal(quick.itemName, '60武器');
             assert.equal(quick.quantity, 1);
@@ -1020,11 +986,9 @@ app.on('browser-window-created', (_event, win) => {
             );
             await click('记录');
             await until(() => !document.querySelector('#item-price-form'), '一次性单价保存');
-            await until(() => document.querySelectorAll('.loot-row').length === 2, '第二条收益');
+            await until(() => document.querySelectorAll('.loot-row').length === 3, '第三条收益');
             assert.equal(disk().itemPrices['100'], undefined, '不固定价格不写回单价表');
-            const variable = disk()
-                .transactions.filter((item) => item.source === 'quick')
-                .find((item) => item.itemId === 100);
+            const variable = disk().transactions.find((item) => item.itemId === 100);
             assert.equal(variable.unitPrice, 35, '按本次填的单价估值');
 
             // ---- 在线计时：开始后立刻结束，按会话结算出点卡流水 ----
@@ -1039,27 +1003,80 @@ app.on('browser-window-created', (_event, win) => {
                 1,
                 '会话结算出点卡流水',
             );
-            assert.ok(
-                await read(() => document.querySelector('.stat-value') !== null),
-                '统计卡仍在',
-            );
 
-            // ---- 补在线时长：忘了点「开始游戏」时的补救 ----
+            // ---- 补在线时长：默认全选在线角色，角色数就是点卡的乘数 ----
             await click('补在线时长');
             await until(() => !!document.querySelector('#online-form'), '补记在线弹窗');
+            assert.equal(
+                await read(() => document.querySelectorAll('.who-chip.on').length),
+                disk().characters.length,
+                '在线角色默认全选',
+            );
             await field('[name="hours"]', '1');
             await field('[name="minutes"]', '30');
+            // 全部取消勾选时没有乘数可用，保存要被拦住。
+            await read(() => document.querySelector('.who-chip').click());
+            assert.equal(
+                await read(() => document.querySelectorAll('.who-chip.on').length),
+                0,
+                '在线角色可以取消勾选',
+            );
+            await click('补记');
+            await until(() => !!document.querySelector('.form-error'), '未选角色拦截');
+            assert.equal(
+                await read(() => document.querySelector('.form-error').textContent.trim()),
+                '至少选一个在线角色',
+            );
+            await read(() => document.querySelector('.who-chip').click());
             await click('补记');
             await until(() => !document.querySelector('#online-form'), '补记保存');
             assert.equal(disk().sessions.length, 2, '补记后多一条会话');
             const backfill = disk().sessions.find((item) => item.mode === 'duration');
             assert.equal(backfill.minutes, 90, '按小时与分钟折算时长');
             assert.equal(backfill.source, 'manual');
+            assert.equal(backfill.accounts, disk().characters.length, '按勾选的在线角色数结算');
             assert.equal(
                 disk().transactions.filter((item) => item.sessionId === backfill.id).length,
                 1,
                 '补记也结算点卡流水',
             );
+
+            // ---- 收益记录弹窗：区间继承、点卡行只读、删除速记的金额记录 ----
+            await click('查看全部');
+            await until(() => !!document.querySelector('.record-head'), '收益记录弹窗');
+            assert.equal(
+                await read(() => document.querySelectorAll('.record-row').length),
+                5,
+                '三条速记 + 两段在线点卡',
+            );
+            assert.equal(
+                await read(() =>
+                    document.querySelector('.record-filters .seg-btn.on')?.textContent.trim(),
+                ),
+                '本月',
+                '收益记录继承页面区间',
+            );
+            assert.equal(
+                await read(
+                    () => document.querySelectorAll('.record-filters [role="combobox"]').length,
+                ),
+                3,
+                '筛选只剩收支、分类、角色',
+            );
+            await click('删除');
+            await until(() => document.querySelectorAll('.modal').length === 2, '收益删除确认');
+            await click('确认删除');
+            await until(
+                () => document.querySelectorAll('.record-row').length === 4,
+                '收益记录减少',
+            );
+            assert.equal(
+                disk().transactions.filter((item) => item.itemId === 99).length,
+                0,
+                '金币记录已删除',
+            );
+            await click('关闭');
+            await until(() => !document.querySelector('.modal'), '关闭收益记录');
 
             await read(() => document.querySelector('a[href="#/settings"]').click());
             await until(() => !!document.querySelector('.settings-page'), '设置页面');

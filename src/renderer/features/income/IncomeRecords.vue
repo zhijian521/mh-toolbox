@@ -17,20 +17,18 @@ import RangeFilter from '../../components/RangeFilter.vue';
  * 库存状态都要一起校验），在这里改一个金额会绕过 `syncItem` 的约束，所以不提供入口。
  */
 const props = defineProps<{ range?: DateRangeValue; character?: string }>();
-const emit = defineEmits<{ close: []; edit: [tx: Transaction]; add: [] }>();
+const emit = defineEmits<{ close: []; edit: [tx: Transaction] }>();
 const app = useApplication();
 const rules = app.rules();
 const PER_PAGE = 20;
 const filters = reactive<{
     kind: string;
-    currency: string;
     category: string;
     character: string;
     range: DateRangeValue;
     keyword: string;
 }>({
     kind: '',
-    currency: '',
     category: '',
     character: props.character && props.character !== 'all' ? props.character : '',
     range: props.range ? { ...props.range } : { preset: 'all', from: '', to: '' },
@@ -66,16 +64,10 @@ const kindOptions = [
     { value: 'income', label: '收入' },
     { value: 'expense', label: '支出' },
 ];
-const currencyOptions = [
-    { value: '', label: '全部币种' },
-    { value: 'cash', label: '梦幻币' },
-    { value: 'reserve', label: '储备金' },
-];
 const list = computed(() => {
     const keyword = filters.keyword.trim().toLocaleLowerCase();
     return all.value.filter((tx) => {
         if (filters.kind && tx.kind !== filters.kind) return false;
-        if (filters.currency && tx.currency !== filters.currency) return false;
         if (filters.category && tx.category !== filters.category) return false;
         if (filters.character && tx.characterId !== filters.character) return false;
         if (filters.range.from && tx.date < filters.range.from) return false;
@@ -96,7 +88,6 @@ const filtered = computed(
     () =>
         !!filters.keyword.trim() ||
         !!filters.kind ||
-        !!filters.currency ||
         !!filters.category ||
         !!filters.character ||
         !!filters.range.from ||
@@ -108,7 +99,6 @@ watch(pages, (value) => {
 watch(
     () => [
         filters.kind,
-        filters.currency,
         filters.category,
         filters.character,
         filters.range.from,
@@ -125,9 +115,16 @@ watch(
 function isItem(tx: Transaction) {
     return tx.recordType === 'item';
 }
-/** 物品与成交记录都由物品模块管理，这里只读。 */
-function readonly(tx: Transaction) {
-    return isItem(tx) || !!tx.itemRecordId;
+/**
+ * 除了速记产生的金额记录，其余这里都只读。
+ *
+ * 物品与成交记录归物品模块；点卡流水由在线计时生成，在这里删掉一条会和对应会话对不上
+ * （时长仍算在汇总里，流水却没了），要动就回计时那边改。
+ */
+function lockedText(tx: Transaction) {
+    if (isItem(tx) || tx.itemRecordId) return '物品内管理';
+    if (tx.sessionId) return '在线计时内管理';
+    return '';
 }
 function kindText(tx: Transaction) {
     if (isItem(tx)) return '物品';
@@ -146,12 +143,14 @@ function stateOf(tx: Transaction) {
         return remaining > 0 ? state + ' · 剩 ' + remaining + '/' + (tx.quantity ?? 0) : state;
     }
     if (tx.itemRecordId) return '成交 ×' + (tx.saleQuantity ?? 0);
-    return tx.currency === 'reserve' ? '储备金' : '梦幻币';
+    if (!tx.sessionId) return '速记';
+    // 点卡流水由在线计时生成，看对应会话就知道是自动计时还是补记的。
+    const session = rules.state.sessions.find((item) => item.id === tx.sessionId);
+    return String(session?.source ?? '') === 'timer' ? '自动计时' : '手动补记';
 }
 function resetFilters() {
     Object.assign(filters, {
         kind: '',
-        currency: '',
         category: '',
         character: '',
         keyword: '',
@@ -191,14 +190,6 @@ async function remove() {
                         v-model="filters.kind"
                         label="收支方向筛选"
                         :options="kindOptions"
-                    />
-                </label>
-                <label class="filter-field filter-currency">
-                    币种
-                    <BaseSelect
-                        v-model="filters.currency"
-                        label="币种筛选"
-                        :options="currencyOptions"
                     />
                 </label>
                 <label class="filter-field filter-category">
@@ -251,7 +242,7 @@ async function remove() {
         <div v-if="!list.length" class="empty compact-empty">
             <AppIcon name="bolt" :size="32" />
             <p v-if="filtered">没有符合筛选条件的记录。</p>
-            <p v-else>还没有收益记录，点下方的「记一笔」开始。</p>
+            <p v-else>还没有收益记录，用左边的物品速记记一条就会出现。</p>
             <button v-if="filtered" class="btn compact" @click="resetFilters">清除筛选</button>
         </div>
         <template v-else>
@@ -259,7 +250,7 @@ async function remove() {
                 <span>日期 / 角色</span>
                 <span>类型 / 分类</span>
                 <span>记录内容</span>
-                <span>币种 / 状态</span>
+                <span>状态</span>
                 <span class="num">金额</span>
                 <span class="ops"></span>
             </div>
@@ -281,20 +272,12 @@ async function remove() {
                     <span class="cell-state">{{ stateOf(tx) }}</span>
                     <span class="cell-amount" :class="tx.kind">
                         {{ isItem(tx) ? U.fmtMoney(tx.amount) : signedAmount(tx) }}
-                        <small>
-                            {{
-                                isItem(tx)
-                                    ? '估值'
-                                    : tx.currency === 'reserve'
-                                      ? '储备金'
-                                      : '梦幻币'
-                            }}
-                        </small>
+                        <small v-if="isItem(tx)">估值</small>
                     </span>
                     <span class="cell-ops">
-                        <template v-if="readonly(tx)">
-                            <span class="hint cell-locked">物品内管理</span>
-                        </template>
+                        <span v-if="lockedText(tx)" class="hint cell-locked">
+                            {{ lockedText(tx) }}
+                        </span>
                         <template v-else>
                             <button
                                 class="btn compact"
@@ -326,7 +309,6 @@ async function remove() {
                     下一页
                 </button>
             </div>
-            <button class="btn" @click="emit('add')">＋ 记一笔</button>
             <button ref="closeButton" class="btn" @click="close">关闭</button>
         </template>
     </BaseModal>
@@ -371,9 +353,6 @@ async function remove() {
 }
 .filter-kind {
     width: 112px;
-}
-.filter-currency {
-    width: 104px;
 }
 .filter-category {
     width: 120px;

@@ -41,10 +41,9 @@ type CatalogItem = { id: number; name: string; img: string; icon: string };
 
 const app = useApplication();
 const rules = app.rules();
-const addButton = ref<HTMLButtonElement>();
 const character = ref('all');
 const range = ref<DateRangeValue>({ preset: 'month', ...U.rangeFor('month') });
-const editing = ref<{ tx?: Transaction } | null>(null);
+const editing = ref<Transaction | null>(null);
 const recordsOpen = ref(false);
 const priceTarget = ref<{ item: CatalogItem; thenAdd: boolean; once: boolean } | null>(null);
 const onlineMode = ref<'backfill' | 'adjust' | null>(null);
@@ -102,7 +101,7 @@ const stats = computed(() => {
     void now.value;
     return rules.earningsStats(character.value, range.value.from, range.value.to, true);
 });
-/** 掉落记录只看速记产生的收入，手工记的收支走「全部记录」。 */
+/** 收益记录只看速记产生的收入；点卡流水走「全部记录」，不混进来。 */
 const loot = computed(() =>
     records.value.filter((tx) => tx.source === 'quick' && tx.kind === 'income'),
 );
@@ -204,7 +203,11 @@ function remember() {
     opener.value = focused instanceof HTMLElement && focused !== document.body ? focused : null;
 }
 function restore() {
-    const target = opener.value?.isConnected ? opener.value : addButton.value;
+    // 「记一笔」删掉后页面没有那个固定入口了，回落到速记网格的第一张卡片：
+    // 关掉单价弹窗、移除一条收益之后，焦点本来就该还在这块区域。
+    const target = opener.value?.isConnected
+        ? opener.value
+        : document.querySelector<HTMLElement>('.item-grid .item-card');
     target?.focus({ preventScroll: true });
     opener.value = null;
 }
@@ -291,19 +294,11 @@ async function confirmRemove() {
         removeError.value = failure instanceof Error ? failure.message : String(failure);
     }
 }
-function openEditor() {
-    remember();
-    editing.value = {};
-}
+/** 收益记录弹窗里的编辑入口：只有速记产生的金额记录能改，物品与点卡不在这里动。 */
 function editFromList(tx: Transaction) {
     recordsOpen.value = false;
     opener.value = null;
-    editing.value = { tx: plain(tx) as Transaction };
-}
-function addFromList() {
-    recordsOpen.value = false;
-    opener.value = null;
-    editing.value = {};
+    editing.value = plain(tx) as Transaction;
 }
 async function saved() {
     editing.value = null;
@@ -352,10 +347,6 @@ async function saved() {
                 <button class="chip" :disabled="app.busy" @click="settingsOpen = true">
                     <AppIcon name="coin" :size="13" />
                     点卡 {{ quick.accounts }} 角色 · {{ U.fmtMoney(quick.cardPrice / 10000) }}/点
-                </button>
-                <span class="spacer"></span>
-                <button ref="addButton" class="btn" :disabled="app.busy" @click="openEditor()">
-                    ＋ 记一笔
                 </button>
             </div>
             <div class="stat-grid">
@@ -469,14 +460,13 @@ async function saved() {
             </div>
         </template>
     </div>
-    <IncomeEditor v-if="editing" :tx="editing.tx" @close="editing = null" @saved="saved" />
+    <IncomeEditor v-if="editing" :tx="editing" @close="editing = null" @saved="saved" />
     <IncomeRecords
         v-if="recordsOpen"
         :range="range"
         :character="character"
         @close="recordsOpen = false"
         @edit="editFromList"
-        @add="addFromList"
     />
     <ItemPriceDialog
         v-if="priceTarget"
@@ -544,9 +534,6 @@ async function saved() {
 }
 .chip svg {
     color: var(--gold);
-}
-.spacer {
-    flex: 1;
 }
 .live {
     display: inline-flex;
