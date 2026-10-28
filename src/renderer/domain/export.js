@@ -5,8 +5,6 @@
  * 记录导出：把筛选后的流水渲染成 CSV。
  * @typedef {object} ExportDomain 只用到下列成员，其余由领域对象在运行时提供
  * @property {(id: string) => string} charName
- * @property {(tx: Tx) => string | number} itemRemaining
- * @property {(tx: Tx) => string | number} itemHoldingValue
  * @property {(records: Tx[]) => string} recordsCsv
  * @typedef {object} Tx 流水记录，物品与资金共用一张表
  * @property {string} [date]
@@ -57,10 +55,8 @@ export default function install(D, _U, _gateway, _localStorage) {
                 '手续费（原币种）',
                 '物品名称',
                 '获得数量',
-                '剩余数量',
                 '出售数量',
                 '物品单价（万）',
-                '剩余估值（万）',
                 '渠道',
                 '备注',
             ],
@@ -80,10 +76,8 @@ export default function install(D, _U, _gateway, _localStorage) {
                 tx.fee || 0,
                 item ? tx.itemName || '' : '',
                 item ? tx.quantity || '' : '',
-                item ? this.itemRemaining(tx) : '',
                 tx.saleQuantity || '',
                 item ? tx.unitPrice || '' : '',
-                item ? this.itemHoldingValue(tx) : '',
                 tx.channel || '',
                 tx.note || '',
             ]);

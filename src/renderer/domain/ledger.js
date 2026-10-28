@@ -60,11 +60,6 @@ export default function install(D, U, _gateway, _localStorage) {
                 return Math.max(0, item.quantity - this.itemSoldQuantity(item));
             },
 
-            /** @this {Domain} @param {any} item @returns {number} */
-            itemHoldingValue(item) {
-                return item.status === 'held' ? this.itemValue(item, this.itemRemaining(item)) : 0;
-            },
-
             /** @this {Domain} @param {string} id */
             syncItem(id) {
                 const item = this.state.transactions.find(

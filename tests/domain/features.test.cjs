@@ -36,7 +36,8 @@ test('分次出售、超卖校验、成交编辑和删除保持库存与实际�
         D.settleItem(item, { date: '2026-01-02', amount: 18, quantity: 4 }),
     );
     assert.equal(D.itemRemaining(item), 6);
-    assert.equal(D.stats(D.earnings()).itemEstimate, 30);
+    // 不记库存：统计只报物品标价合计，没有「持有估值」这回事。
+    assert.equal(D.stats(D.earnings()).itemValue, 50);
     assert.equal(D.stats(D.earnings()).income, 18);
     const second = await D.commit(() =>
         D.settleItem(item, { date: '2026-01-03', amount: 30, quantity: 6 }),
@@ -203,7 +204,7 @@ test('备份边界拒绝单价文件和未来版本；替换失败保留活动�
     assert.equal(options.backupReason, 'import');
 });
 
-test('CSV 包含 BOM、单位、引号换行与公式防护，物品按剩余库存导出', async () => {
+test('CSV 包含 BOM、单位、引号换行与公式防护，物品不带库存列', async () => {
     const D = fixture();
     D.charById('c1').name = '=SUM(A1:A2)';
     const item = await D.saveTransaction({ ...loot, note: '文字,"引号"\n第二行' });
@@ -213,7 +214,10 @@ test('CSV 包含 BOM、单位、引号换行与公式防护，物品按剩余库
     assert.ok(csv.includes('"梦幻币（万）"'));
     assert.ok(csv.includes('"\'=SUM(A1:A2)"'));
     assert.ok(csv.includes('"文字,""引号""\n第二行"'));
-    assert.ok(csv.includes('"10","8","","5","40"'));
+    // 获得数量 → 出售数量 → 单价；「剩余数量」「剩余估值」两列随库存概念一起去掉了。
+    assert.ok(csv.includes('"10","","5"'));
+    assert.equal(csv.includes('剩余数量'), false);
+    assert.equal(csv.includes('剩余估值'), false);
 });
 
 test('活动在线汇总不修改缓存值；角色及日期筛选生效', async () => {

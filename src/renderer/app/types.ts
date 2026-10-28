@@ -107,9 +107,9 @@ export interface AccountStats {
 /**
  * 收益账本汇总，来自领域 `earningsStats`。
  *
- * 物品记录不计入收支，走两套口径：`itemValue` / `itemQty` 是范围内物品记录的数量 × 单价
- * （记了多少东西，卖出不影响）；`itemEstimate` / `itemCount` 只算持有中的剩余数量，
- * 留给物品库存模块。`hourly` 为 null 表示当前范围没有在线时长，不能倒推出时薪。
+ * 物品记录不计入收支，只走 `itemValue` / `itemQty` 一个口径：范围内物品记录的
+ * 数量 × 单价（记了多少东西，卖出不影响）。这套工具不记库存，所以没有「持有估值」。
+ * `hourly` 为 null 表示当前范围没有在线时长，不能倒推出时薪。
  */
 export interface EarningsStats {
     income: number;
@@ -125,9 +125,6 @@ export interface EarningsStats {
     itemValue: number;
     /** 对应的物品件数。 */
     itemQty: number;
-    /** 仓库口径：持有中的剩余估值。 */
-    itemEstimate: number;
-    itemCount: number;
     onlineMinutes: number;
     cardCost: number;
     hourly: number | null;
@@ -472,10 +469,12 @@ export interface Domain {
         to: string,
         includeActive?: boolean,
     ): EarningsStats;
-    /** 物品剩余数量（获得数量减去已成交数量）。 */
+    /**
+     * 物品还没卖掉的件数（获得数量减去已成交数量）。
+     *
+     * 只用于成交时的超卖校验与默认数量，不是给界面看的「库存」——这套工具不维护库存视图。
+     */
     itemRemaining(tx: Transaction): number;
-    /** 剩余数量 × 单价；已售罄的物品为 0。 */
-    itemHoldingValue(tx: Transaction): number;
     /** 数量 × 单价（默认用记录自己的数量），保留两位；物品价值的唯一口径。 */
     itemValue(tx: Transaction, quantity?: number): number;
     /** 速记物品的参考单价，单位是游戏币（15000 = 1.5 万）。 */

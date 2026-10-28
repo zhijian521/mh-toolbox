@@ -246,7 +246,6 @@ interface Domain {
     itemSales: (item: any, list?: any[]) => any[];
     itemRemaining: (item: any) => number;
     itemSoldQuantity: (item: any) => number;
-    itemHoldingValue: (item: any) => number;
     syncItem: (id: string) => void;
     syncEquipmentStatus: (id: string) => void;
     syncAccountEquipment: (tx: any) => void;

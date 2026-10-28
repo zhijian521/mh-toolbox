@@ -25,9 +25,6 @@ export default function install(D, _U, _gateway, _localStorage) {
                     reserveIncome: 0,
                     minutes: 0,
                     count: txs.length,
-                    /* 仓库口径：只算持有中的剩余数量，物品库存模块用。 */
-                    itemEstimate: 0,
-                    itemCount: 0,
                     /* 记账口径：范围内每条物品记录的数量 × 单价，与卖没卖无关。 */
                     itemValue: 0,
                     itemQty: 0,
@@ -39,10 +36,6 @@ export default function install(D, _U, _gateway, _localStorage) {
                         const quantity = Number(t.quantity) || 0;
                         r.itemValue += quantity * (Number(t.unitPrice) || 0);
                         r.itemQty += quantity;
-                        if (t.status === 'held') {
-                            r.itemEstimate += D.itemHoldingValue(t);
-                            r.itemCount += D.itemRemaining(t);
-                        }
                         return;
                     }
                     const amt = Number(t.amount) || 0;
