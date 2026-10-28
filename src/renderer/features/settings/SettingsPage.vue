@@ -4,6 +4,7 @@ import BaseModal from '../../components/BaseModal.vue';
 import PageHeader from '../../components/PageHeader.vue';
 import { useApplication } from '../../stores/application';
 import { desktop, plain } from '../../services/desktop';
+import { loadTheme, setTheme, themePreference } from '../../services/theme';
 import type { AppData, ThemePreference } from '../../app/types';
 const app = useApplication();
 const importCandidate = ref<AppData | null>(null),
@@ -19,31 +20,20 @@ const counts = computed(() => [
 ]);
 /*
  * 外观：偏好存在主进程（建窗口前就要知道），所以只能经桌面通道读写。
- * 切换后渲染层的 prefers-color-scheme 立刻变，light-dark() 跟着翻，页面不用重载。
+ * 状态放在 services/theme.ts 里与侧栏共用——各存一份的话，侧栏切完再进设置页
+ * 会看到旧的选中项。
  */
-const theme = ref<ThemePreference>('auto');
 const themeOptions: Array<{ value: ThemePreference; label: string }> = [
     { value: 'auto', label: '跟随系统' },
     { value: 'light', label: '浅色' },
     { value: 'dark', label: '深色' },
 ];
-onMounted(async () => {
-    try {
-        theme.value = (await desktop().getTheme()).theme;
-    } catch {
-        // 浏览器预览没有桌面通道，保留默认档即可，不做提示。
-    }
-});
+onMounted(loadTheme);
 async function chooseTheme(next: ThemePreference) {
-    if (busy.value || theme.value === next) return;
-    const previous = theme.value;
-    // 先落到界面上：失败了再退回去，避免点了没反应的观感。
-    theme.value = next;
+    if (busy.value || themePreference.value === next) return;
     try {
-        const state = await desktop().setTheme(next);
-        theme.value = state.theme;
+        await setTheme(next);
     } catch (failure) {
-        theme.value = previous;
         app.notify(failure instanceof Error ? failure.message : String(failure), true);
     }
 }
@@ -112,15 +102,15 @@ async function wipe() {
                     v-for="option in themeOptions"
                     :key="option.value"
                     class="btn"
-                    :class="{ selected: theme === option.value }"
-                    :aria-pressed="theme === option.value"
+                    :class="{ selected: themePreference === option.value }"
+                    :aria-pressed="themePreference === option.value"
                     :disabled="busy"
                     @click="chooseTheme(option.value)"
                 >
                     {{ option.label }}
                 </button>
             </div>
-            <p class="hint">深色模式仍在逐页适配，个别页面可能还是浅色底。</p>
+            <p class="hint">侧栏底部的太阳 / 月亮图标可以在浅色与深色之间直接对调。</p>
         </section>
         <section class="paper-section">
             <h2>数据概览</h2>

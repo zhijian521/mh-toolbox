@@ -6,6 +6,7 @@ import AppIcon from '../components/AppIcon.vue';
 import ErrorBoundary from '../components/ErrorBoundary.vue';
 import WindowControls from '../components/WindowControls.vue';
 import RescuePanel from '../features/rescue/RescuePanel.vue';
+import { loadTheme, themeDark, toggleTheme } from '../services/theme';
 import { sections } from './navigation';
 const application = useApplication();
 const route = useRoute();
@@ -14,7 +15,15 @@ function toggleSidebar() {
     collapsed.value = !collapsed.value;
     localStorage.setItem('mhv2.sidebarCollapsed', String(collapsed.value));
 }
-onMounted(application.initialize);
+function switchTheme() {
+    toggleTheme().catch((failure) => {
+        application.notify(failure instanceof Error ? failure.message : String(failure), true);
+    });
+}
+onMounted(() => {
+    void loadTheme();
+    void application.initialize();
+});
 </script>
 <template>
     <div id="app-shell" :class="{ collapsed }">
@@ -48,7 +57,19 @@ onMounted(application.initialize);
                 </RouterLink>
             </nav>
             <footer class="sidebar-footer">
-                <span v-if="!collapsed">本地保存 · 独立数据</span>
+                <!--
+                    明暗切换放在折叠按钮旁边：换主题是随手动作，不该为此翻进设置页。
+                    图标画的是「现在是什么」，悬停才说明「点了会变成什么」。
+                -->
+                <button
+                    class="icon-button"
+                    :aria-label="themeDark ? '切换到浅色模式' : '切换到深色模式'"
+                    :title="themeDark ? '切换到浅色模式' : '切换到深色模式'"
+                    :aria-pressed="themeDark"
+                    @click="switchTheme"
+                >
+                    <AppIcon :name="themeDark ? 'moon' : 'sun'" />
+                </button>
                 <button
                     class="icon-button"
                     :aria-label="collapsed ? '展开菜单' : '收起菜单'"
@@ -216,17 +237,31 @@ onMounted(application.initialize);
     padding: 1px 4px;
     line-height: 15px;
 }
+/*
+ * 只剩两个图标按钮，居中摆。原来左边那行「本地保存 · 独立数据」是启动时的自我
+ * 说明，看两天就成噪音了，占的位置正好给明暗切换。
+ */
 .sidebar-footer {
     margin-top: auto;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
+    gap: 8px;
     border-top: 1px solid var(--line);
-    min-height: 49px;
-    padding: 8px 15px;
-    font-size: 11.5px;
-    color: var(--muted);
+    padding: 9px 0;
     flex-shrink: 0;
+}
+/* 收起后侧栏只有 64px，两个按钮横排放不下，改成一列。 */
+.collapsed .sidebar-footer {
+    flex-direction: column;
+    gap: 4px;
+}
+/*
+ * 侧栏底色就是 --paper-2，全局 .icon-button:hover 也用它，等于没反馈。
+ * 这一处换成深一档的 --panel-3，指上去才看得出按到了哪个。
+ */
+.sidebar-footer .icon-button:hover:not(:disabled) {
+    background: var(--panel-3);
 }
 .collapsed .brand {
     padding: 25px 15px 28px;
@@ -236,9 +271,6 @@ onMounted(application.initialize);
 }
 .collapsed .nav-item {
     padding: 0;
-    justify-content: center;
-}
-.collapsed .sidebar-footer {
     justify-content: center;
 }
 .workspace {

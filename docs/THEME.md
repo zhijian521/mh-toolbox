@@ -117,7 +117,12 @@ nativeTheme.themeSource = preference === 'auto' ? 'system' : preference;
 
 ### 3.4 切换入口
 
-设置页「外观」分区，三选一按钮组（`.btn` + `.btn.selected`），走 `mhV2.getTheme / setTheme` 两个白名单通道。切换即时生效，不重载页面。
+两个入口，共用 `services/theme.ts` 里的同一份状态——各存一份的话，在侧栏切完再进设置页会看到旧的选中项。
+
+- **设置页「外观」分区**：三选一按钮组（`.btn` + `.btn.selected`），`auto / light / dark` 都能选。
+- **侧栏底部**：太阳 / 月亮图标，在浅色与深色之间直接对调。图标画的是「现在是什么」，`title` 与 `aria-label` 说明「点了会变成什么」。`auto` 档点一下会落到明确的 `light` / `dark`——用户点的是「我要看深色」，不是「把自动调成另一种自动」；想回跟随系统去设置页选。
+
+两处都走 `mhV2.getTheme / setTheme` 两个白名单通道，切换即时生效，不重载页面。状态里另有一份 `dark`（当前实际深浅），由主进程的返回值与 `prefers-color-scheme` 的变化共同维护，侧栏靠它决定画太阳还是月亮。
 
 ## 4. 硬编码收敛顺序
 

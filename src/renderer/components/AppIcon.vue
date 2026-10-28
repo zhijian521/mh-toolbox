@@ -35,6 +35,9 @@ const paths: Record<string, string> = {
     grip: 'M9 4h.01M15 4h.01M9 9h.01M15 9h.01M9 14h.01M15 14h.01M9 19h.01M15 19h.01',
     'panel-expand': 'M3 4h18v16H3zM9 4v16M13 9l3 3-3 3',
     'panel-collapse': 'M3 4h18v16H3zM9 4v16M16 9l-3 3 3 3',
+    // 明暗切换：太阳与月亮同一套细线，18px 下靠轮廓分辨，不画光晕之类的小细节。
+    sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+    moon: 'M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z',
     'window-minimize': 'M5 12h14',
     'window-maximize': 'M5 5h14v14H5z',
     'window-restore': 'M8 8h11v11H8zM5 15V5h10',

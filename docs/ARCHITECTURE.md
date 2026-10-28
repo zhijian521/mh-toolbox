@@ -11,7 +11,7 @@ src/renderer/features/      按业务模块划分的页面：总览、收益、�
 src/renderer/game-data/     按主题独立维护的梦幻游戏资料，供页面和领域规则引用
 src/renderer/domain/        从基线迁入的领域规则，ES 模块工厂
 src/renderer/stores/        Pinia 应用状态、完成或回滚后的界面快照
-src/renderer/services/      桌面接口及普通数据转换
+src/renderer/services/      桌面接口、外观偏好（`theme.ts`，设置页与侧栏共用）及普通数据转换
 src/renderer/assets/        独立字体、许可和样式；只保留设计基座
 migration/baseline/         原 V1 完整工程，作为迁移参考
 migration/initial-baseline/ 不可变初始文本快照
