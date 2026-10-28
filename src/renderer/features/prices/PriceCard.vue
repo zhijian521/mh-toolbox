@@ -188,9 +188,14 @@ const sparkPoints = computed(() => {
     display: flex;
     flex-direction: column;
     padding: 9px 12px 8px 14px;
-    border: 1px solid var(--line);
+    border: 1px solid color-mix(in srgb, var(--tone) 22%, var(--line));
     border-radius: 5px;
-    background: var(--paper);
+    /* 卡片底色是分类色的极淡版本：同一类的卡片一眼认得出，又不至于盖过价格。 */
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--tone) 9%, var(--paper)) 0%,
+        var(--paper) 58%
+    );
     min-width: 0;
     overflow: hidden;
     transition:
@@ -204,11 +209,15 @@ const sparkPoints = computed(() => {
     inset: 0 auto 0 0;
     width: 3px;
     background: var(--tone);
-    opacity: 0.8;
+    opacity: 0.85;
 }
 .price-card:hover {
-    border-color: var(--line-2);
-    background: #fffdf6;
+    border-color: color-mix(in srgb, var(--tone) 42%, var(--line-2));
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--tone) 14%, var(--paper)) 0%,
+        var(--paper) 62%
+    );
 }
 /* 走势线贴着价格右侧，作为一行内容而不是底纹：底纹会穿过元信息与操作按钮。 */
 .price-spark {
@@ -280,7 +289,16 @@ const sparkPoints = computed(() => {
     display: flex;
     align-items: baseline;
     gap: 3px;
-    margin-top: 2px;
+    margin-top: 3px;
+    padding: 1px 0 2px;
+    border-radius: 3px;
+    /* 价格后面一道分类色的光，从左向右淡出，右侧留给走势线。 */
+    background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--tone) 14%, transparent) 0%,
+        color-mix(in srgb, var(--tone) 4%, transparent) 58%,
+        transparent 88%
+    );
     min-width: 0;
 }
 .card-price b {
