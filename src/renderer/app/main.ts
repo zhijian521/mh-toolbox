@@ -17,7 +17,7 @@ import '../assets/styles.css';
 const router = createRouter({
     history: createWebHashHistory(),
     routes: [
-        { path: '/', redirect: '/characters' },
+        { path: '/', redirect: '/overview' },
         ...sections
             .filter((section) => section.pending)
             .map(({ path, title, icon }) => ({
@@ -32,7 +32,7 @@ const router = createRouter({
         { path: '/overview', component: OverviewPage },
         { path: '/prices', component: PricesPage },
         { path: '/settings', component: SettingsPage },
-        { path: '/:pathMatch(.*)*', redirect: '/characters' },
+        { path: '/:pathMatch(.*)*', redirect: '/overview' },
     ],
 });
 

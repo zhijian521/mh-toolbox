@@ -122,15 +122,22 @@ app.on('browser-window-created', (_event, win) => {
             await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', {
                 enabled: true,
             });
+            // 默认落地页是总览（侧栏第一项，也是打开应用后第一眼要看的东西）。
             await until(
-                () => document.querySelector('.page-header h1')?.textContent === '角色',
-                '启动角色页',
+                () => document.querySelector('.page-header h1')?.textContent === '总览',
+                '启动总览页',
             );
             const info = await read(() => window.mhV2.info());
             file = info.dataFile;
             assert.equal(file, path.join(temporary, 'mh-tool-v2', 'data.json'));
             assert.equal(app.getPath('sessionData'), path.join(temporary, 'mh-tool-v2', 'session'));
             assert.equal(await read(() => !!(window.D || window.Views || window.mh)), false);
+            // 空数据时总览是「创建角色」引导页，先点进去把流程接上。
+            await read(() => document.querySelector('.empty a[href="#/characters"]').click());
+            await until(
+                () => document.querySelector('.page-header h1')?.textContent === '角色',
+                '进入角色页',
+            );
 
             await click('＋ 添加角色');
             await until(() => !!document.querySelector('#character-form'), '新建档案');
@@ -1029,8 +1036,15 @@ app.on('browser-window-created', (_event, win) => {
             const variable = disk().transactions.find((item) => item.itemId === 100);
             assert.equal(variable.unitPrice, 35, '按本次填的单价估值');
 
-            // ---- 在线计时：开始后立刻结束，按会话结算出点卡流水 ----
+            // ---- 在线计时：开始前先问这次几个号在线（不再固定用设置里的角色数） ----
             await click('▶ 开始游戏');
+            await until(() => !!document.querySelector('#online-form'), '开始游戏弹窗');
+            assert.equal(
+                await read(() => document.querySelectorAll('.who-chip.on').length),
+                disk().characters.length,
+                '开始游戏默认全部角色在线',
+            );
+            await click('开始计时');
             await until(() => !!document.querySelector('.live'), '计时中');
             await new Promise((resolve) => setTimeout(resolve, 1100));
             await click('■ 结束游戏');
@@ -1067,6 +1081,8 @@ app.on('browser-window-created', (_event, win) => {
             // ---- 同一天再打一局：覆盖那条，不新增 ----
             const firstSettleId = merged[0].id;
             await click('▶ 开始游戏');
+            await until(() => !!document.querySelector('#online-form'), '第二局开始弹窗');
+            await click('开始计时');
             await until(() => !!document.querySelector('.live'), '第二局计时中');
             await new Promise((resolve) => setTimeout(resolve, 1100));
             await click('■ 结束游戏');

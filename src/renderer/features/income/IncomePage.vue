@@ -11,12 +11,12 @@ import {
     quickVariable,
 } from '../../game-data/quick-items.js';
 import AppIcon from '../../components/AppIcon.vue';
-import BaseModal from '../../components/BaseModal.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
 import RangeFilter from '../../components/RangeFilter.vue';
 import PageHeader from '../../components/PageHeader.vue';
 import IncomeEditor from './IncomeEditor.vue';
 import IncomeRecords from './IncomeRecords.vue';
+import IncomeDeleteDialog from './IncomeDeleteDialog.vue';
 import ItemPriceDialog from './ItemPriceDialog.vue';
 import OnlineDialog from './OnlineDialog.vue';
 import QuickSettings from './QuickSettings.vue';
@@ -60,10 +60,9 @@ const range = ref<DateRangeValue>({ preset: 'today', ...U.rangeFor('today') });
 const editing = ref<Transaction | null>(null);
 const recordsOpen = ref(false);
 const priceTarget = ref<{ item: CatalogItem; thenAdd: boolean; once: boolean } | null>(null);
-const onlineMode = ref<'backfill' | 'adjust' | null>(null);
+const onlineMode = ref<'start' | 'backfill' | 'adjust' | null>(null);
 const settingsOpen = ref(false);
 const removing = ref<Transaction | null>(null);
-const removeError = ref('');
 /** 打开弹窗的那个按钮：保存后把焦点还回去。 */
 const opener = ref<HTMLElement | null>(null);
 
@@ -129,7 +128,25 @@ const stats = computed(() => {
 const loot = computed(() =>
     records.value.filter((tx) => tx.source === 'quick' && tx.kind === 'income'),
 );
-const lootValue = computed(() => loot.value.reduce((sum, tx) => sum + holding(tx), 0));
+/** 面板只放最近 12 条：一天记几十条时，右侧窄栏不该被撑成一整屏。 */
+const LOOT_LIMIT = 12;
+const lootShown = computed(() => loot.value.slice(0, LOOT_LIMIT));
+/**
+ * 面板底部的两个合计。
+ *
+ * 金币与物品估值单位都是「万」，但量纲不同（一个是到手的币，一个是按标价折算的货值），
+ * 加在一起得出的数没有任何含义——之前那个「合计」就是两个数硬加，看着像净收益其实不是。
+ */
+const lootMoney = computed(() =>
+    loot.value
+        .filter((tx) => tx.recordType !== 'item')
+        .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0),
+);
+const lootItem = computed(() =>
+    loot.value
+        .filter((tx) => tx.recordType === 'item')
+        .reduce((sum, tx) => sum + rules.itemValue(tx), 0),
+);
 const rangeText = computed(() => {
     const { from: start, to: end } = range.value;
     if (!start && !end) return '全部时间';
@@ -241,15 +258,16 @@ async function syncAccount(dates: string[]) {
     }
 }
 /** 开始计时：参数取「点卡参数」里的角色数与单价，结算时按每小时 6 点算成本。 */
-async function startGame() {
+/**
+ * 开始游戏：先问这次几个号在线、点卡什么价。
+ *
+ * 以前直接拿设置里的角色数开计时，但补记按实际勾选算——同一天两个入口算出来的
+ * 点卡会对不上，而用户往往这两个入口都用。
+ */
+function startGame() {
     if (app.busy || active.value) return;
-    try {
-        await app.execute((domain) => domain.startSession(currentCharacter()));
-        now.value = Date.now();
-        app.notify('开始记录游戏时间');
-    } catch (failure) {
-        app.notify(failure instanceof Error ? failure.message : String(failure), true);
-    }
+    remember();
+    onlineMode.value = 'start';
 }
 /** 结束计时：落会话与点卡流水，顺手把涉及的那几天同步进账号账本。 */
 async function stopGame() {
@@ -356,21 +374,22 @@ function askRemove(tx: Transaction) {
     remember();
     removing.value = tx;
 }
-async function confirmRemove() {
-    const tx = removing.value;
-    if (!tx || app.busy) return;
-    removeError.value = '';
-    try {
-        // removeTransaction 只改内存，必须自己套一层 commit 才会落盘。
-        await app.execute((domain) => domain.commit(() => domain.removeTransaction(tx.id)));
-        removing.value = null;
-        app.notify('已移除该记录');
-        await syncAccount([tx.date]);
-        await nextTick();
-        restore();
-    } catch (failure) {
-        removeError.value = failure instanceof Error ? failure.message : String(failure);
-    }
+/** 删除弹窗确认之后：关窗、提示，再把涉及的日期重新同步进账号。 */
+async function removed(dates: string[]) {
+    removing.value = null;
+    app.notify('已删除该记录');
+    await syncAccount(dates || []);
+    await nextTick();
+    restore();
+}
+/** 编辑弹窗里点「删除这条」：关掉编辑器，直接进统一的那套删除确认。 */
+function removeFromEditor() {
+    const tx = editing.value;
+    if (!tx) return;
+    editing.value = null;
+    // 焦点原本在编辑器按钮上，关掉后已经断开，交给 restore 回落到速记网格。
+    opener.value = null;
+    removing.value = plain(tx) as Transaction;
 }
 /** 收益记录弹窗里的编辑入口：只有速记产生的金额记录能改，物品与点卡不在这里动。 */
 function editFromList(tx: Transaction) {
@@ -391,8 +410,12 @@ async function recordsChanged(dates: string[]) {
 }
 /** 补记在线时长、回拨开始时间之后，涉及的那几天都要重新同步。 */
 async function onlineSaved(dates: string[]) {
+    const wasStart = onlineMode.value === 'start';
     onlineMode.value = null;
+    if (wasStart) now.value = Date.now();
     await syncAccount(dates || []);
+    await nextTick();
+    restore();
 }
 </script>
 <template>
@@ -506,7 +529,7 @@ async function onlineSaved(dates: string[]) {
                         <small>{{ rangeText }}</small>
                     </header>
                     <ul v-if="loot.length" class="loot-list">
-                        <li v-for="tx in loot" :key="tx.id">
+                        <li v-for="tx in lootShown" :key="tx.id">
                             <div class="loot-row">
                                 <span class="loot-icon">
                                     <img
@@ -544,10 +567,20 @@ async function onlineSaved(dates: string[]) {
                     </p>
                     <footer class="loot-footer">
                         <span class="loot-sum">
-                            共
-                            <b>{{ loot.length }}</b>
-                            条 · 合计
-                            <b>{{ U.fmtMoney(lootValue) }}</b>
+                            <span>
+                                共
+                                <b>{{ loot.length }}</b>
+                                条
+                                <span v-if="loot.length > LOOT_LIMIT" class="loot-more">
+                                    · 显示最近 {{ LOOT_LIMIT }} 条
+                                </span>
+                            </span>
+                            <span class="loot-totals">
+                                金币
+                                <b>{{ U.fmtMoney(lootMoney) }}</b>
+                                · 物品
+                                <b>{{ U.fmtMoney(lootItem) }}</b>
+                            </span>
                         </span>
                         <button
                             class="btn compact"
@@ -561,7 +594,19 @@ async function onlineSaved(dates: string[]) {
             </div>
         </template>
     </div>
-    <IncomeEditor v-if="editing" :tx="editing" @close="editing = null" @saved="saved" />
+    <IncomeEditor
+        v-if="editing"
+        :tx="editing"
+        @close="editing = null"
+        @saved="saved"
+        @remove="removeFromEditor"
+    />
+    <IncomeDeleteDialog
+        v-if="removing"
+        :tx="removing"
+        @close="removing = null"
+        @deleted="removed"
+    />
     <IncomeRecords
         v-if="recordsOpen"
         :range="range"
@@ -591,20 +636,7 @@ async function onlineSaved(dates: string[]) {
         @close="settingsOpen = false"
         @saved="settingsOpen = false"
     />
-    <BaseModal v-if="removing" title="移除收益记录" :busy="app.busy" @close="removing = null">
-        <p>确定移除「{{ removing.itemName || removing.note || '物品' }}」这一条吗？</p>
-        <p v-if="removing.saleId">它已经关联了成交收入，移除后成交记录也会一起删除，且无法恢复。</p>
-        <p v-else>移除后物品估值会重新计算，且无法恢复。</p>
-        <p v-if="removeError" class="error" role="alert">{{ removeError }}</p>
-        <template #footer="{ close }">
-            <button class="btn" autofocus :disabled="app.busy" @click="close">取消</button>
-            <button class="btn danger" :disabled="app.busy" @click="confirmRemove">
-                {{ app.busy ? '移除中…' : '确认移除' }}
-            </button>
-        </template>
-    </BaseModal>
 </template>
-
 <style scoped>
 .income-filters {
     display: flex;
@@ -868,7 +900,19 @@ async function onlineSaved(dates: string[]) {
     font-size: 12.5px;
 }
 .loot-sum {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     min-width: 0;
+    line-height: 1.45;
+}
+.loot-totals {
+    white-space: nowrap;
+}
+/* 模板空白会被 condense，提示与计数之间靠 margin 分隔而不是靠空格。 */
+.loot-more {
+    margin-left: 2px;
+    color: var(--line-2);
 }
 .empty-line {
     margin: 14px 0;

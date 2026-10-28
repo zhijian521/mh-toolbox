@@ -247,20 +247,36 @@ onMounted(application.initialize);
     display: flex;
     flex-direction: column;
 }
+/*
+ * 成功与失败要能一眼分开：只看文字颜色的差别在余光里几乎等于没有。
+ * 底色、边框、前置符号三处同时变，扫一眼就知道刚才那下成没成。
+ */
 .toast {
     position: fixed;
     bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
     padding: 11px 20px;
-    border: 1px solid var(--line-2);
+    border: 1px solid color-mix(in srgb, var(--green) 45%, var(--line));
     border-radius: 4px;
-    background: var(--paper);
+    background: color-mix(in srgb, var(--green) 10%, var(--paper));
     box-shadow: 0 3px 12px #2f2a2414;
     color: var(--green);
     z-index: 100;
 }
+.toast::before {
+    content: '✓';
+    font-weight: 700;
+}
 .toast.error {
+    border-color: color-mix(in srgb, var(--red) 45%, var(--line));
+    background: color-mix(in srgb, var(--red) 9%, var(--paper));
     color: var(--red);
+}
+.toast.error::before {
+    content: '!';
 }
 </style>

@@ -4,6 +4,14 @@
 /** @typedef {Partial<Domain> & ThisType<Domain>} OnlineMixin */
 
 /**
+ * 每个角色每小时消耗的点卡点数。
+ *
+ * 游戏规则，不是用户设置——所以写成常量而不是拆进 `quickSettings`。
+ * 页面上的文案也从这里取，避免改了公式却漏掉提示文字。
+ */
+export const POINTS_PER_HOUR = 6;
+
+/**
  * @param {Domain} D
  * @param {any} U
  * @param {unknown} _gateway
@@ -179,7 +187,10 @@ export default function install(D, U, _gateway, _localStorage) {
                 if (session.mode !== 'legacy') {
                     session.cost =
                         Math.round(
-                            ((session.minutes / 60) * 6 * session.accounts * session.cardPrice) /
+                            ((session.minutes / 60) *
+                                POINTS_PER_HOUR *
+                                session.accounts *
+                                session.cardPrice) /
                                 100,
                         ) / 100;
                 }

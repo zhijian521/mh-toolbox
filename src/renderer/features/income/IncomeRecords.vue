@@ -7,6 +7,7 @@ import AppIcon from '../../components/AppIcon.vue';
 import BaseModal from '../../components/BaseModal.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
 import RangeFilter from '../../components/RangeFilter.vue';
+import IncomeDeleteDialog from './IncomeDeleteDialog.vue';
 
 /**
  * 收益的全部记录。
@@ -43,7 +44,6 @@ const filters = reactive<{
 });
 const page = ref(1);
 const pendingDelete = ref<Transaction | null>(null);
-const deleteError = ref('');
 const listEl = ref<HTMLElement>();
 const closeButton = ref<HTMLButtonElement>();
 
@@ -115,7 +115,6 @@ watch(
     () => {
         page.value = 1;
         pendingDelete.value = null;
-        deleteError.value = '';
     },
 );
 
@@ -125,61 +124,6 @@ function isItem(tx: Transaction) {
 /** 只有速记产生的金额记录能改；物品与成交的金额是算出来的，不在这里动。 */
 function canEdit(tx: Transaction) {
     return !tx.sessionId && !isItem(tx) && !tx.itemRecordId;
-}
-/** 物品记录挂着的成交记录：删物品时它们会一起消失，确认窗要说清楚。 */
-function salesOf(tx: Transaction) {
-    return all.value.filter((item) => item.itemRecordId === tx.id);
-}
-function deleteTitle(tx: Transaction) {
-    if (tx.sessionId) return '删除点卡记录';
-    if (isItem(tx)) return '删除物品记录';
-    if (tx.itemRecordId) return '删除成交记录';
-    return '删除记录';
-}
-/** 点卡流水对应的会话；找不到说明是历史遗留流水，删它就只删流水。 */
-function sessionOf(tx: Transaction) {
-    if (!tx.sessionId) return null;
-    return rules.state.sessions.find((item) => item.id === tx.sessionId) ?? null;
-}
-/**
- * 删点卡行的补充说明。
- *
- * 点卡是「会话 × 参数」算出来的成本，只删费用会留下时长还在、成本消失的错账，
- * 所以删除连带会话；跨天计时按天拆成多行流水，那些行也会一起消失。
- */
-function sessionDeleteNote(tx: Transaction) {
-    if (!tx.sessionId) return '';
-    const minutes = Number(sessionOf(tx)?.minutes);
-    const rows = all.value.filter((item) => item.sessionId === tx.sessionId).length;
-    const when =
-        Number.isFinite(minutes) && minutes > 0 ? '在线 ' + U.fmtMinutes(minutes) : '这段计时';
-    return (
-        '这段计时（' +
-        when +
-        '）会一并删除：点卡由在线记录算出来，只删费用会让时长和成本对不上' +
-        (rows > 1 ? '；跨天拆出的 ' + rows + ' 行点卡也会一起消失' : '') +
-        '。'
-    );
-}
-/**
- * 删物品与成交记录的补充说明。
- *
- * 成交记录挂着物品（`itemRecordId`），物品一删它们就成了无主收入，所以一起删；
- * 反过来删成交时，物品要退回「持有」，否则会出现「一件已卖出却还在手里」的假账。
- */
-function itemDeleteNote(tx: Transaction) {
-    if (tx.itemRecordId) return '这件物品会回到「持有」，成交收入从汇总里扣除。';
-    if (!isItem(tx)) return '';
-    const sales = salesOf(tx);
-    if (!sales.length) return '物品估值与汇总会重新计算，且无法恢复。';
-    const total = sales.reduce((sum, sale) => sum + (Number(sale.amount) || 0), 0);
-    return (
-        '它已有 ' +
-        sales.length +
-        ' 条成交记录（合计 ' +
-        U.fmtMoney(total) +
-        '），会一并删除：成交挂在物品上，单独留着就是无主收入。'
-    );
 }
 function kindText(tx: Transaction) {
     if (isItem(tx)) return '物品';
@@ -211,35 +155,20 @@ function resetFilters() {
 }
 function cancelDelete() {
     pendingDelete.value = null;
-    deleteError.value = '';
 }
-async function remove() {
-    const tx = pendingDelete.value;
-    if (!tx || app.busy) return;
-    deleteError.value = '';
-    // 先取出来：删除后 pendingDelete 会清空，闭包里不能再读它。
-    const sessionId = tx.sessionId;
-    // 受影响的日期：点卡行跨天会拆成多行，删一段会话就要重算它覆盖的每一天。
-    const dates = sessionId
-        ? [...new Set(all.value.filter((item) => item.sessionId === sessionId).map((t) => t.date))]
-        : [tx.date];
-    try {
-        // removeTransaction / removeSession 都只改内存，必须自己套一层 commit 才会落盘。
-        await app.execute((domain) =>
-            domain.commit(() =>
-                sessionId ? domain.removeSession(sessionId) : domain.removeTransaction(tx.id),
-            ),
-        );
-        pendingDelete.value = null;
-        app.notify(sessionId ? '点卡与对应在线记录已删除' : '记录已删除');
-        emit('changed', dates);
-        await nextTick();
-        const target =
-            listEl.value?.querySelector<HTMLButtonElement>('button') ?? closeButton.value;
-        target?.focus({ preventScroll: true });
-    } catch (failure) {
-        deleteError.value = failure instanceof Error ? failure.message : String(failure);
-    }
+/**
+ * 共用删除弹窗确认之后：关窗、提示、把受影响的日期交给页面重新同步。
+ *
+ * 点卡行跨天会拆成多行，删一段会话就要重算它覆盖的每一天，所以日期由弹窗算好带回来。
+ */
+async function deleted(dates: string[]) {
+    const wasSession = !!pendingDelete.value?.sessionId;
+    pendingDelete.value = null;
+    app.notify(wasSession ? '点卡与对应在线记录已删除' : '记录已删除');
+    emit('changed', dates || []);
+    await nextTick();
+    const target = listEl.value?.querySelector<HTMLButtonElement>('button') ?? closeButton.value;
+    target?.focus({ preventScroll: true });
 }
 </script>
 <template>
@@ -372,41 +301,12 @@ async function remove() {
             <button ref="closeButton" class="btn" @click="close">关闭</button>
         </template>
     </BaseModal>
-    <BaseModal
+    <IncomeDeleteDialog
         v-if="pendingDelete"
-        :title="deleteTitle(pendingDelete)"
-        :busy="app.busy"
+        :tx="pendingDelete"
         @close="cancelDelete"
-    >
-        <p>
-            确定删除 {{ pendingDelete.date }} 的「{{
-                pendingDelete.note || pendingDelete.itemName || pendingDelete.category
-            }}」吗？
-        </p>
-        <p v-if="isItem(pendingDelete)">
-            按速记单价折算
-            <b>{{ U.fmtMoney(pendingDelete.amount) }}</b>
-            ，删除后物品估值与汇总会重新计算，且无法恢复。
-        </p>
-        <p v-else>
-            金额
-            <b>{{ signedAmount(pendingDelete) }}</b>
-            ，删除后汇总与笔数会重新计算，且无法恢复。
-        </p>
-        <p v-if="pendingDelete.sessionId" class="hint">
-            {{ sessionDeleteNote(pendingDelete) }}
-        </p>
-        <p v-if="itemDeleteNote(pendingDelete)" class="hint">
-            {{ itemDeleteNote(pendingDelete) }}
-        </p>
-        <p v-if="deleteError" class="error" role="alert">{{ deleteError }}</p>
-        <template #footer="{ close }">
-            <button class="btn" autofocus :disabled="app.busy" @click="close">取消</button>
-            <button class="btn danger" :disabled="app.busy" @click="remove">
-                {{ app.busy ? '删除中…' : '确认删除' }}
-            </button>
-        </template>
-    </BaseModal>
+        @deleted="deleted"
+    />
 </template>
 
 <style scoped>

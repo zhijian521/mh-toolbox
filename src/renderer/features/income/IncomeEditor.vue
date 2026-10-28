@@ -20,7 +20,7 @@ import BaseSelect from '../../components/BaseSelect.vue';
  * 保存时固定写 `cash`。
  */
 const props = defineProps<{ tx: Transaction }>();
-const emit = defineEmits<{ close: []; saved: [] }>();
+const emit = defineEmits<{ close: []; saved: []; remove: [] }>();
 const app = useApplication();
 const rules = app.rules();
 
@@ -149,7 +149,19 @@ async function save() {
             <p v-if="error" class="error form-error" role="alert">{{ error }}</p>
         </form>
         <template #footer="{ close }">
-            <span class="hint footer-hint">金额单位为万，收益账本只记梦幻币。</span>
+            <!--
+                删除放在编辑器里是因为「改着改着发现整条记错了」是最常见的路径：
+                先撤销修改再出去找列表行，比直接删掉多两步。
+                实际的确认与连带删除仍在页面那层做，这里只把意图交出去。
+            -->
+            <button
+                class="btn danger foot-delete"
+                type="button"
+                :disabled="app.busy"
+                @click="emit('remove')"
+            >
+                删除这条
+            </button>
             <button class="btn" :disabled="app.busy" @click="close">取消</button>
             <button class="btn primary" type="submit" form="income-form" :disabled="app.busy">
                 {{ app.busy ? '保存中…' : '保存记录' }}
@@ -162,5 +174,9 @@ async function save() {
 .form-error {
     margin-top: 12px;
     font-size: 13px;
+}
+/* 删除靠左、其余按钮靠右，避免和提示文字挤成一段。 */
+.foot-delete {
+    margin-right: auto;
 }
 </style>
