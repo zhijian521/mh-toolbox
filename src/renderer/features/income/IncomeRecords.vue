@@ -2,6 +2,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import type { DateRangeValue, Transaction } from '../../app/types';
 import { useApplication } from '../../stores/application';
+import { desktop } from '../../services/desktop';
 import { U } from '../../domain/util.js';
 import AppIcon from '../../components/AppIcon.vue';
 import BaseModal from '../../components/BaseModal.vue';
@@ -136,7 +137,7 @@ function titleOf(tx: Transaction) {
     return isItem(tx) ? tx.itemName || '物品' : tx.category;
 }
 function stateOf(tx: Transaction) {
-    // 不显示「剩 N / N」：收益页不记库存，物品只按标价算价值。
+    // 不显示「剩 N / N」：收益页不记库存，物品只按当前单价算价值。
     if (isItem(tx)) return rules.itemStatuses[tx.status ?? ''] || '持有';
     if (tx.itemRecordId) return '成交 ×' + (tx.saleQuantity ?? 0);
     if (!tx.sessionId) return '速记';
@@ -152,6 +153,35 @@ function resetFilters() {
         keyword: '',
         range: { preset: 'all', from: '', to: '' },
     });
+}
+/**
+ * 导出当前筛选结果。
+ *
+ * 导的是 `list` 而不是 `all`：用户在这层筛完才点导出，导出的就该是眼前这套。
+ * 分页不影响——`list` 是筛选后的全量，不是当前这一页。
+ */
+async function exportCsv() {
+    if (!list.value.length) return;
+    try {
+        const stamp =
+            filters.range.from && filters.range.to
+                ? filters.range.from + '_' + filters.range.to
+                : U.today();
+        const saved = await desktop().saveTextFile(rules.recordsCsv(list.value), {
+            title: '导出收益记录',
+            defaultName: '收益记录-' + stamp + '.csv',
+            filterName: 'CSV 表格',
+            ext: 'csv',
+        });
+        if (saved.canceled) return;
+        if (!saved.ok) {
+            app.notify(saved.error || '导出失败', true);
+            return;
+        }
+        app.notify('已导出 ' + list.value.length + ' 笔到 ' + saved.filePath);
+    } catch (failure) {
+        app.notify(failure instanceof Error ? failure.message : String(failure), true);
+    }
 }
 function cancelDelete() {
     pendingDelete.value = null;
@@ -263,7 +293,7 @@ async function deleted(dates: string[]) {
                     </span>
                     <span class="cell-state">{{ stateOf(tx) }}</span>
                     <span class="cell-amount" :class="tx.kind">
-                        {{ isItem(tx) ? U.fmtMoney(tx.amount) : signedAmount(tx) }}
+                        {{ isItem(tx) ? U.fmtMoney(rules.itemValue(tx)) : signedAmount(tx) }}
                         <small v-if="isItem(tx)">估值</small>
                     </span>
                     <span class="cell-ops">
@@ -298,6 +328,9 @@ async function deleted(dates: string[]) {
                     下一页
                 </button>
             </div>
+            <button class="btn compact" :disabled="!list.length" @click="exportCsv">
+                导出 CSV
+            </button>
             <button ref="closeButton" class="btn" @click="close">关闭</button>
         </template>
     </BaseModal>
@@ -448,7 +481,7 @@ async function deleted(dates: string[]) {
     color: var(--red);
     border-color: color-mix(in srgb, var(--red) 40%, transparent);
 }
-/* 物品按标价算价值，不进当期收支。 */
+/* 物品按当前单价算价值，不进当期收支。 */
 .badge.item {
     color: var(--muted);
 }

@@ -16,6 +16,7 @@ export default function install(D, _U, _gateway, _localStorage) {
         /** @type {StatisticsMixin} */ ({
             /** @param {any[]} txs */
             stats(txs) {
+                const self = this;
                 const r = {
                     income: 0,
                     expense: 0,
@@ -25,17 +26,16 @@ export default function install(D, _U, _gateway, _localStorage) {
                     reserveIncome: 0,
                     minutes: 0,
                     count: txs.length,
-                    /* 记账口径：范围内每条物品记录的数量 × 单价，与卖没卖无关。 */
+                    /* 记账口径：范围内每条物品记录按当前单价折算，与卖没卖无关。 */
                     itemValue: 0,
                     itemQty: 0,
                 };
                 txs.forEach(function (t) {
                     if (t.ledger === 'account') return;
                     if (t.recordType === 'item') {
-                        // 记这条物品时的标价，卖出不影响它：这里要的是「打了多少东西」，不是库存。
-                        const quantity = Number(t.quantity) || 0;
-                        r.itemValue += quantity * (Number(t.unitPrice) || 0);
-                        r.itemQty += quantity;
+                        // 价值按「当前单价」算，卖没卖不影响：这里要的是「打了多少东西、值多少」。
+                        r.itemValue += self.itemValue(t);
+                        r.itemQty += Number(t.quantity) || 0;
                         return;
                     }
                     const amt = Number(t.amount) || 0;

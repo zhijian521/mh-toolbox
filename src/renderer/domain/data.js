@@ -209,13 +209,34 @@ export function createData(localStorage) {
             return (list || this.state.transactions).filter((t) => t.ledger === 'account');
         },
         /**
+         * 物品记录的计价单价（万）：有当前参考价就用它，否则退回记录里那一笔填的价。
+         *
+         * 界面显示「单价 × 数量」和统计汇总都走这里，避免两处各算一遍再对不上。
+         * @this {Domain}
+         * @param {any} t
+         * @returns {number}
+         */
+        itemUnitPrice(t) {
+            const current = this.itemPrice(t && t.itemId ? String(t.itemId) : '');
+            return current > 0 ? current / 10000 : Number(t && t.unitPrice) || 0;
+        },
+
+        /**
+         * 物品记录的估值：数量 × **当前**参考单价。
+         *
+         * 口径从「记录时的单价」改成「当前单价」是刻意的：这套工具不做出售与库存，
+         * 物品价值只在界面上表示「这些东西按今天的行情值多少」。改了物价就跟着变，
+         * 不用回头改一批历史记录。
+         *
+         * 没有当前单价的退回记录里的单价——不固定价格的物品（书、铁、兽决…）本来就
+         * 每条现填、不写回单价表，只能用记账那一刻填的数。
          * @this {Domain}
          * @param {any} t
          * @param {number} [quantity]
          * @returns {number}
          */
         itemValue(t, quantity = t.quantity) {
-            return Math.round((Number(quantity) || 0) * (Number(t.unitPrice) || 0) * 100) / 100;
+            return Math.round((Number(quantity) || 0) * this.itemUnitPrice(t) * 100) / 100;
         },
 
         /**

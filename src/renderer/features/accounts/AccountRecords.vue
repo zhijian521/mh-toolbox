@@ -2,6 +2,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import type { DateRangeValue, Transaction } from '../../app/types';
 import { useApplication } from '../../stores/application';
+import { desktop } from '../../services/desktop';
 import { U } from '../../domain/util.js';
 import AppIcon from '../../components/AppIcon.vue';
 import BaseModal from '../../components/BaseModal.vue';
@@ -142,6 +143,30 @@ function resetFilters() {
 function cancelDelete() {
     pendingDelete.value = null;
     deleteError.value = '';
+}
+/** 导出当前筛选结果：导的是眼前这套，不是全部。 */
+async function exportCsv() {
+    if (!list.value.length) return;
+    try {
+        const stamp =
+            filters.range.from && filters.range.to
+                ? filters.range.from + '_' + filters.range.to
+                : U.today();
+        const saved = await desktop().saveTextFile(rules.recordsCsv(list.value), {
+            title: '导出账号记录',
+            defaultName: '账号记录-' + stamp + '.csv',
+            filterName: 'CSV 表格',
+            ext: 'csv',
+        });
+        if (saved.canceled) return;
+        if (!saved.ok) {
+            app.notify(saved.error || '导出失败', true);
+            return;
+        }
+        app.notify('已导出 ' + list.value.length + ' 笔到 ' + saved.filePath);
+    } catch (failure) {
+        app.notify(failure instanceof Error ? failure.message : String(failure), true);
+    }
 }
 /** 手续费不占列宽，挪进悬停提示：金额列已经是扣费后的实收 / 加费后的实付。 */
 function feeNote(tx: Transaction) {
@@ -300,6 +325,9 @@ async function remove() {
                     下一页
                 </button>
             </div>
+            <button class="btn compact" :disabled="!list.length" @click="exportCsv">
+                导出 CSV
+            </button>
             <button class="btn" @click="emit('add')">＋ 记一笔</button>
             <button ref="closeButton" class="btn" @click="close">关闭</button>
         </template>

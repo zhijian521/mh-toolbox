@@ -18,7 +18,7 @@ import RangeFilter from '../../components/RangeFilter.vue';
  * 两个账本的区间是分开的：日常收益按「本日」看（当天打了多少），账号账本按「本月」看
  * （买卖是低频大额）。共用角色筛选，换角色三块一起变。
  *
- * 物品只取收益页的口径（按速记时标价算价值，`itemValue`）。「持有物品估值」是库存口径，
+ * 物品只取收益页的口径（按当前参考单价算价值，`itemValue`）。「持有物品估值」是库存口径，
  * 同一个词两种数会让人以为哪边算错了，所以总览里不出现。
  *
  * 趋势图固定看「截至区间结束的 14 天」，与统计卡的区间起点无关：选「本日」时统计卡只有
@@ -111,7 +111,7 @@ const statCards = computed(() => {
             key: 'item',
             label: '物品估值',
             value: U.fmtMoney(s.itemValue),
-            note: s.itemQty + ' 件 · 按速记标价',
+            note: s.itemQty + ' 件 · 按当前物价',
             tone: '',
         },
         {

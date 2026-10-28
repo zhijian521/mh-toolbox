@@ -18,6 +18,7 @@ import IncomeEditor from './IncomeEditor.vue';
 import IncomeRecords from './IncomeRecords.vue';
 import IncomeDeleteDialog from './IncomeDeleteDialog.vue';
 import ItemPriceDialog from './ItemPriceDialog.vue';
+import PriceBulkDialog from './PriceBulkDialog.vue';
 import OnlineDialog from './OnlineDialog.vue';
 import QuickSettings from './QuickSettings.vue';
 
@@ -34,9 +35,10 @@ import QuickSettings from './QuickSettings.vue';
  * - 不固定价格：价格随等级、品类浮动（书、铁、兽决…），每次点击现填一次单价，
  *   只用于那一条记录，不写回单价表。
  *
- * 物品记录不计入收支——每件按记下来时的单价算出价值，不区分卖没卖（不记库存），
- * 卖出时才由成交记录产生梦幻币收入。顶部两张卡因此是两条平行的口径：
- * 物品值多少、梦幻币净赚多少。
+ * 物品记录不计入收支——每件按**当前参考单价**算出价值，不区分卖没卖（不记库存），
+ * 卖出时才由成交记录产生梦幻币收入。改价之后历史记录的估值跟着变，这是有意的：
+ * 物品那张卡回答的是「这些货按今天的行情值多少」，不是「当时按什么价记的」。
+ * 顶部几张卡因此是平行的口径：物品值多少、梦幻币净赚多少，互不相加。
  *
  * **账号那条「游戏收益」是实时同步的**：速记、删记录、补/删在线时长之后，当天每角色的
  * 「速记金币 + 物品估值 − 点卡」会立刻改写账号账本里那条记录（同一天只留一条）。
@@ -62,6 +64,8 @@ const recordsOpen = ref(false);
 const priceTarget = ref<{ item: CatalogItem; thenAdd: boolean; once: boolean } | null>(null);
 const onlineMode = ref<'start' | 'backfill' | 'adjust' | null>(null);
 const settingsOpen = ref(false);
+/** 批量设价弹窗：四十个固定价物品逐个右键太费事，给它一条 CSV 通道。 */
+const bulkOpen = ref(false);
 const removing = ref<Transaction | null>(null);
 /** 打开弹窗的那个按钮：保存后把焦点还回去。 */
 const opener = ref<HTMLElement | null>(null);
@@ -181,7 +185,7 @@ const quickRosterText = computed(() => {
 function lootMeta(tx: Transaction) {
     const detail =
         tx.recordType === 'item'
-            ? U.fmtMoney(Number(tx.unitPrice) || 0) + ' × ' + (tx.quantity ?? 0)
+            ? U.fmtMoney(rules.itemUnitPrice(tx)) + ' × ' + (tx.quantity ?? 0)
             : '金额记录';
     return rules.charName(tx.characterId) + ' · ' + detail;
 }
@@ -207,7 +211,7 @@ const statCards = computed(() => {
             key: 'item',
             label: '物品估值',
             value: U.fmtMoney(s.itemValue),
-            note: s.itemQty + ' 件 · 按速记单价计',
+            note: s.itemQty + ' 件 · 按当前物价计',
             tone: '',
         },
         {
@@ -247,11 +251,14 @@ function priceText(id: number) {
 function iconOf(id?: number) {
     return quickItemById(Number(id))?.icon || '';
 }
-/** 物品按记录时的数量 × 单价；「金币」这类金额记录直接取金额。 */
+/**
+ * 物品按当前单价 × 数量；「金币」这类金额记录直接取金额。
+ *
+ * 不读 `tx.amount`：物品记录的 amount 是记账那一刻的快照，改过物价之后它就和
+ * 顶部「物品估值」对不上了。领域 `itemValue` 是唯一口径，这里只转发。
+ */
 function holding(tx: Transaction) {
-    return tx.recordType === 'item'
-        ? (Number(tx.quantity) || 0) * (Number(tx.unitPrice) || 0)
-        : Number(tx.amount) || 0;
+    return tx.recordType === 'item' ? rules.itemValue(tx) : Number(tx.amount) || 0;
 }
 /** 一段计时覆盖的日期，跨夜时拆成多天；上限 8 天纯粹是防坏数据。 */
 function dayList(from: number, to: number) {
@@ -531,7 +538,12 @@ async function onlineSaved(dates: string[]) {
                             <b>{{ quickRosterText }}</b>
                         </small>
                     </header>
-                    <p class="section-label">固定价格 · 点一下记一条，右键改价</p>
+                    <p class="section-label">
+                        固定价格 · 点一下记一条，右键改价
+                        <button class="link-btn" :disabled="app.busy" @click="bulkOpen = true">
+                            批量设价…
+                        </button>
+                    </p>
                     <div class="item-grid">
                         <button
                             v-for="item in quickItems"
@@ -677,6 +689,7 @@ async function onlineSaved(dates: string[]) {
         @close="settingsOpen = false"
         @saved="settingsOpen = false"
     />
+    <PriceBulkDialog v-if="bulkOpen" @close="bulkOpen = false" />
 </template>
 <style scoped>
 .income-filters {
@@ -818,10 +831,31 @@ async function onlineSaved(dates: string[]) {
     font-weight: 600;
 }
 .section-label {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
     margin: 14px 0 8px;
     color: var(--muted);
     font-size: 11px;
     letter-spacing: 0.4px;
+}
+/* 「批量设价」是低频操作，做成小字链接挂在分组标题右侧，不占主界面的按钮位置。 */
+.link-btn {
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--gold);
+    font-size: 11px;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+}
+.link-btn:hover:not(:disabled) {
+    text-decoration: underline;
+}
+.link-btn:disabled {
+    color: var(--muted);
+    cursor: default;
 }
 .item-grid {
     display: grid;

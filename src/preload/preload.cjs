@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('mhV2', {
     info: () => ipcRenderer.invoke('mhv2:info'),
     importData: () => ipcRenderer.invoke('mhv2:importData'),
     exportData: (data) => ipcRenderer.invoke('mhv2:exportData', data),
+    // 通用文本导出/导入：CSV 记录与单价表共用，路径与体积校验都在主进程。
+    saveTextFile: (content, options) => ipcRenderer.invoke('mhv2:saveTextFile', content, options),
+    openTextFile: (options) => ipcRenderer.invoke('mhv2:openTextFile', options),
     window: (action) => ipcRenderer.invoke('mhv2:window', action),
     getWindowState: () => ipcRenderer.invoke('mhv2:windowState'),
     // 外观：偏好存在主进程，切换要走主进程才能改到 prefers-color-scheme。

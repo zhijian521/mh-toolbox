@@ -30,7 +30,7 @@ interface DomainState {
     gearLogs: any[];
     /** 物价卡片，与账本、角色、装备都没有外键。 */
     prices: any[];
-    /** 物品参考单价，键为物品名，值以原始梦幻币计价（不是万）。 */
+    /** 物品参考单价，键为物品目录 id，值以原始梦幻币计价（不是万）。 */
     itemPrices?: Record<string, number>;
     quickSettings?: Record<string, any>;
 }
@@ -162,6 +162,8 @@ interface Domain {
     earnings: (list: any[]) => any[];
     accounts: (list: any[]) => any[];
     itemValue: (t: any, quantity?: number) => number;
+    /** 物品记录的计价单价（万）：当前参考价优先，没有则退回记录里填的价。 */
+    itemUnitPrice: (t: any) => number;
     txIn: (charId: string, from: string, to: string, ledger?: string) => any[];
     goalTypeText: (v: string) => string;
     gearAction: (v: string) => { v: string; t: string; dir: number };
@@ -377,4 +379,15 @@ interface Domain {
     removePriceItem: (id: string) => Promise<void>;
     priceItemInput: (input: any) => { name: string; category: string; note: string };
     priceLogInput: (input: any) => { date: string; price: number; note: string };
+
+    // ---- item-prices.js：固定价物品单价表的 CSV 导入导出 ----
+    /** 导出单价表（带 BOM 的 CSV 文本），未设价的物品也占一行。 */
+    itemPriceCsv: () => string;
+    /** 导入单价表：空单元格表示不改，填 0 表示清除。 */
+    importItemPriceCsv: (text: string) => Promise<{
+        updated: number;
+        cleared: number;
+        skipped: number;
+        problems: string[];
+    }>;
 }

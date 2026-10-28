@@ -160,6 +160,65 @@ function registerIpc({ app, store, logger, theme, getWindow }) {
         }
     });
 
+    /**
+     * 通用文本导出（CSV、单价表）。
+     *
+     * 内容由渲染层生成，主进程只管挑路径与落盘。照样套 `assertExportPath`：
+     * 用户把文件名填成 data.json 并选到数据目录时，仍然不能覆盖正在用的档案。
+     *
+     * @param {string} content 已经带好换行与 BOM
+     * @param {{ title?: string, defaultName?: string, filterName?: string, ext?: string }} [options]
+     */
+    guarded('saveTextFile', async (content, options) => {
+        const opt = options && typeof options === 'object' ? options : {};
+        const ext = String(opt.ext || 'txt').replace(/^\./, '');
+        const defaultName = String(opt.defaultName || '导出.' + ext);
+        const result = await dialog.showSaveDialog(getWindow(), {
+            title: String(opt.title || '导出文件'),
+            defaultPath: defaultName,
+            filters: [
+                { name: String(opt.filterName || ext.toUpperCase() + ' 文件'), extensions: [ext] },
+            ],
+        });
+        if (result.canceled) return { ok: false, canceled: true };
+        try {
+            assertExportPath(result.filePath, app.getPath('appData'), store.file);
+            const text = String(content == null ? '' : content);
+            await fs.writeFile(result.filePath, text, 'utf8');
+            logger.info('已导出 ' + defaultName + '：' + result.filePath);
+            return { ok: true, filePath: result.filePath, bytes: Buffer.byteLength(text, 'utf8') };
+        } catch (error) {
+            logger.error('导出文本文件失败', error);
+            return { ok: false, error: '导出失败：' + error.message };
+        }
+    });
+    /**
+     * 通用文本导入（单价表）。与 `importData` 的区别：那个专读整份 JSON 备份，
+     * 标题和过滤器都写死了，拿来读单价表会让用户以为要覆盖全部数据。
+     */
+    guarded('openTextFile', async (options) => {
+        const opt = options && typeof options === 'object' ? options : {};
+        const ext = String(opt.ext || 'csv').replace(/^\./, '');
+        const result = await dialog.showOpenDialog(getWindow(), {
+            title: String(opt.title || '选择文件'),
+            properties: ['openFile'],
+            filters: [
+                { name: String(opt.filterName || ext.toUpperCase() + ' 文件'), extensions: [ext] },
+            ],
+        });
+        if (result.canceled) return { ok: false, canceled: true };
+        try {
+            const text = await fs.readFile(result.filePaths[0], 'utf8');
+            // 与备份导入同一条体积保护：畸形大文件会把渲染进程卡死。
+            if (text.length > 8 * 1024 * 1024)
+                return { ok: false, error: '文件超过 8 MB，已停止导入' };
+            return { ok: true, text, filePath: result.filePaths[0] };
+        } catch (error) {
+            logger.error('读取文本文件失败', error);
+            return { ok: false, error: '读取失败：' + error.message };
+        }
+    });
+
     // ---- 急救通道：数据打不开时使用，不依赖领域实例是否就绪 ----
 
     /** 把内存里的数据文件原样另存，即使无法解析也能抢救出来。 */

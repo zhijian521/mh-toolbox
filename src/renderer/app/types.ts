@@ -374,6 +374,20 @@ export interface Result {
     filePath?: string;
 }
 
+/**
+ * 保存/打开对话框的参数。
+ *
+ * 只暴露用户看得懂的四个字段：`ext` 同时决定默认扩展名与过滤器，
+ * 其余（编码、是否追加 BOM）由渲染层在内容里自己决定。
+ */
+export interface FileDialogOptions {
+    title?: string;
+    defaultName?: string;
+    filterName?: string;
+    /** 不带点，例如 `csv`。 */
+    ext?: string;
+}
+
 export interface BackupEntry {
     name: string;
     path: string;
@@ -424,6 +438,16 @@ export interface DesktopGateway {
     info(): Promise<AppInfo>;
     importData(): Promise<Result>;
     exportData(data: AppData): Promise<Result>;
+    /**
+     * 通用文本导出：记录 CSV、单价表。内容由渲染层生成，主进程只挑路径并落盘。
+     * 与 `exportData` 一样会拒绝覆盖正在使用的数据文件。
+     */
+    saveTextFile(
+        content: string,
+        options?: FileDialogOptions,
+    ): Promise<Result & { bytes?: number }>;
+    /** 通用文本导入：返回原文，解析与校验交给领域层。 */
+    openTextFile(options?: FileDialogOptions): Promise<Result & { text?: string }>;
     window(action: 'minimize' | 'maximize' | 'close'): Promise<void>;
     getWindowState(): Promise<WindowState>;
     onWindowStateChanged(listener: (state: WindowState) => void): () => void;
@@ -573,9 +597,22 @@ export interface Domain {
     itemRemaining(tx: Transaction): number;
     /** 数量 × 单价（默认用记录自己的数量），保留两位；物品价值的唯一口径。 */
     itemValue(tx: Transaction, quantity?: number): number;
+    /** 物品记录的计价单价（万）：当前参考价优先，没有则退回记录里填的价。 */
+    itemUnitPrice(tx: Transaction): number;
     /** 速记物品的参考单价，单位是游戏币（15000 = 1.5 万）。 */
     itemPrice(id: number | string): number;
     setItemPrice(id: string, price: number): void;
+    /** 把筛选后的流水渲染成 CSV（带 BOM、防公式注入）。 */
+    recordsCsv(records: Transaction[]): string;
+    /** 固定价物品的单价表导出成 CSV，未设价的也占一行。 */
+    itemPriceCsv(): string;
+    /** 单价表导入：空单元格表示不改，填 0 表示清除。 */
+    importItemPriceCsv(text: string): Promise<{
+        updated: number;
+        cleared: number;
+        skipped: number;
+        problems: string[];
+    }>;
     /** 速记参数：同时在线角色数与每点单价。 */
     setQuickSettings(input: { accounts?: number; cardPrice?: number }): void;
     /** 开始计时；`roster` 是这次同时在线的角色，多开时点卡按它平摊。 */

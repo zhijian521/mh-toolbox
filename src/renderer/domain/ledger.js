@@ -206,10 +206,9 @@ export default function install(D, U, _gateway, _localStorage) {
                                                 tx.kind !== 'income'
                                             )
                                                 return;
+                                            /* 与统计同口径：当前单价 × 数量，不读记录里的快照。 */
                                             if (tx.recordType === 'item')
-                                                items +=
-                                                    (Number(tx.quantity) || 0) *
-                                                    (Number(tx.unitPrice) || 0);
+                                                items += this.itemValue(tx);
                                             else cash += Number(tx.amount) || 0;
                                         },
                                     );
