@@ -21,6 +21,3 @@ export const priceCategories = [
 
 /** 分类缺失或为空时的兜底值。 */
 export const defaultPriceCategory = '其他';
-
-/** 计价单位的下拉选项，同样允许手填。 */
-export const priceUnits = ['个', '本', '张', '组', '套', '件', '颗'];

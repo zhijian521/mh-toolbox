@@ -213,6 +213,8 @@ export default function install(D, U, _gateway, _localStorage) {
                     }
                     const item = Object.assign({}, draft, {
                         id: U.uid(),
+                        // 单位不在界面上填写，新建统一记「个」；编辑时不动已有值。
+                        unit: '个',
                         logs: /** @type {any[]} */ ([]),
                         createdAt: now,
                         updatedAt: now,
@@ -310,9 +312,12 @@ export default function install(D, U, _gateway, _localStorage) {
 
             /**
              * 物品表单校验（只在交互式保存路径调用，可以抛错）。
+             *
+             * 不再收「计价单位」：界面上已经去掉这个字段，由新建时统一填「个」，
+             * 编辑时保留原值——旧数据里写过「本」「颗」的卡片不会被悄悄改掉。
              * @this {Domain}
              * @param {any} input
-             * @returns {{ name: string, category: string, unit: string, note: string }}
+             * @returns {{ name: string, category: string, note: string }}
              */
             priceItemInput(input) {
                 const raw = input && typeof input === 'object' ? input : {};
@@ -323,7 +328,6 @@ export default function install(D, U, _gateway, _localStorage) {
                 return {
                     name,
                     category: text(raw.category) || '其他',
-                    unit: text(raw.unit) || '个',
                     note: text(raw.note),
                 };
             },

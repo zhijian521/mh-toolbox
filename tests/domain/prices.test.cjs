@@ -60,13 +60,13 @@ test('新建物品：可选初始价，名称与同名都会被拦下', async ()
     const item = await D.savePriceItem({
         name: '高级兽决',
         category: '兽决',
-        unit: '本',
         note: '紫禁城',
         price: 120000,
         date: '2026-10-20',
     });
     assert.equal(item.name, '高级兽决');
-    assert.equal(item.unit, '本');
+    // 界面不再填计价单位，新建统一记「个」。
+    assert.equal(item.unit, '个');
     assert.equal(item.logs.length, 1);
     assert.equal(item.logs[0].price, 120000);
     assert.equal(item.logs[0].date, '2026-10-20');
@@ -76,6 +76,15 @@ test('新建物品：可选初始价，名称与同名都会被拦下', async ()
     const bare = await D.savePriceItem({ name: '无价格' });
     assert.deepEqual(bare.logs, []);
     assert.equal(D.priceCurrent(bare), null);
+
+    // 编辑不覆盖旧数据里的单位：早先版本记过「本」，界面上不再露出这个字段。
+    const legacy = D.normalize({
+        prices: [{ id: 'old', name: '旧卡片', unit: '本', logs: [] }],
+    }).prices[0];
+    D.state.prices.push(legacy);
+    await D.savePriceItem({ name: '旧卡片改名', category: '兽决' }, 'old');
+    assert.equal(legacy.unit, '本');
+    assert.equal(legacy.name, '旧卡片改名');
 
     await assert.rejects(() => D.savePriceItem({ name: ' 高级兽决 ' }), /同名/);
     await assert.rejects(() => D.savePriceItem({ name: '   ' }), /名称/);

@@ -9,11 +9,20 @@ import { useApplication } from '../../stores/application';
  * 一张卡的价格流水。
  *
  * 每行与「上一条更早的记录」比较，标出这次是涨了还是跌了；行的顺序就是领域给的
- * `priceLogsSorted`，这里不再排一遍。删除用行内确认，不再叠一层弹窗——记录本身
- * 可以重录，三层弹窗的键盘代价比误删更大。
+ * `priceLogsSorted`，这里不再排一遍。删除单条价格用行内确认，不再叠一层弹窗——
+ * 记录本身可以重录，三层弹窗的键盘代价比误删更大。
+ *
+ * 物品本身的编辑与删除放在这里：卡片上不再挂图标，历史弹窗是这张卡的「详情」入口。
+ * 这两件事由页面接走（先收起本弹窗，再开编辑或确认框），避免三层弹窗叠在一起。
  */
 const props = defineProps<{ item: PriceItem }>();
-const emit = defineEmits<{ close: []; add: []; edit: [log: PriceLog] }>();
+const emit = defineEmits<{
+    close: [];
+    add: [];
+    edit: [log: PriceLog];
+    editItem: [];
+    removeItem: [];
+}>();
 const app = useApplication();
 const rules = app.rules();
 
@@ -65,7 +74,7 @@ async function remove(log: PriceLog) {
                 <span class="summary-unit">{{ currentLabel.unit }}</span>
             </div>
             <div class="summary-side">
-                <span class="summary-label">当前价 · 每{{ item.unit || '个' }}</span>
+                <span class="summary-label">当前价</span>
                 <span class="summary-count">共 {{ total }} 条 · 分类 {{ item.category }}</span>
             </div>
         </div>
@@ -124,6 +133,14 @@ async function remove(log: PriceLog) {
         <p v-else class="empty-history">还没有价格记录。</p>
 
         <template #footer="{ close }">
+            <div class="foot-tools">
+                <button class="btn compact" :disabled="app.busy" @click="emit('editItem')">
+                    编辑物品
+                </button>
+                <button class="btn compact danger" :disabled="app.busy" @click="emit('removeItem')">
+                    删除
+                </button>
+            </div>
             <button class="btn" :disabled="app.busy" @click="close">关闭</button>
             <button class="btn primary" :disabled="app.busy" @click="emit('add')">＋ 记一条</button>
         </template>
@@ -238,5 +255,12 @@ async function remove(log: PriceLog) {
     text-align: center;
     color: var(--muted);
     font-size: 13px;
+}
+/* 弹窗底栏默认右对齐；物品级操作靠左，与「记一条」这类流水操作分开。 */
+.foot-tools {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: auto;
 }
 </style>

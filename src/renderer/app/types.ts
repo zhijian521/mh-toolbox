@@ -227,7 +227,6 @@ export interface PriceChange {
 export interface PriceItemInput {
     name: string;
     category: string;
-    unit: string;
     note: string;
     price?: number | string | null;
     date?: string;

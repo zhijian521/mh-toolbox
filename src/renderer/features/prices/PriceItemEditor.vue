@@ -1,53 +1,87 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, nextTick, reactive, ref } from 'vue';
 import type { PriceItem } from '../../app/types';
-import { priceUnits } from '../../game-data/price-catalog.js';
 import { U } from '../../domain/util.js';
 import { plain } from '../../services/desktop';
 import { useApplication } from '../../stores/application';
 import BaseDate from '../../components/BaseDate.vue';
 import BaseModal from '../../components/BaseModal.vue';
+import BaseSelect from '../../components/BaseSelect.vue';
 import NumberStepper from '../../components/NumberStepper.vue';
 
 /**
  * 新建 / 编辑物价卡片。
  *
- * 弹窗只维护「物品是什么」：名称、分类、单位、备注。价格走 `PriceLogEditor`（记价），
+ * 弹窗只维护「物品是什么」：名称、分类、备注。价格走 `PriceLogEditor`（记价），
  * 这样一张卡的价格只有一条写入路径，不会出现「编辑弹窗改价」与「记一条价」两套口径。
  * 新建时顺手记一条初始价，省掉建完再点一次「记价」。
+ *
+ * 分类用项目的 `BaseSelect`（和角色页、目标页同一个下拉），它只能选不能填，
+ * 所以最后一项「新建类型」切出一个输入框——既保持样式统一，也不堵住自定义分类。
  */
 const props = defineProps<{
     /** 传入表示编辑，不传表示新建。 */
     item?: PriceItem;
-    /** 名称建议，来自页面（常见物品目录），不在这里 import 游戏资料。 */
-    suggestions: string[];
 }>();
 const emit = defineEmits<{ close: []; saved: [id: string] }>();
 const app = useApplication();
 const rules = app.rules();
-const todayText = U.today();
+const CUSTOM = '__custom__';
 
 const draft = reactive({
     name: props.item?.name ?? '',
     // 默认留空：不替用户猜分类，保存时领域会兜底成「其他」。
     category: props.item?.category ?? '',
-    unit: props.item?.unit ?? '个',
     note: props.item?.note ?? '',
     price: '' as number | string,
-    date: todayText,
+    date: U.today(),
 });
-const initial = JSON.stringify(draft);
-const dirty = computed(() => JSON.stringify(draft) !== initial);
+const custom = ref(false);
+const customName = ref('');
+const customInput = ref<HTMLInputElement>();
 const error = ref('');
 const editing = computed(() => !!props.item);
-/** 分类与单位都允许手填：列表只做建议，用户填过的自定义值也要留在选项里。 */
-const categoryList = computed(() => [
-    ...new Set([...rules.priceCategories, draft.category].filter(Boolean)),
-]);
+const categoryOptions = computed(() =>
+    [...new Set([...rules.priceCategories, draft.category].filter(Boolean))]
+        .map((name) => ({ value: name, label: name }))
+        .concat([{ value: CUSTOM, label: '＋ 新建类型' }]),
+);
+const categoryPick = computed({
+    get: () => (custom.value ? CUSTOM : draft.category),
+    set: (value: string) => {
+        if (value === CUSTOM) {
+            custom.value = true;
+            void nextTick(() => customInput.value?.focus());
+            return;
+        }
+        custom.value = false;
+        customName.value = '';
+        draft.category = value;
+    },
+});
+
+const snapshot = () =>
+    JSON.stringify([
+        draft.name,
+        draft.category,
+        draft.note,
+        draft.price,
+        draft.date,
+        custom.value,
+        customName.value,
+    ]);
+const initial = snapshot();
+const dirty = computed(() => snapshot() !== initial);
 
 async function save() {
     if (app.busy) return;
     error.value = '';
+    const category = custom.value ? customName.value.trim() : draft.category.trim();
+    if (custom.value && !category) {
+        error.value = '请填写新类型的名称';
+        customInput.value?.focus();
+        return;
+    }
     const priceWan = draft.price === '' ? null : Number(draft.price);
     if (priceWan !== null && (!Number.isFinite(priceWan) || priceWan < 0)) {
         error.value = '初始价必须是不小于 0 的数字';
@@ -56,6 +90,7 @@ async function save() {
     try {
         const input = {
             ...plain(draft),
+            category,
             price: priceWan === null ? null : Math.round(priceWan * 10000),
         };
         const saved = await app.execute((domain) => domain.savePriceItem(input, props.item?.id));
@@ -82,46 +117,32 @@ async function save() {
                         <input
                             v-model="draft.name"
                             name="name"
-                            list="price-name-options"
                             maxlength="40"
                             autocomplete="off"
                             placeholder="例如：高级兽决"
                             autofocus
                         />
-                        <datalist id="price-name-options">
-                            <option v-for="name in suggestions" :key="name" :value="name" />
-                        </datalist>
                     </label>
-                    <div class="form-grid">
-                        <label>
-                            分类
-                            <input
-                                v-model="draft.category"
-                                name="category"
-                                list="price-category-options"
-                                maxlength="20"
-                                autocomplete="off"
-                                placeholder="选一个或自己填"
-                            />
-                            <datalist id="price-category-options">
-                                <option v-for="name in categoryList" :key="name" :value="name" />
-                            </datalist>
-                        </label>
-                        <label>
-                            计价单位
-                            <input
-                                v-model="draft.unit"
-                                name="unit"
-                                list="price-unit-options"
-                                maxlength="10"
-                                autocomplete="off"
-                                placeholder="个"
-                            />
-                            <datalist id="price-unit-options">
-                                <option v-for="name in priceUnits" :key="name" :value="name" />
-                            </datalist>
-                        </label>
-                    </div>
+                    <label>
+                        分类
+                        <BaseSelect
+                            v-model="categoryPick"
+                            label="物品分类"
+                            placeholder="选择分类"
+                            :options="categoryOptions"
+                        />
+                    </label>
+                    <label v-if="custom">
+                        新类型名称
+                        <input
+                            ref="customInput"
+                            v-model="customName"
+                            name="customCategory"
+                            maxlength="12"
+                            autocomplete="off"
+                            placeholder="例如：灵饰"
+                        />
+                    </label>
                     <template v-if="!editing">
                         <div class="initial-price">
                             <span class="field-text">当前价</span>
@@ -137,9 +158,6 @@ async function save() {
                             <span class="field-text">记录日期</span>
                             <BaseDate v-model="draft.date" label="价格记录日期" />
                         </div>
-                        <p class="hint">
-                            价格按「万」填写，例如 12.5 万填 12.5；留空则先建卡片，之后再记价。
-                        </p>
                     </template>
                     <p v-else class="hint">改价请回卡片点「记价」，每次改价都会留下一条历史。</p>
                     <label>

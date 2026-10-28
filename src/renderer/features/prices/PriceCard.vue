@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { PriceChange, PriceItem, PriceLog } from '../../app/types';
-import AppIcon from '../../components/AppIcon.vue';
 import { useApplication } from '../../stores/application';
 
 /**
@@ -10,6 +9,9 @@ import { useApplication } from '../../stores/application';
  * 卡片只负责展示与派发操作：当前价、涨跌与显示口径全部来自领域层
  * （`priceCurrent` / `priceChange` / `priceLabel`），页面再把算好的走势点集传进来，
  * 卡片里不重算一遍，否则卡片与历史弹窗迟早给出两个价。
+ *
+ * 编辑与删除物品的入口放在历史弹窗里：卡片上一排图标会把紧凑的版面重新撑开，
+ * 而这两件事本来也不是高频操作。
  */
 const props = defineProps<{
     item: PriceItem;
@@ -24,18 +26,12 @@ const props = defineProps<{
 const emit = defineEmits<{
     log: [];
     history: [];
-    edit: [];
-    remove: [];
 }>();
 const rules = useApplication().rules();
 
 const label = computed(() => rules.priceLabel(props.current ? props.current.price : null));
-const updateText = computed(() => {
-    if (props.current) return props.current.date.slice(5);
-    return '未记录';
-});
+const updateText = computed(() => (props.current ? props.current.date.slice(5) : '未记录'));
 const logCount = computed(() => props.item.logs.length);
-const unit = computed(() => props.item.unit || '个');
 
 const delta = computed(() => {
     const change = props.change;
@@ -85,8 +81,8 @@ const sparkPoints = computed(() => {
     const min = Math.min(...values);
     const max = Math.max(...values);
     const span = max - min || 1;
-    const width = 64;
-    const height = 18;
+    const width = 52;
+    const height = 15;
     const pad = 1.5;
     return values
         .map((value, index) => {
@@ -107,26 +103,7 @@ const sparkPoints = computed(() => {
     >
         <header class="card-head">
             <span class="card-category">{{ item.category }}</span>
-            <div class="actions card-tools">
-                <button
-                    class="icon-button"
-                    :disabled="busy"
-                    aria-label="编辑物品"
-                    title="编辑物品"
-                    @click="emit('edit')"
-                >
-                    <AppIcon name="edit" :size="15" />
-                </button>
-                <button
-                    class="icon-button danger"
-                    :disabled="busy"
-                    aria-label="删除物品"
-                    title="删除物品"
-                    @click="emit('remove')"
-                >
-                    <AppIcon name="trash" :size="15" />
-                </button>
-            </div>
+            <span class="card-count">{{ logCount }} 条</span>
         </header>
 
         <h2 class="card-name" :title="item.name">{{ item.name }}</h2>
@@ -137,7 +114,7 @@ const sparkPoints = computed(() => {
             <svg
                 v-if="sparkPoints"
                 class="price-spark"
-                viewBox="0 0 64 18"
+                viewBox="0 0 52 15"
                 :class="delta ? delta.dir : 'flat'"
                 aria-hidden="true"
             >
@@ -152,18 +129,16 @@ const sparkPoints = computed(() => {
                 <span class="delta-since">较 {{ delta.since }}</span>
             </template>
             <template v-else-if="current">首次记录</template>
-            <template v-else>还没有价格，点「记价」补一条</template>
+            <template v-else>还没有价格</template>
         </p>
 
-        <p class="card-meta">
+        <p v-if="current || item.note" class="card-meta">
             <span>{{ updateText }}</span>
-            <span class="meta-dot">·</span>
-            <span>每{{ unit }}</span>
-            <span class="meta-dot">·</span>
-            <span>{{ logCount }} 条记录</span>
+            <template v-if="item.note">
+                <span class="meta-dot">·</span>
+                <span class="meta-note" :title="item.note">{{ item.note }}</span>
+            </template>
         </p>
-
-        <p v-if="item.note" class="card-note" :title="item.note">{{ item.note }}</p>
 
         <div class="actions card-actions">
             <button
@@ -174,12 +149,7 @@ const sparkPoints = computed(() => {
             >
                 ＋ 记价
             </button>
-            <button
-                class="btn compact"
-                :disabled="busy || !logCount"
-                aria-label="历史"
-                @click="emit('history')"
-            >
+            <button class="btn compact" :disabled="busy" aria-label="历史" @click="emit('history')">
                 历史
             </button>
         </div>
@@ -191,8 +161,8 @@ const sparkPoints = computed(() => {
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 14px 16px 13px 19px;
+    gap: 4px;
+    padding: 9px 12px 10px 14px;
     border: 1px solid var(--line);
     border-radius: 4px;
     background: var(--paper);
@@ -200,7 +170,6 @@ const sparkPoints = computed(() => {
     overflow: hidden;
     transition:
         border-color 120ms ease,
-        transform 120ms ease,
         box-shadow 120ms ease;
 }
 /* 分类竖条：比整块色底更克制，也避免一屏卡片变成调色盘。 */
@@ -214,61 +183,55 @@ const sparkPoints = computed(() => {
 }
 .price-card:hover {
     border-color: var(--line-2);
-    transform: translateY(-1px);
-    box-shadow: 0 3px 10px #2f2a240f;
+    box-shadow: 0 2px 8px #2f2a240f;
 }
 .card-head {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
     gap: 8px;
-    min-height: 24px;
+    font-size: 11px;
+    line-height: 1.5;
 }
 .card-category {
-    font-size: 11.5px;
     letter-spacing: 1px;
     color: var(--tone);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.card-tools {
-    gap: 2px;
-    flex-wrap: nowrap;
-    opacity: 0.7;
-    transition: opacity 120ms ease;
-}
-.price-card:hover .card-tools,
-.price-card:focus-within .card-tools {
-    opacity: 1;
-}
-.card-tools .icon-button {
-    width: 24px;
-    height: 24px;
+.card-count {
+    flex: none;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
 }
 .card-name {
-    font-size: 16px;
-    line-height: 1.45;
-    overflow-wrap: anywhere;
+    font-size: 14px;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .card-price {
     display: flex;
     align-items: baseline;
-    gap: 4px;
+    gap: 3px;
     min-width: 0;
 }
 .price-value {
-    font-size: 27px;
-    line-height: 1.15;
-    letter-spacing: -0.5px;
+    font-size: 22px;
+    line-height: 1.2;
+    letter-spacing: -0.3px;
     font-variant-numeric: tabular-nums;
     color: var(--ink);
 }
 .price-unit {
-    font-size: 13px;
+    font-size: 11.5px;
     color: var(--gold);
-    letter-spacing: 0.5px;
 }
 .price-spark {
-    width: 64px;
-    height: 18px;
+    width: 52px;
+    height: 15px;
     margin-left: auto;
     align-self: center;
     flex: none;
@@ -290,9 +253,9 @@ const sparkPoints = computed(() => {
 .card-delta {
     display: flex;
     align-items: baseline;
-    gap: 6px;
-    font-size: 12.5px;
-    min-height: 18px;
+    gap: 5px;
+    font-size: 11.5px;
+    min-height: 16px;
     color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
@@ -305,40 +268,36 @@ const sparkPoints = computed(() => {
 .card-delta.down .delta-pct {
     color: var(--green);
 }
-.delta-text {
-    font-variant-numeric: tabular-nums;
-}
+.delta-text,
 .delta-pct {
     font-variant-numeric: tabular-nums;
 }
 .delta-since {
-    color: var(--muted);
-    font-size: 12px;
+    font-size: 11px;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 .card-meta {
     display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11.5px;
+    align-items: baseline;
+    gap: 4px;
+    font-size: 11px;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    white-space: nowrap;
 }
 .meta-dot {
     opacity: 0.6;
 }
-.card-note {
-    font-size: 12.5px;
-    color: var(--muted);
-    line-height: 1.6;
+.meta-note {
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
 }
 .card-actions {
     margin-top: auto;
-    padding-top: 8px;
-    gap: 6px;
+    padding-top: 6px;
+    gap: 5px;
+    flex-wrap: nowrap;
 }
 </style>

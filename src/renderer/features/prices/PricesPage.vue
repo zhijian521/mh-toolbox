@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref } from 'vue';
 import type { PriceItem, PriceLog } from '../../app/types';
-import { quickCatalog } from '../../game-data/quick-items.js';
 import { plain } from '../../services/desktop';
 import { useApplication } from '../../stores/application';
 import AppIcon from '../../components/AppIcon.vue';
@@ -96,12 +95,6 @@ const description = computed(() => {
 const filtered = computed(
     () => !!filters.keyword.trim() || !!filters.category || filters.sort !== 'updated',
 );
-/** 常见物品名称只作为输入建议，不预置任何价格。 */
-const suggestions = computed(() => [...new Set(quickCatalog.map((item) => item.name))]);
-/** 编辑时传一份去代理的副本：弹窗里改的是草稿，不碰快照。 */
-function editItem(item: PriceItem) {
-    editing.value = { item: plain(item) as PriceItem };
-}
 /** 折线用的近 8 次价格，时间正序。 */
 function trendOf(item: PriceItem) {
     return rules
@@ -120,7 +113,7 @@ function resetFilters() {
     Object.assign(filters, { category: '', keyword: '', sort: 'updated' });
 }
 /** 保存后把焦点交给卡片上的对应按钮；卡片被筛掉时退回新建按钮，别让焦点掉回 body。 */
-async function focusCard(id: string, action = '编辑物品') {
+async function focusCard(id: string, action = '记价') {
     await nextTick();
     const target =
         content.value?.querySelector<HTMLButtonElement>(
@@ -153,6 +146,20 @@ function addFromHistory() {
     if (!item) return;
     history.value = null;
     logging.value = { item };
+}
+/** 物品级的编辑与删除挂在历史弹窗上，同样先收起它再开下一个弹窗。 */
+function editItemFromHistory() {
+    const item = history.value;
+    if (!item) return;
+    history.value = null;
+    editing.value = { item: plain(item) as PriceItem };
+}
+function removeFromHistory() {
+    const item = history.value;
+    if (!item) return;
+    history.value = null;
+    deleting.value = item;
+    deleteError.value = '';
 }
 async function remove() {
     const item = deleting.value;
@@ -228,11 +235,6 @@ async function remove() {
                 :busy="app.busy"
                 @log="logging = { item }"
                 @history="history = item"
-                @edit="editItem(item)"
-                @remove="
-                    deleting = item;
-                    deleteError = '';
-                "
             />
         </div>
     </div>
@@ -240,7 +242,6 @@ async function remove() {
     <PriceItemEditor
         v-if="editing"
         :item="editing.item"
-        :suggestions="suggestions"
         @close="editing = null"
         @saved="savedItem"
     />
@@ -257,6 +258,8 @@ async function remove() {
         @close="history = null"
         @add="addFromHistory"
         @edit="editLog"
+        @edit-item="editItemFromHistory"
+        @remove-item="removeFromHistory"
     />
     <BaseModal v-if="deleting" title="删除物价卡片" :busy="app.busy" @close="deleting = null">
         <p>确定删除「{{ deleting.name }}」吗？</p>
@@ -306,8 +309,9 @@ async function remove() {
 }
 .price-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
-    gap: 14px;
+    /* 210px 起：1280 宽的工作区能排下 4 列，一屏看到的价格条目翻一倍。 */
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 10px;
     align-items: stretch;
 }
 @media (max-width: 750px) {

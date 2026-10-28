@@ -370,6 +370,6 @@ interface Domain {
     savePriceLog: (itemId: string, input: any, logId?: string) => Promise<any>;
     removePriceLog: (itemId: string, logId: string) => Promise<void>;
     removePriceItem: (id: string) => Promise<void>;
-    priceItemInput: (input: any) => { name: string; category: string; unit: string; note: string };
+    priceItemInput: (input: any) => { name: string; category: string; note: string };
     priceLogInput: (input: any) => { date: string; price: number; note: string };
 }
