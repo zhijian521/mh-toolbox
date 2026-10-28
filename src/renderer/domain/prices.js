@@ -113,8 +113,12 @@ export default function install(D, U, _gateway, _localStorage) {
             },
 
             /**
-             * 与「上一条不同日期的记录」比：同一天改两次价不该算成一次涨跌。
-             * 不足两条记录或找不到更早日期时返回 null。
+             * 涨跌：优先与「上一条不同日期的记录」比，全部记录都落在同一天时退回上一条。
+             *
+             * 只认不同日期曾经让徽章永远不出现——一天内记两次价是常态（先记大概价、
+             * 回头核实再改），两天记录都在今天时 `find` 找不到基准，卡片就没有徽章。
+             * 跨天时基准仍是上一个不同日期，同一天补记不会把跨天涨跌冲掉。
+             * 不足两条返回 null。
              * @this {Domain}
              * @param {any} item
              * @returns {any}
@@ -123,11 +127,11 @@ export default function install(D, U, _gateway, _localStorage) {
                 const logs = this.priceLogsSorted(item);
                 if (logs.length < 2) return null;
                 const latest = logs[0];
-                const base = logs.find(
-                    (/** @type {any} */ log, /** @type {number} */ index) =>
-                        index > 0 && log.date !== latest.date,
-                );
-                if (!base) return null;
+                const base =
+                    logs.find(
+                        (/** @type {any} */ log, /** @type {number} */ index) =>
+                            index > 0 && log.date !== latest.date,
+                    ) || logs[1];
                 const delta = latest.price - base.price;
                 return {
                     delta,

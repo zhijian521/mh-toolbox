@@ -110,6 +110,29 @@ test('记价：同一天连记两条也能分出先后，涨跌与上一条不�
     assert.equal(change.since, '2026-10-01');
 });
 
+test('涨跌：全部记录都落在同一天时退回上一条，不再返回 null', async () => {
+    const D = make();
+    D.state = D.normalize({});
+    const item = await D.savePriceItem({
+        name: '垃圾内丹',
+        price: 110000,
+        date: '2026-10-28',
+    });
+    await D.savePriceLog(item.id, { date: '2026-10-28', price: 100000 });
+
+    // 一天内记两次价是常态，之前只认不同日期，这里会拿到 null、卡片没有徽章。
+    const change = D.priceChange(item);
+    assert.notEqual(change, null, '同一天记两次价也要能看到涨跌');
+    assert.equal(change.to, 100000);
+    assert.equal(change.from, 110000);
+    assert.equal(change.delta, -10000);
+    assert.equal(change.since, '2026-10-28');
+
+    // 同一天两条价格一样时给 delta = 0（卡片显示「持平」），同样不是 null。
+    await D.savePriceLog(item.id, { date: '2026-10-28', price: 100000 });
+    assert.equal(D.priceChange(item).delta, 0);
+});
+
 test('涨跌：不足两条返回 null，跌价给出负值', async () => {
     const D = make();
     D.state = D.normalize({});

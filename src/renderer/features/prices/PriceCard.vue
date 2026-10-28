@@ -45,10 +45,15 @@ const logCount = computed(() => props.item.logs.length);
 const badge = computed(() => {
     const change = props.change;
     if (!change) return null;
+    /*
+     * 两条记录都在同一天时，基准日期就是今天，写「较 10-28」容易被读成「跟昨天比」。
+     * 这时改成「同日上一条」，才说得清是今天内的变动。
+     */
+    const since = change.since === props.current?.date ? '同日上一条' : change.since;
     const amount = rules.priceLabel(Math.abs(change.delta));
     const money = amount.value + ' ' + amount.unit;
     if (change.delta === 0) {
-        return { dir: 'flat', text: '持平', title: '与 ' + change.since + ' 同价' };
+        return { dir: 'flat', text: '持平', title: '与 ' + since + ' 同价' };
     }
     const up = change.delta > 0;
     const pct = change.pct === null ? null : Math.abs(change.pct * 100);
@@ -56,7 +61,7 @@ const badge = computed(() => {
         dir: up ? 'up' : 'down',
         arrow: up ? '▲' : '▼',
         text: pct === null ? money : pct.toFixed(pct < 1 ? 1 : 0) + '%',
-        title: '较 ' + change.since + (up ? ' 涨 ' : ' 跌 ') + money,
+        title: '较 ' + since + (up ? ' 涨 ' : ' 跌 ') + money,
     };
 });
 
