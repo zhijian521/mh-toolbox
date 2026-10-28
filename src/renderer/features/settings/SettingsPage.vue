@@ -20,18 +20,104 @@ const counts = computed(() => [
     ['装备', app.data?.equipment.length],
 ]);
 /*
- * 使用帮助：每页一句，只写「这页能干什么」，不复述界面上的按钮。
- * 说得太长就没人看，八条各控制在 26 字以内。
+ * 使用帮助：每个页面一条，收起时只留「页名 + 一句概述」，展开才看具体操作。
+ *
+ * 概述那一句只回答「这页能干什么」，不超过 26 字；展开的步骤写「怎么操作」，
+ * 一条一个动作，按实际点击顺序排。步骤只写界面上真实存在的入口，
+ * 改了界面就要回来改这里——它比文档更容易被用户当真。
  */
 const helpItems = [
-    { page: '总览', text: '双账本合计、14 天趋势与目标进度' },
-    { page: '收益', text: '物品速记与在线计时，按天分账' },
-    { page: '账号', text: '人民币与梦幻币分开记，含买卖进出' },
-    { page: '目标', text: '长期目标与每次进度记录' },
-    { page: '装备', text: '装备栏与仓库，可粘贴或截图导入' },
-    { page: '角色', text: '档案、门派与养成进度' },
-    { page: '物价', text: '物品价格卡片与历史流水' },
-    { page: '设置', text: '备份、外观与这份帮助' },
+    {
+        page: '总览',
+        text: '收益、账号与目标的状态一览',
+        steps: [
+            '顶部先选角色和日期范围，两块账本各自独立。',
+            '收益默认看今天，账号默认看本月，改一边不影响另一边。',
+            '趋势固定展示截至区间结束的 14 天，切范围只挪窗口不换口径。',
+            '底部只列进行中的目标，完成的不显示。',
+            '这里只读：记账去收益页与账号页，记进度去目标页。',
+        ],
+    },
+    {
+        page: '收益',
+        text: '物品速记与在线计时，按天分账',
+        steps: [
+            '先在右上角选角色；多开时点「点卡」勾出正在玩的几个号。',
+            '点物品图标记一条。固定价直接记，右键卡片可以改价。',
+            '不固定价的物品每次弹窗填单价，适合未鉴定之类的浮动货。',
+            '「▶ 开始游戏」计时，点「■ 结束游戏」按在线角色平摊点卡。',
+            '忘了计时用「补在线时长」；开始时间记错用「调整开始时间」。',
+            '记录行右侧 ✕ 删掉误记；日常产出会自动同步成账号页的「游戏收益」。',
+        ],
+    },
+    {
+        page: '账号',
+        text: '人民币与梦幻币分账，含买卖进出',
+        steps: [
+            '「＋ 记一笔」手填；点快捷入口则类型与币种都已预设好。',
+            '十一个快捷入口：装备/召唤兽买卖、点卡充值购买、游戏币买卖、养成投入、游戏收益、其他收支。',
+            '人民币与梦幻币分开统计，储备金并入梦幻币。',
+            '收入扣手续费、支出加手续费，口径由领域统一算，页面不重算。',
+            '装备买卖在装备页「记变动」里记，这里只读展示，不要重复记。',
+            '当前区间没有记录但历史有时，点「查看全部时间」。',
+        ],
+    },
+    {
+        page: '目标',
+        text: '长期目标与每次进度记录',
+        steps: [
+            '「＋ 新建目标」选类型：养成、存钱或装备。',
+            '养成目标跟随角色档案自动算，不用手动记。',
+            '存钱与装备目标点卡片上的「＋ 记进度」累计，每次变化都留历史。',
+            '状态、类型、角色与关键字都能筛，搜的是目标名、角色和备注。',
+            '卡片可拖动调顺序；完成后切到「已完成」查看或恢复。',
+        ],
+    },
+    {
+        page: '装备',
+        text: '装备栏与仓库，可粘贴或截图导入',
+        steps: [
+            '先选角色。「搭配」看三套方案各穿了什么，「仓库」看拥有哪些装备。',
+            '点方案标签切换；「使用此套」标记当前在用的那套，旁边可改名与复制。',
+            '点空格子选装。详情里「从本套卸下」只解除引用，档案仍留在仓库。',
+            '仓库里「＋ 新增装备」手填，「粘贴导入」贴游戏里的属性文本，「截图识别」走本地 OCR。',
+            '详情里「记变动」记买入或卖出，流水自动写进账号账本。',
+            '删除与售出会清空所有方案里的引用，动手前有确认。',
+        ],
+    },
+    {
+        page: '角色',
+        text: '档案、门派与养成进度',
+        steps: [
+            '「＋ 添加角色」填名字、门派与等级，其余属性逐项补。',
+            '卡片上三个小图标：编辑档案、查看养成记录、删除。',
+            '拖动卡片调整顺序，这个顺序就是各页角色筛选里的排列。',
+            '顶部「养成记录」汇总全部角色的成长历史。',
+            '删除前会列出联动影响（账本、装备、目标），确认后才删。',
+        ],
+    },
+    {
+        page: '物价',
+        text: '物品价格卡片与历史流水',
+        steps: [
+            '「＋ 新建卡片」按物品建一张，选好分类方便后面筛。',
+            '卡片右下角「＋ 记价」记一条行情，每次记价都留一条流水。',
+            '涨跌与迷你走势由历史自动算出来，不用手填。',
+            '「历史」看完整价格流水；左下角两个小图标可编辑或删除这张卡。',
+            '物价是独立集合，和角色、账本、装备都不关联。',
+        ],
+    },
+    {
+        page: '设置',
+        text: '备份、外观与这份帮助',
+        steps: [
+            '外观三选一：跟随系统、浅色、深色，改完立即生效。',
+            '数据区可导出备份、导入备份，导入会先校验再覆盖当前数据。',
+            '换机或重装前先导出备份，数据只存在本机。',
+            '「清空 V2 数据」不可撤销，执行前有二次确认。',
+            '关于里有版本、数据版本、许可范围与源码地址。',
+        ],
+    },
 ];
 const helpTips = [
     '数据只在本机，换机或重装前先导出备份。',
@@ -198,12 +284,17 @@ async function wipe() {
         <div class="settings-column">
             <section class="paper-section">
                 <h2>使用帮助</h2>
-                <dl class="help-list">
-                    <div v-for="item in helpItems" :key="item.page">
-                        <dt>{{ item.page }}</dt>
-                        <dd>{{ item.text }}</dd>
-                    </div>
-                </dl>
+                <div class="help-list">
+                    <details v-for="item in helpItems" :key="item.page" class="help-item">
+                        <summary>
+                            <span class="help-page">{{ item.page }}</span>
+                            <span class="help-brief">{{ item.text }}</span>
+                        </summary>
+                        <ol class="help-steps">
+                            <li v-for="step in item.steps" :key="step">{{ step }}</li>
+                        </ol>
+                    </details>
+                </div>
                 <ul class="help-tips">
                     <li v-for="tip in helpTips" :key="tip">{{ tip }}</li>
                 </ul>
@@ -355,30 +446,95 @@ async function wipe() {
     font-variant-numeric: tabular-nums;
 }
 /*
- * 使用帮助：八页各一句，两列排。dt 用赭金当小标题，dd 收一档字号压成灰，
- * 扫的时候先看到页名，需要时再看那句解释。
+ * 使用帮助：一个页面一条，收起时只留「页名 + 一句概述」，点开才看操作步骤。
  *
- * 按列填（左 1-4、右 5-8）而不是按行填：默认的行优先会排成
- * 「总览 / 收益 / 账号 / 目标」…读下来左列是 1、3、5、7，和侧栏顺序对不上。
+ * 用原生 <details>：键盘（Enter / Space）与读屏的展开状态都由浏览器给，
+ * 不另存一份开关状态，也就不会出现「点开了但无障碍属性没跟上」这类问题。
+ * 页名固定宽度，概述与步骤左对齐在同一列，竖着扫下来就对得上侧栏顺序。
  */
 .help-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(4, auto);
-    grid-auto-flow: column;
-    gap: 11px 16px;
+    display: flex;
+    flex-direction: column;
     margin-bottom: 14px;
+    border-top: 1px solid var(--line);
 }
-.help-list dt {
+.help-item {
+    border-bottom: 1px solid var(--line);
+}
+.help-item > summary {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 7px 2px;
+    list-style: none;
+    cursor: pointer;
     font-size: 12.5px;
+}
+/* 去掉 Safari / 旧 Edge 自带的三角，改用右侧细箭头。 */
+.help-item > summary::-webkit-details-marker {
+    display: none;
+}
+.help-item > summary::after {
+    content: '';
+    flex: none;
+    align-self: center;
+    margin-left: auto;
+    width: 5px;
+    height: 5px;
+    border-right: 1.4px solid var(--muted);
+    border-bottom: 1.4px solid var(--muted);
+    transform: rotate(45deg);
+    transition: transform 0.16s ease;
+}
+.help-item[open] > summary::after {
+    transform: rotate(-135deg);
+}
+.help-item > summary:focus-visible {
+    outline: 1px solid var(--gold);
+    outline-offset: 2px;
+}
+.help-page {
+    flex: none;
+    width: 3.2em;
     color: var(--gold);
     letter-spacing: 0.3px;
 }
-.help-list dd {
-    margin-top: 3px;
+.help-brief {
     font-size: 12px;
-    line-height: 1.65;
+    line-height: 1.6;
     color: var(--muted);
+}
+/* 展开的那条把概述提亮一档，扫的时候能看出打开的是哪页。 */
+.help-item[open] .help-brief,
+.help-item > summary:hover .help-brief {
+    color: var(--ink-2);
+}
+.help-steps {
+    counter-reset: step;
+    margin: 0;
+    padding: 1px 2px 10px calc(3.2em + 10px);
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.help-steps li {
+    position: relative;
+    padding-left: 15px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--muted);
+    counter-increment: step;
+}
+/* 序号用赭金小字：步骤之间靠数字断开，比圆点更能看出先后顺序。 */
+.help-steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    font-size: 10px;
+    line-height: 2.05;
+    color: var(--gold);
+    font-variant-numeric: tabular-nums;
 }
 /* 要点用虚线隔开：它们不是第九、第十个页面，而是两句通用的提醒。 */
 .help-tips {
