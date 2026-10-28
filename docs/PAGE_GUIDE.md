@@ -47,6 +47,7 @@
 ## 6. 输入控件
 
 - 数字一律 `BaseNumber`：留空表示未记录，`0` 是明确零值。不要再用 `Number()` 自行转换。
+- 弹窗里只调一个数、需要大号输入时用 `NumberStepper`（快捷编辑、速记单价）：空值语义与 `BaseNumber` 相同，两侧按钮的步进量由 `step` 给，小数用 `decimal`。
 - 下拉用 `BaseSelect`、日期用 `BaseDate`（`min`/`max` 控制范围），编辑态与输入框共用焦点外观。
 - `BaseSelect` / `BaseDate` 的 `label` 仅供读屏；外层 `<label>` 的可见文字不要和它重复写两遍。
 - 普通按钮 `.btn`，主操作 `.btn.primary`，纯图标按钮 `.icon-button` 且必须有 `aria-label`。

@@ -1,35 +1,41 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useApplication } from '../../stores/application';
 import BaseModal from '../../components/BaseModal.vue';
-import BaseNumber from '../../components/BaseNumber.vue';
+import NumberStepper from '../../components/NumberStepper.vue';
+import NumberValue from '../../components/NumberValue.vue';
 
 /**
  * 填写速记物品的单价。
  *
- * 单价按「万」输入，领域里存的是游戏币原值（1.5 万存 15000），点卡单价同理。
- * 固定价格的物品走 `once = false`：保存后写回单价表，以后点击直接按它记。
- * 不固定价格的物品走 `once = true`：只借这一条记录用，不写回单价表——
- * 这类物品价格随等级和品类浮动，留一个「参考价」反而会记错账。
+ * 单价按「万」输入，领域里存的是游戏币原值（1.5 万存 15000）。
+ * `once = false`：固定价格的物品，保存后写回单价表，以后点一下直接按它记。
+ * `once = true`：不固定价格的物品，只借这一条记录用，不写回——这类物品价格随
+ * 等级和品类浮动，留一个「参考价」反而会记错账。
  */
 const props = defineProps<{ id: number; name: string; thenAdd?: boolean; once?: boolean }>();
 const emit = defineEmits<{ close: []; saved: [price?: number] }>();
 const app = useApplication();
 const rules = app.rules();
-const current = props.once ? 0 : rules.itemPrice(props.id);
-const price = ref<number | string>(current ? current / 10000 : '');
-const dirty = ref(false);
+const current = props.once ? 0 : rules.itemPrice(props.id) / 10000;
+const price = ref<number | string>(current || '');
+const initial = String(price.value);
+const dirty = computed(() => initial !== String(price.value));
 const error = ref('');
+const parsed = computed(() => {
+    if (price.value === '') return null;
+    const value = Number(price.value);
+    return Number.isFinite(value) && value > 0 ? value : null;
+});
 
 async function save() {
     if (app.busy) return;
     error.value = '';
-    const value = Number(price.value);
-    if (price.value === '' || !Number.isFinite(value) || value <= 0) {
+    if (parsed.value === null) {
         error.value = '请填写大于 0 的单价';
         return;
     }
-    const raw = Math.round(value * 10000);
+    const raw = Math.round(parsed.value * 10000);
     try {
         if (!props.once)
             await app.execute((domain) =>
@@ -48,26 +54,24 @@ async function save() {
         :dirty="dirty"
         @close="emit('close')"
     >
-        <p class="dialog-subject">{{ name }}</p>
-        <p v-if="once" class="hint">
-            这类物品价格随等级和品类浮动，填的单价只用于这一条记录的估值，不会保存。
-        </p>
-        <p v-else class="hint">
-            单价按万记，只用于速记时的参考估值；物品卖出后仍以成交金额结算收入。
-        </p>
-        <form id="item-price-form" class="price-form" @submit.prevent="save">
-            <label>
-                单价（万）
-                <BaseNumber
+        <form id="item-price-form" @submit.prevent="save">
+            <fieldset :disabled="app.busy">
+                <p class="price-subject">{{ name }}</p>
+                <NumberStepper
                     v-model="price"
                     name="price"
-                    :min="0"
-                    :step="0.1"
-                    @update:model-value="dirty = true"
+                    unit="万"
+                    placeholder="填单价"
+                    decimal
+                    autofocus
                 />
-            </label>
+                <p class="price-preview">
+                    估值
+                    <NumberValue :value="parsed" unit="万" />
+                </p>
+            </fieldset>
+            <p v-if="error" class="error form-error" role="alert">{{ error }}</p>
         </form>
-        <p v-if="error" class="error form-error" role="alert">{{ error }}</p>
         <template #footer="{ close }">
             <button class="btn" :disabled="app.busy" @click="close">取消</button>
             <button class="btn primary" type="submit" form="item-price-form" :disabled="app.busy">
@@ -78,18 +82,21 @@ async function save() {
 </template>
 
 <style scoped>
-.dialog-subject {
-    margin: 0 0 6px;
-    font-size: 15px;
-    font-weight: 600;
+.price-subject {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
 }
-.price-form {
-    margin-top: 14px;
-}
-.price-form label {
-    display: block;
+.price-preview {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
     gap: 4px;
-    font-size: 12.5px;
+    margin: 0;
+    padding: 8px 0 2px;
+    color: var(--gold);
+    font-size: 13px;
 }
 .form-error {
     margin-top: 12px;

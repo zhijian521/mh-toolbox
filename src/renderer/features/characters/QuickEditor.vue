@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import BaseDate from '../../components/BaseDate.vue';
 import BaseModal from '../../components/BaseModal.vue';
+import NumberStepper from '../../components/NumberStepper.vue';
 import NumberValue from '../../components/NumberValue.vue';
 import { useApplication } from '../../stores/application';
 import { U } from '../../domain/util.js';
@@ -28,9 +29,6 @@ const parsed = computed(() => rules.characterNumber(value.value));
 /** 非法数字只在当次输入成立，每次重算，避免清空后仍被判为「有未保存修改」。 */
 function markInvalid(event: Event) {
     invalidEdit.value = event.target instanceof HTMLInputElement && event.target.validity.badInput;
-}
-function step(offset: number) {
-    value.value = Math.max(0, (parsed.value ?? 0) + offset);
 }
 async function save() {
     if (app.busy) return;
@@ -67,40 +65,14 @@ async function save() {
                         <NumberValue :value="metric.value" :unit="metric.unit" />
                     </span>
                 </p>
-                <div class="stepper">
-                    <button
-                        type="button"
-                        class="btn"
-                        aria-label="减少 1"
-                        :disabled="parsed == null || parsed === 0"
-                        @click="step(-1)"
-                    >
-                        −
-                    </button>
-                    <div class="stepper-input">
-                        <input
-                            v-model="value"
-                            name="value"
-                            type="number"
-                            min="0"
-                            step="1"
-                            :max="Number.MAX_SAFE_INTEGER"
-                            placeholder="未记录"
-                            autofocus
-                            @input="markInvalid"
-                        />
-                        <span class="stepper-unit" aria-hidden="true">{{ metric.unit }}</span>
-                    </div>
-                    <button
-                        type="button"
-                        class="btn"
-                        aria-label="增加 1"
-                        :disabled="parsed === Number.MAX_SAFE_INTEGER"
-                        @click="step(1)"
-                    >
-                        ＋
-                    </button>
-                </div>
+                <NumberStepper
+                    v-model="value"
+                    name="value"
+                    :unit="metric.unit"
+                    placeholder="未记录"
+                    autofocus
+                    @invalid="markInvalid"
+                />
                 <p class="quick-preview">
                     <span class="quick-preview-label">修改后：</span>
                     <NumberValue :value="metric.value" :unit="metric.unit" />
@@ -133,40 +105,6 @@ async function save() {
 </template>
 
 <style scoped>
-.stepper {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 160px) 44px;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    margin: 8px 0;
-}
-.stepper-input {
-    position: relative;
-    min-width: 0;
-}
-.stepper-input input {
-    width: 100%;
-    padding: 7px 30px 7px 12px;
-    font-size: 28px;
-    text-align: center;
-}
-.stepper-unit {
-    position: absolute;
-    top: 50%;
-    right: 11px;
-    color: var(--muted);
-    font-size: 12px;
-    transform: translateY(-50%);
-    pointer-events: none;
-}
-.stepper .btn {
-    height: 44px;
-    width: 44px;
-    max-width: 44px;
-    flex: none;
-    font-size: 22px;
-}
 .quick-context {
     display: flex;
     align-items: baseline;

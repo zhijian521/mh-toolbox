@@ -995,9 +995,29 @@ app.on('browser-window-created', (_event, win) => {
             );
 
             // ---- 不固定价格：每次现填单价，且不写回单价表 ----
+            assert.equal(
+                await read(
+                    () =>
+                        document.querySelector('[data-item="100"]').querySelectorAll('.item-price')
+                            .length,
+                ),
+                0,
+                '不固定价格的卡片不再标注单价',
+            );
             await read(() => document.querySelector('[data-item="100"]').click());
             await until(() => !!document.querySelector('#item-price-form'), '兽决单价弹窗');
+            assert.ok(
+                await read(() => !!document.querySelector('#item-price-form .stepper input')),
+                '单价弹窗用步进器输入',
+            );
             await field('[name="price"]', '35');
+            assert.equal(
+                await read(() =>
+                    document.querySelector('.price-preview').textContent.replace(/\s+/g, ''),
+                ),
+                '估值35万',
+                '弹窗内实时显示估值',
+            );
             await click('记录');
             await until(() => !document.querySelector('#item-price-form'), '一次性单价保存');
             await until(() => document.querySelectorAll('.loot-row').length === 2, '第二条收益');

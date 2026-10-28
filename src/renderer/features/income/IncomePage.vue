@@ -371,7 +371,7 @@ async function saved() {
                         物品速记
                         <small>点一下记一条 · 固定价格可右键改价</small>
                     </header>
-                    <p class="section-label">固 定 价 格</p>
+                    <p class="section-label">固定价格</p>
                     <div class="item-grid">
                         <button
                             v-for="item in quickItems"
@@ -391,7 +391,7 @@ async function saved() {
                             </span>
                         </button>
                     </div>
-                    <p class="section-label">不 固 定 价 格</p>
+                    <p class="section-label">不固定价格</p>
                     <div class="item-grid">
                         <button
                             v-for="item in quickVariable"
@@ -405,7 +405,6 @@ async function saved() {
                         >
                             <img :src="item.icon" :alt="item.name" loading="lazy" />
                             <span class="item-name">{{ item.name }}</span>
-                            <span class="item-price none">每次填价</span>
                         </button>
                     </div>
                 </section>
@@ -635,7 +634,7 @@ async function saved() {
     margin: 14px 0 8px;
     color: var(--muted);
     font-size: 11px;
-    letter-spacing: 2px;
+    letter-spacing: 0.4px;
 }
 .item-grid {
     display: grid;
