@@ -1,29 +1,48 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue';
-import type { Transaction } from '../../app/types';
+import type { DateRangeValue, Transaction } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import { U } from '../../domain/util.js';
 import AppIcon from '../../components/AppIcon.vue';
-import BaseDate from '../../components/BaseDate.vue';
 import BaseModal from '../../components/BaseModal.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
+import RangeFilter from '../../components/RangeFilter.vue';
+import { currencyText, signedAmount } from './format';
 
 /**
  * 账号的全部记录。
  *
- * 筛选只影响展示与汇总口径（汇总跟着筛选走，和列表里看到的笔数一致）。
+ * 打开时继承页面的时间范围与角色：页脚写着「共 N 笔」，点进来的第一屏就该是这 N 笔，
+ * 想看全量点「重置」。筛选只影响展示与汇总口径（汇总跟着筛选走，和列表里的笔数一致）。
+ *
  * 删除走第二层弹窗：`modal-layer` 会让 Escape 与 Tab 只由最上层响应、背景 inert
  * 只由最外层负责，所以确认框可以安全地叠在列表之上，不必退化成内联确认条。
  */
+const props = defineProps<{ range?: DateRangeValue; character?: string }>();
 const emit = defineEmits<{ close: []; edit: [tx: Transaction]; add: [] }>();
 const app = useApplication();
 const rules = app.rules();
 const PER_PAGE = 20;
-const filters = reactive({ kind: '', currency: '', category: '', from: '', to: '', keyword: '' });
+const filters = reactive<{
+    kind: string;
+    currency: string;
+    category: string;
+    character: string;
+    range: DateRangeValue;
+    keyword: string;
+}>({
+    kind: '',
+    currency: '',
+    category: '',
+    character: props.character && props.character !== 'all' ? props.character : '',
+    range: props.range ? { ...props.range } : { preset: 'all', from: '', to: '' },
+    keyword: '',
+});
 const page = ref(1);
 const pendingDelete = ref<Transaction | null>(null);
 const deleteError = ref('');
 const listEl = ref<HTMLElement>();
+const closeButton = ref<HTMLButtonElement>();
 
 const all = computed<Transaction[]>(() => {
     void app.data;
@@ -40,6 +59,10 @@ const categoryOptions = computed(() => {
         ...[...options].map((item) => ({ value: item, label: item })),
     ];
 });
+const characterOptions = computed(() => [
+    { value: '', label: '全部角色' },
+    ...app.characters.map((item) => ({ value: item.id, label: item.name })),
+]);
 const kindOptions = [
     { value: '', label: '全部收支' },
     { value: 'income', label: '收入 / 卖出' },
@@ -58,8 +81,9 @@ const list = computed(() => {
         if (filters.currency === 'cash' && !['cash', 'reserve'].includes(tx.currency)) return false;
         if (filters.currency === 'rmb' && tx.currency !== 'rmb') return false;
         if (filters.category && tx.category !== filters.category) return false;
-        if (filters.from && tx.date < filters.from) return false;
-        if (filters.to && tx.date > filters.to) return false;
+        if (filters.character && tx.characterId !== filters.character) return false;
+        if (filters.range.from && tx.date < filters.range.from) return false;
+        if (filters.range.to && tx.date > filters.range.to) return false;
         if (!keyword) return true;
         return [tx.note, tx.category, rules.charName(tx.characterId), tx.channel]
             .join(' ')
@@ -81,39 +105,43 @@ const filtered = computed(
         !!filters.kind ||
         !!filters.currency ||
         !!filters.category ||
-        !!filters.from ||
-        !!filters.to,
+        !!filters.character ||
+        !!filters.range.from ||
+        !!filters.range.to,
 );
 watch(pages, (value) => {
     if (page.value > value) page.value = value;
 });
 watch(
-    () => [filters.kind, filters.currency, filters.category, filters.from, filters.to],
+    () => [
+        filters.kind,
+        filters.currency,
+        filters.category,
+        filters.character,
+        filters.range.from,
+        filters.range.to,
+        filters.keyword,
+    ],
     () => {
         page.value = 1;
         pendingDelete.value = null;
-    },
-);
-watch(
-    () => filters.keyword,
-    () => {
-        page.value = 1;
-        pendingDelete.value = null;
+        deleteError.value = '';
     },
 );
 
-function currencyText(currency: string) {
-    return currency === 'rmb' ? '人民币' : currency === 'reserve' ? '储备金' : '梦幻币';
-}
-function netAmount(tx: Transaction) {
-    const fee = Number(tx.fee) || 0;
-    return tx.kind === 'income' ? tx.amount - fee : tx.amount + fee;
-}
-function signedAmount(tx: Transaction) {
-    return (tx.kind === 'income' ? '+' : '−') + U.fmtAmount(netAmount(tx), tx.currency);
-}
 function resetFilters() {
-    Object.assign(filters, { kind: '', currency: '', category: '', from: '', to: '', keyword: '' });
+    Object.assign(filters, {
+        kind: '',
+        currency: '',
+        category: '',
+        character: '',
+        keyword: '',
+        range: { preset: 'all', from: '', to: '' },
+    });
+}
+function cancelDelete() {
+    pendingDelete.value = null;
+    deleteError.value = '';
 }
 async function remove() {
     const tx = pendingDelete.value;
@@ -125,9 +153,12 @@ async function remove() {
         await app.execute((domain) => domain.commit(() => domain.removeTransaction(tx.id)));
         pendingDelete.value = null;
         app.notify('记录已删除');
-        // 被删的那行连同它的按钮一起消失，弹窗原来的焦点目标已断开，落回列表首项。
+        // 被删的那行连同它的按钮一起消失，弹窗原来的焦点目标已断开；
+        // 落到列表首项，列表因此变空时退回「关闭」。
         await nextTick();
-        listEl.value?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+        const target =
+            listEl.value?.querySelector<HTMLButtonElement>('button') ?? closeButton.value;
+        target?.focus({ preventScroll: true });
     } catch (failure) {
         deleteError.value = failure instanceof Error ? failure.message : String(failure);
     }
@@ -136,50 +167,51 @@ async function remove() {
 <template>
     <BaseModal title="账号记录" wide :busy="app.busy" @close="emit('close')">
         <div class="record-filters">
-            <label class="filter-field filter-kind">
-                收支
-                <BaseSelect v-model="filters.kind" label="收支方向筛选" :options="kindOptions" />
-            </label>
-            <label class="filter-field filter-currency">
-                币种
-                <BaseSelect
-                    v-model="filters.currency"
-                    label="币种筛选"
-                    :options="currencyOptions"
-                />
-            </label>
-            <label class="filter-field filter-category">
-                分类
-                <BaseSelect
-                    v-model="filters.category"
-                    label="分类筛选"
-                    :options="categoryOptions"
-                />
-            </label>
-            <label class="filter-field filter-keyword">
-                搜索
-                <input
-                    v-model="filters.keyword"
-                    type="search"
-                    aria-label="搜索记录内容、分类或角色"
-                    placeholder="内容、分类或角色"
-                />
-            </label>
-            <span class="filter-break" aria-hidden="true"></span>
-            <label class="filter-field filter-date">
-                开始
-                <BaseDate v-model="filters.from" label="开始日期" :max="filters.to || U.today()" />
-            </label>
-            <label class="filter-field filter-date">
-                结束
-                <BaseDate
-                    v-model="filters.to"
-                    label="结束日期"
-                    :min="filters.from"
-                    :max="U.today()"
-                />
-            </label>
-            <button v-if="filtered" class="btn compact" @click="resetFilters">重置</button>
+            <RangeFilter v-model="filters.range" label="记录时间范围" />
+            <div class="filter-row">
+                <label class="filter-field filter-kind">
+                    收支
+                    <BaseSelect
+                        v-model="filters.kind"
+                        label="收支方向筛选"
+                        :options="kindOptions"
+                    />
+                </label>
+                <label class="filter-field filter-currency">
+                    币种
+                    <BaseSelect
+                        v-model="filters.currency"
+                        label="币种筛选"
+                        :options="currencyOptions"
+                    />
+                </label>
+                <label class="filter-field filter-category">
+                    分类
+                    <BaseSelect
+                        v-model="filters.category"
+                        label="分类筛选"
+                        :options="categoryOptions"
+                    />
+                </label>
+                <label class="filter-field filter-character">
+                    角色
+                    <BaseSelect
+                        v-model="filters.character"
+                        label="记录角色筛选"
+                        :options="characterOptions"
+                    />
+                </label>
+                <label class="filter-field filter-keyword">
+                    搜索
+                    <input
+                        v-model="filters.keyword"
+                        type="search"
+                        aria-label="搜索记录内容、分类或角色"
+                        placeholder="内容、分类或角色"
+                    />
+                </label>
+                <button v-if="filtered" class="btn compact" @click="resetFilters">重置</button>
+            </div>
         </div>
         <div class="record-summary">
             <span>
@@ -197,7 +229,6 @@ async function remove() {
                 <span class="hint">收入 / 支出 · {{ stats.cash.count }} 笔</span>
             </span>
         </div>
-        <p v-if="deleteError && !pendingDelete" class="error" role="alert">{{ deleteError }}</p>
         <div v-if="!list.length" class="empty compact-empty">
             <AppIcon name="book" :size="32" />
             <p v-if="filtered">没有符合筛选条件的记录。</p>
@@ -265,10 +296,10 @@ async function remove() {
                 </button>
             </div>
             <button class="btn" @click="emit('add')">＋ 记一笔</button>
-            <button class="btn" @click="close">关闭</button>
+            <button ref="closeButton" class="btn" @click="close">关闭</button>
         </template>
     </BaseModal>
-    <BaseModal v-if="pendingDelete" title="删除记录" :busy="app.busy" @close="pendingDelete = null">
+    <BaseModal v-if="pendingDelete" title="删除记录" :busy="app.busy" @close="cancelDelete">
         <p>
             确定删除 {{ pendingDelete.date }} 的「{{
                 pendingDelete.note || pendingDelete.category
@@ -293,6 +324,12 @@ async function remove() {
 <style scoped>
 .record-filters {
     display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+}
+.filter-row {
+    display: flex;
     align-items: end;
     gap: 10px;
     flex-wrap: wrap;
@@ -303,29 +340,20 @@ async function remove() {
     font-size: 12px;
 }
 .filter-kind {
-    width: 118px;
+    width: 112px;
 }
 .filter-currency {
-    width: 110px;
+    width: 104px;
 }
 .filter-category {
-    width: 124px;
+    width: 120px;
 }
-.filter-date {
-    width: 148px;
+.filter-character {
+    width: 116px;
 }
-/*
- * 筛选分两行：收支 / 币种 / 分类 / 搜索在第一行，日期与重置在第二行。
- * 六个控件挤一行时搜索会被压到只露出半个占位符；靠 flex-basis: 100% 的空节点
- * 强制换行，比依赖窗口宽度自然折行稳定。
- */
 .filter-keyword {
-    flex: 1 1 200px;
-    min-width: 170px;
-}
-.filter-break {
-    flex-basis: 100%;
-    height: 0;
+    flex: 1 1 170px;
+    min-width: 150px;
 }
 .filter-keyword input {
     min-height: 34px;

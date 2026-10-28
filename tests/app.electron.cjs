@@ -756,6 +756,23 @@ app.on('browser-window-created', (_event, win) => {
             // 收入扣手续费：200 - 10 = 190。
             await click('＋ 记一笔');
             await until(() => !!document.querySelector('#account-form'), '记一笔弹窗');
+            // 金额留空不能落一条 ¥0.00：领域允许 0，拦截放在表单这一层。
+            await submit('#account-form');
+            await until(
+                () => !!document.querySelector('#account-form .form-error'),
+                '空金额被拦下',
+            );
+            assert.equal(
+                await read(() =>
+                    document.querySelector('#account-form .form-error').textContent.trim(),
+                ),
+                '请填写成交金额',
+            );
+            assert.equal(
+                disk().transactions.filter((item) => item.ledger === 'account').length,
+                1,
+                '空金额不落盘',
+            );
             await choose('收支分类', '游戏币卖出');
             await choose('收支方向', '收入 / 卖出');
             await field('[name="amount"]', '200');
@@ -799,8 +816,15 @@ app.on('browser-window-created', (_event, win) => {
             await until(() => !document.querySelector('#account-form'), '保存账号编辑');
             assert.equal(disk().transactions.find((item) => item.id === recentId).amount, 600);
 
-            await click('查看全部记录');
+            await click('查看记录');
             await until(() => !!document.querySelector('.record-head'), '全部记录');
+            assert.equal(
+                await read(() =>
+                    document.querySelector('.record-filters .seg-btn.on')?.textContent.trim(),
+                ),
+                '本月',
+                '记录弹窗继承页面的时间范围',
+            );
             assert.equal(await read(() => document.querySelectorAll('.record-row').length), 3);
             await choose('收支方向筛选', '收入 / 卖出');
             await until(() => document.querySelectorAll('.record-row').length === 1, '只看收入');

@@ -92,7 +92,18 @@ function captureInput(event: Event) {
 async function save() {
     if (app.busy) return;
     error.value = '';
+    // 留空表示没填，不是 0：`Number('')` 会得 0，直接落到一条 ¥0.00 的记录上。
+    if (draft.amount === '' || draft.amount === null || draft.amount === undefined) {
+        error.value = '请填写成交金额';
+        // 错误提示在表单底部，把焦点带回出错的字段。
+        document.querySelector<HTMLElement>('#account-form [name="amount"]')?.focus();
+        return;
+    }
     const amount = Number(draft.amount);
+    if (!Number.isFinite(amount)) {
+        error.value = '请填写有效的成交金额';
+        return;
+    }
     const fee = Number(draft.fee || 0);
     if (draft.kind === 'income' && fee > amount) {
         error.value = '手续费不能超过收入金额';
@@ -112,8 +123,9 @@ async function save() {
                     fee,
                     note: draft.note.trim(),
                     ledger: 'account',
-                    recordType: 'money',
-                    minutes: 0,
+                    // 时长与记录形态不属于这张表单：新建按「金额记录」，编辑保留原值。
+                    recordType: props.tx?.recordType ?? 'money',
+                    minutes: props.tx?.minutes ?? 0,
                     // 装备页尚未迁移：旧记录带着关联就原样保留，不在这里清掉。
                     equipmentId: props.tx?.equipmentId ?? '',
                     gearAction: props.tx?.gearAction ?? '',

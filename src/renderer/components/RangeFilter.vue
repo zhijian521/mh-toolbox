@@ -24,6 +24,17 @@ const presets = [
     { value: 'all', label: '全部' },
 ];
 const current = computed(() => props.modelValue);
+/**
+ * 开始日期的上限：不晚于结束日期，也不晚于今天。
+ *
+ * 「本月」「本周」算出来的结束日是月末 / 周日，本身就是未来日期；直接拿它当
+ * `max` 会在日历里放开未来几天，用户能选到一个还没发生的开始日期。
+ */
+const fromMax = computed(() => {
+    const today = U.today();
+    const end = current.value.to;
+    return end && end < today ? end : today;
+});
 function choose(preset: string) {
     const range = U.rangeFor(preset);
     emit('update:modelValue', { preset, from: range.from || '', to: range.to || '' });
@@ -61,7 +72,7 @@ function change(key: 'from' | 'to', value: string) {
                 <BaseDate
                     :model-value="current.from"
                     label="开始日期"
-                    :max="current.to || U.today()"
+                    :max="fromMax"
                     :disabled="disabled"
                     @update:model-value="change('from', $event)"
                 />

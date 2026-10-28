@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
-import type { DateRangeValue, Transaction } from '../../app/types';
+import type { AccountStats, DateRangeValue, Transaction } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import { plain } from '../../services/desktop';
 import { U } from '../../domain/util.js';
@@ -10,6 +10,7 @@ import RangeFilter from '../../components/RangeFilter.vue';
 import PageHeader from '../../components/PageHeader.vue';
 import AccountEditor from './AccountEditor.vue';
 import AccountRecords from './AccountRecords.vue';
+import { currencyText, signedAmount } from './format';
 
 /**
  * 账号账本。
@@ -23,18 +24,24 @@ import AccountRecords from './AccountRecords.vue';
  */
 const app = useApplication();
 const rules = app.rules();
-const content = ref<HTMLElement>();
 const addButton = ref<HTMLButtonElement>();
 const character = ref('all');
 /** 快捷按钮与日期区间共用一份状态，默认落在本月。 */
 const range = ref<DateRangeValue>({ preset: 'month', ...U.rangeFor('month') });
 const editing = ref<{ tx?: Transaction; preset?: Record<string, unknown> } | null>(null);
 const recordsOpen = ref(false);
+/** 打开弹窗的那个按钮：保存后把焦点还回去，连着记同类账时不用重新找。 */
+const opener = ref<HTMLElement | null>(null);
 
 const characterOptions = computed(() => [
     { value: 'all', label: '全部角色' },
     ...app.characters.map((item) => ({ value: item.id, label: item.name })),
 ]);
+/** 两张汇总卡同构：币种就是 `accountStats` 的口径参数，只是标题不同。 */
+const totals: Array<{ key: 'rmb' | 'cash'; label: string }> = [
+    { key: 'rmb', label: '人民币' },
+    { key: 'cash', label: '梦幻币' },
+];
 const records = computed<Transaction[]>(() => {
     void app.data;
     return rules
@@ -42,17 +49,27 @@ const records = computed<Transaction[]>(() => {
         .slice()
         .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
 });
-const stats = computed(() => ({
+const stats = computed<Record<'rmb' | 'cash', AccountStats>>(() => ({
     rmb: rules.accountStats(records.value, 'rmb'),
     cash: rules.accountStats(records.value, 'cash'),
 }));
+/** 同角色的全部记录：当前范围为空但历史有时，给一个切回全部时间的出口。 */
+const allForCharacter = computed(() => {
+    void app.data;
+    return rules.txIn(character.value, '', '', 'account');
+});
 const recent = computed(() => records.value.slice(0, 8));
+/** 储备金并入梦幻币统计（同为万单位），明细里仍显示自己的币种。 */
+const hasReserve = computed(() => records.value.some((tx) => tx.currency === 'reserve'));
 /** 最近记录的小标题：带上当前范围，避免和「全部记录」混淆。 */
 const rangeText = computed(() => {
     const { from: start, to: end } = range.value;
     if (!start && !end) return '全部时间';
     return end ? start + ' 至 ' + end : start + ' 起';
 });
+function reserveSuffix(currency: string) {
+    return currency === 'cash' && hasReserve.value ? ' · 含储备金' : '';
+}
 
 /** 快捷入口只做预填，真正的校验仍在领域层；与 V1 的九宫格一致。 */
 const shortcuts: Array<{
@@ -135,32 +152,45 @@ const shortcuts: Array<{
     },
 ];
 
-function currencyText(currency: string) {
-    return currency === 'rmb' ? '人民币' : currency === 'reserve' ? '储备金' : '梦幻币';
+function remember() {
+    const active = document.activeElement;
+    opener.value = active instanceof HTMLElement && active !== document.body ? active : null;
 }
-/** 实收 / 实付：收入扣手续费，支出加手续费，与 `accountStats` 同一口径。 */
-function netAmount(tx: Transaction) {
-    const fee = Number(tx.fee) || 0;
-    return tx.kind === 'income' ? tx.amount - fee : tx.amount + fee;
-}
-function signedAmount(tx: Transaction) {
-    return (tx.kind === 'income' ? '+' : '−') + U.fmtAmount(netAmount(tx), tx.currency);
-}
+/** 新建时把角色筛选一起带过去，否则筛到「小号」记的账会落到排序第一的角色上。 */
 function openEditor(presetValues?: Record<string, unknown>) {
-    editing.value = { preset: presetValues };
+    remember();
+    editing.value = {
+        preset: {
+            characterId: character.value === 'all' ? undefined : character.value,
+            ...presetValues,
+        },
+    };
 }
 function openRecord(tx: Transaction) {
+    remember();
     editing.value = { tx: plain(tx) as Transaction };
 }
 /** 记录弹窗里点编辑时先收起列表，两层弹窗都会抢 Escape 与焦点循环。 */
 function editFromList(tx: Transaction) {
     recordsOpen.value = false;
+    // 列表关掉后原按钮不可达，保存后回「记一笔」即可。
+    opener.value = null;
     editing.value = { tx: plain(tx) as Transaction };
+}
+function addFromList() {
+    recordsOpen.value = false;
+    opener.value = null;
+    editing.value = {};
 }
 async function saved() {
     editing.value = null;
     await nextTick();
-    addButton.value?.focus({ preventScroll: true });
+    const target = opener.value?.isConnected ? opener.value : addButton.value;
+    target?.focus({ preventScroll: true });
+    opener.value = null;
+}
+function showAll() {
+    range.value = { preset: 'all', from: '', to: '' };
 }
 </script>
 <template>
@@ -171,7 +201,7 @@ async function saved() {
             </button>
         </template>
     </PageHeader>
-    <div ref="content" class="page-content">
+    <div class="page-content">
         <div v-if="!app.characters.length" class="empty">
             <AppIcon name="book" :size="38" />
             <h2>先创建角色</h2>
@@ -190,46 +220,30 @@ async function saved() {
                 </div>
             </div>
             <div class="account-totals">
-                <article class="card total-card">
+                <article v-for="item in totals" :key="item.key" class="card total-card">
                     <header class="card-title">
-                        人民币收支
-                        <small>含手续费 · {{ stats.rmb.count }} 笔</small>
+                        {{ item.label }}收支
+                        <small>
+                            含手续费 · {{ stats[item.key].count }} 笔{{ reserveSuffix(item.key) }}
+                        </small>
                     </header>
                     <div class="account-metrics">
                         <span>
                             收入
-                            <b class="money-in">{{ U.fmtAmount(stats.rmb.income, 'rmb') }}</b>
-                        </span>
-                        <span>
-                            支出
-                            <b class="money-out">{{ U.fmtAmount(stats.rmb.expense, 'rmb') }}</b>
-                        </span>
-                        <span>
-                            差额
-                            <b :class="stats.rmb.net >= 0 ? 'money-in' : 'money-out'">
-                                {{ U.fmtAmount(stats.rmb.net, 'rmb') }}
+                            <b class="money-in">
+                                {{ U.fmtAmount(stats[item.key].income, item.key) }}
                             </b>
                         </span>
-                    </div>
-                </article>
-                <article class="card total-card">
-                    <header class="card-title">
-                        梦幻币收支
-                        <small>含手续费 · {{ stats.cash.count }} 笔</small>
-                    </header>
-                    <div class="account-metrics">
-                        <span>
-                            收入
-                            <b class="money-in">{{ U.fmtAmount(stats.cash.income, 'cash') }}</b>
-                        </span>
                         <span>
                             支出
-                            <b class="money-out">{{ U.fmtAmount(stats.cash.expense, 'cash') }}</b>
+                            <b class="money-out">
+                                {{ U.fmtAmount(stats[item.key].expense, item.key) }}
+                            </b>
                         </span>
                         <span>
                             差额
-                            <b :class="stats.cash.net >= 0 ? 'money-in' : 'money-out'">
-                                {{ U.fmtAmount(stats.cash.net, 'cash') }}
+                            <b :class="stats[item.key].net >= 0 ? 'money-in' : 'money-out'">
+                                {{ U.fmtAmount(stats[item.key].net, item.key) }}
                             </b>
                         </span>
                     </div>
@@ -254,7 +268,7 @@ async function saved() {
                             <AppIcon :name="item.icon" :size="20" />
                             <span
                                 class="badge"
-                                :class="item.preset.kind === 'income' ? 'in' : 'out'"
+                                :class="item.preset.kind === 'income' ? 'income' : 'expense'"
                             >
                                 {{ item.preset.kind === 'income' ? '收入' : '支出' }}
                             </span>
@@ -278,7 +292,7 @@ async function saved() {
                             @click="openRecord(tx)"
                         >
                             <span class="recent-kind">
-                                <span class="badge" :class="tx.kind === 'income' ? 'in' : 'out'">
+                                <span class="badge" :class="tx.kind">
                                     {{ tx.kind === 'income' ? '收入' : '支出' }}
                                 </span>
                                 <span class="recent-category">{{ tx.category }}</span>
@@ -299,6 +313,12 @@ async function saved() {
                         </button>
                     </li>
                 </ul>
+                <p v-else-if="allForCharacter.length" class="empty-line">
+                    当前范围（{{ rangeText }}）没有记录，全部时间共
+                    <b>{{ allForCharacter.length }}</b>
+                    笔。
+                    <button class="text-button" @click="showAll">查看全部时间</button>
+                </p>
                 <p v-else class="empty-line">
                     这个范围还没有记录，点上面的快捷入口记第一笔账号收支。
                 </p>
@@ -309,7 +329,7 @@ async function saved() {
                         笔账号记录
                     </span>
                     <button class="btn compact" :disabled="app.busy" @click="recordsOpen = true">
-                        查看全部记录
+                        查看记录
                     </button>
                 </footer>
             </section>
@@ -324,12 +344,11 @@ async function saved() {
     />
     <AccountRecords
         v-if="recordsOpen"
+        :range="range"
+        :character="character"
         @close="recordsOpen = false"
         @edit="editFromList"
-        @add="
-            recordsOpen = false;
-            editing = {};
-        "
+        @add="addFromList"
     />
 </template>
 
@@ -448,11 +467,11 @@ async function saved() {
     border-radius: 3px;
     font-size: 11px;
 }
-.badge.in {
+.badge.income {
     color: var(--green);
     border-color: #4a7c5973;
 }
-.badge.out {
+.badge.expense {
     color: var(--red);
     border-color: #b33a3a66;
 }
@@ -462,7 +481,7 @@ async function saved() {
     list-style: none;
 }
 /*
- * 最近记录横排：分类、备注、日期与角色、渠道与币种、金额各占一列。
+ * 最近记录横排：分类（含备注）、日期与角色、渠道与币种、金额各占一列。
  * 早先做成「左内容 + 右金额」两栏，一行只有几十个字，中间大片空白；
  * 铺满整行之后八条记录的信息量接近全部记录弹窗，又不用点进去才能看清。
  */
@@ -481,6 +500,10 @@ async function saved() {
     font-family: inherit;
     text-align: left;
     cursor: pointer;
+}
+/* 末行不画底线，否则会和页脚的 border-top 在 12px 内并成两条横线。 */
+.recent-list li:last-child .recent-row {
+    border-bottom: 0;
 }
 .recent-row:hover {
     background: var(--paper-2);
@@ -535,6 +558,12 @@ async function saved() {
     color: var(--muted);
     font-size: 12.5px;
 }
+.empty-line .text-button {
+    margin-left: 6px;
+    color: var(--gold);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
 .recent-footer {
     display: flex;
     align-items: center;
@@ -545,11 +574,6 @@ async function saved() {
     border-top: 1px solid var(--line);
     color: var(--muted);
     font-size: 12.5px;
-}
-@media (max-width: 980px) {
-    .shortcut-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
 }
 @media (max-width: 750px) {
     .shortcut-grid {
