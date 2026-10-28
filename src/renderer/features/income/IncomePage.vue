@@ -445,7 +445,11 @@ async function onlineSaved(dates: string[]) {
                     <small class="stat-note">{{ item.note }}</small>
                 </article>
             </div>
-            <p v-if="accountSettled.count" class="sync-note">
+            <p
+                v-if="accountSettled.count"
+                class="sync-note"
+                title="金额 = 速记金币 + 物品估值 − 点卡；同一天同角色只留一条，随时覆盖"
+            >
                 账号「游戏收益」随记录自动更新 · 本范围
                 <b>{{ accountSettled.count }}</b>
                 条 · 净
