@@ -115,12 +115,12 @@ const shortcuts: Array<{
         preset: { category: '点卡充值', kind: 'expense', currency: 'rmb', channel: '官方充值' },
     },
     {
-        // 游戏内用梦幻币买点卡：同样记在「点卡充值」分类下，但走另一本账。
+        // 游戏内用梦幻币买点卡：与官方充值分成两个分类，明细里不用再靠币种小字分辨。
         id: 'topup-cash',
-        title: '购买点卡',
+        title: '点卡购买',
         icon: 'card',
         hint: '游戏内 · 梦幻币',
-        preset: { category: '点卡充值', kind: 'expense', currency: 'cash', channel: '游戏内' },
+        preset: { category: '点卡购买', kind: 'expense', currency: 'cash', channel: '游戏内' },
     },
     {
         id: 'coin-buy',

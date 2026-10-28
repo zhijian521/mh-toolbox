@@ -116,7 +116,9 @@ export function createData(localStorage) {
         accountCats: [
             '装备交易',
             '召唤兽交易',
+            /* 点卡分两条：官方人民币充值，与游戏内用梦幻币买卡。 */
             '点卡充值',
+            '点卡购买',
             '游戏币买入',
             '游戏币卖出',
             '养成投入',

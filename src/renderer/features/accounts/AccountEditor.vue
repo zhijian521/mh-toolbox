@@ -70,14 +70,20 @@ const unitLabel = computed(() => (draft.currency === 'rmb' ? '元' : '万'));
 const amountLabel = computed(() => '成交金额（' + unitLabel.value + '）');
 const feeLabel = computed(() => '手续费（' + unitLabel.value + '）');
 
-// 点卡充值只可能是官方渠道的人民币支出，选中后把另外三项一起带过去。
+// 点卡两条各自绑定币种与渠道：官方充值走人民币，游戏内买卡走梦幻币。
+// 只在新建时联动，编辑旧记录一律按原值，不被这条规则改写。
 watch(
     () => draft.category,
     (category) => {
-        if (!props.tx && category === '点卡充值') {
+        if (props.tx) return;
+        if (category === '点卡充值') {
             draft.kind = 'expense';
             draft.currency = 'rmb';
             draft.channel = '官方充值';
+        } else if (category === '点卡购买') {
+            draft.kind = 'expense';
+            draft.currency = 'cash';
+            draft.channel = '游戏内';
         }
     },
 );

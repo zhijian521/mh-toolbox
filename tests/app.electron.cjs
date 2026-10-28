@@ -750,6 +750,13 @@ app.on('browser-window-created', (_event, win) => {
                 '游戏内',
                 '购买点卡应预设为游戏内渠道',
             );
+            assert.equal(
+                await read(() =>
+                    document.querySelector('[aria-label="收支分类"]').textContent.trim(),
+                ),
+                '点卡购买',
+                '游戏内买点卡用独立分类，不与官方充值混在一起',
+            );
             await click('取消');
             await until(() => !document.querySelector('#account-form'), '关闭购买点卡');
 
@@ -773,7 +780,24 @@ app.on('browser-window-created', (_event, win) => {
                 1,
                 '空金额不落盘',
             );
+            // 两个点卡分类各自绑定币种与渠道：没走快捷入口、直接选分类也不会记错账。
+            await choose('收支分类', '点卡购买');
+            assert.equal(
+                await read(() =>
+                    document.querySelector('[aria-label="记账币种"]').textContent.trim(),
+                ),
+                '梦幻币 · 万',
+                '点卡购买应带出梦幻币',
+            );
+            assert.equal(
+                await read(() =>
+                    document.querySelector('[aria-label="交易渠道"]').textContent.trim(),
+                ),
+                '游戏内',
+                '点卡购买应带出游戏内渠道',
+            );
             await choose('收支分类', '游戏币卖出');
+            await choose('记账币种', '人民币 · 元');
             await choose('收支方向', '收入 / 卖出');
             await field('[name="amount"]', '200');
             await field('[name="fee"]', '10');
