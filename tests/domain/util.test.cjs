@@ -49,8 +49,16 @@ test('整数、数字与人民币格式的千分位与小数位', () => {
 test('在线时长不足一小时按分钟，空值显示破折号', () => {
     assert.equal(U.fmtMinutes(0), '—');
     assert.equal(U.fmtMinutes(null), '—');
+    assert.equal(U.fmtMinutes(0.5), '30 秒');
     assert.equal(U.fmtMinutes(45), '45 分钟');
     assert.equal(U.fmtMinutes(90), '1.5 小时');
+});
+
+test('在线时长最多两位小数，计时中的长小数不会漏到界面上', () => {
+    // 计时中的分钟数是 0.016666666666666666 这种长小数，直接拼会满屏尾巴。
+    assert.equal(U.fmtMinutes(45.678), '45.68 分钟');
+    assert.equal(U.fmtMinutes(59.999), '1.0 小时');
+    assert.equal(U.fmtMinutes(1 / 60), '1 秒');
 });
 
 test('快捷区间按当前本地日期计算，自定义范围可只设一端', () => {

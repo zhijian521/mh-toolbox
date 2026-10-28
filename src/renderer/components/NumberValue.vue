@@ -1,5 +1,15 @@
 <script setup lang="ts">
 defineProps<{ value: number | string | null | undefined; unit?: string }>();
+
+/**
+ * 数字展示入口：最多两位小数。
+ *
+ * 领域里不少值是算出来的（目标进度按角色平均、时长按秒折算），直接交给
+ * `toLocaleString()` 会带出 3 位小数甚至一长串尾巴，界面上统一收在这里。
+ */
+function show(value: number) {
+    return value.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+}
 </script>
 <template>
     <span class="number-value" :class="{ unknown: value == null || value === '' }">
@@ -8,7 +18,7 @@ defineProps<{ value: number | string | null | undefined; unit?: string }>();
                 value == null || value === ''
                     ? '—'
                     : typeof value === 'number'
-                      ? value.toLocaleString('zh-CN')
+                      ? show(value)
                       : value
             }}
         </b>

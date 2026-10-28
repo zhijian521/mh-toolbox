@@ -92,11 +92,15 @@ export function fmtAmount(value, currency) {
 
 /**
  * @param {number | null | undefined} minutes
- * @returns {string} 不足一小时按分钟，否则保留一位小数的小时数
+ * @returns {string} 不足一分钟按秒、不足一小时按分钟（最多两位小数），否则保留一位小数的小时数
  */
 export function fmtMinutes(minutes) {
     if (!minutes) return '—';
-    if (minutes < 60) return minutes + ' 分钟';
+    // 计时中的分钟数是个长小数（0.016666666666666666），直接拼出来会满屏尾巴。
+    if (minutes < 1) return Math.max(1, Math.round(minutes * 60)) + ' 秒';
+    // 先按两位小数收一次，再决定用分钟还是小时：59.999 收完是 60，该显示成小时。
+    const rounded = Math.round(minutes * 100) / 100;
+    if (rounded < 60) return rounded + ' 分钟';
     return (minutes / 60).toFixed(1) + ' 小时';
 }
 

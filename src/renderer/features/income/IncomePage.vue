@@ -64,23 +64,33 @@ const records = computed<Transaction[]>(() => {
         .slice()
         .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
 });
-/** 正在计时的会话；每秒刷新一次，让秒表与统计跟着走。 */
+/** 正在计时的会话；秒表与统计分别按自己的节拍刷新。 */
 const active = computed(() => {
     void app.data;
     return rules.state.activeSession;
 });
+/** 秒表用的时钟：只让「00:12:34」走字，不触发任何统计计算。 */
 const now = ref(Date.now());
-let ticker: ReturnType<typeof setInterval> | null = null;
+/** 统计节拍：`earningsStats` 要遍历全部流水与会话，每秒跑一遍纯属浪费，十秒一次足够。 */
+const statTick = ref(Date.now());
+let clock: ReturnType<typeof setInterval> | null = null;
+let statClock: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
-    ticker = setInterval(() => {
+    clock = setInterval(() => {
         if (active.value) now.value = Date.now();
     }, 1000);
+    statClock = setInterval(() => {
+        if (active.value) statTick.value = Date.now();
+    }, 10000);
 });
 onBeforeUnmount(() => {
-    if (ticker) clearInterval(ticker);
+    if (clock) clearInterval(clock);
+    if (statClock) clearInterval(statClock);
 });
 watch(active, () => {
+    // 开始/结束计时的瞬间要立刻对一次，不能等下一个十秒。
     now.value = Date.now();
+    statTick.value = Date.now();
 });
 const elapsedText = computed(() => {
     const start = Number(active.value?.startAt) || 0;
@@ -97,8 +107,8 @@ const elapsedText = computed(() => {
 });
 const stats = computed(() => {
     void app.data;
-    // 计时中每秒重算一次，否则「在线时长 / 时薪」会停在开始那一刻。
-    void now.value;
+    // 计时中每十秒重算一次，否则「在线时长 / 时薪」会停在开始那一刻。
+    void statTick.value;
     return rules.earningsStats(character.value, range.value.from, range.value.to, true);
 });
 /** 收益记录只看速记产生的收入；点卡流水走「全部记录」，不混进来。 */
