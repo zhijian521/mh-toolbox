@@ -194,7 +194,7 @@ const sparkPoints = computed(() => {
     position: relative;
     display: flex;
     flex-direction: column;
-    padding: 9px 12px 8px 14px;
+    padding: 9px 12px 8px;
     border: 1px solid color-mix(in srgb, var(--tone) 22%, var(--line));
     border-radius: 5px;
     /* 卡片底色是分类色的极淡版本：同一类的卡片一眼认得出，又不至于盖过价格。 */
@@ -208,15 +208,6 @@ const sparkPoints = computed(() => {
     transition:
         border-color 120ms ease,
         background-color 120ms ease;
-}
-/* 分类竖条：比整块色底克制，也不至于让一屏卡片变成调色盘。 */
-.price-card::before {
-    content: '';
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 3px;
-    background: var(--tone);
-    opacity: 0.85;
 }
 .price-card:hover {
     border-color: color-mix(in srgb, var(--tone) 42%, var(--line-2));
@@ -255,7 +246,7 @@ const sparkPoints = computed(() => {
 .tag-hole {
     position: absolute;
     top: 6px;
-    left: 13px;
+    left: 12px;
     width: 10px;
     height: 10px;
     border-radius: 50%;
@@ -271,8 +262,8 @@ const sparkPoints = computed(() => {
     justify-content: space-between;
     gap: 6px;
     min-height: 16px;
-    /* 让开挂绳孔（13 + 10 + 4，相对卡片左侧 14 的内边距）。 */
-    padding-left: 13px;
+    /* 让开挂绳孔（12 + 10 + 6，相对卡片左侧 12 的内边距）。 */
+    padding-left: 16px;
 }
 /* 分类做成小标签：价签左上角那块「品类」的标，两端圆头，像贴在卡面上的纸签。 */
 .card-category {
@@ -324,7 +315,7 @@ const sparkPoints = computed(() => {
  */
 .card-rule {
     height: 0;
-    margin: 4px -12px 0 -14px;
+    margin: 4px -12px 0;
     border-top: 1px dashed color-mix(in srgb, var(--tone) 32%, transparent);
 }
 .card-price {
@@ -332,8 +323,8 @@ const sparkPoints = computed(() => {
     align-items: baseline;
     gap: 3px;
     /* 价格带横贯卡片：左右用负外边距顶到边框，上下两条线把这一栏框住。 */
-    margin: 0 -12px 0 -14px;
-    padding: 4px 12px 5px 14px;
+    margin: 0 -12px;
+    padding: 4px 12px 5px;
     border-bottom: 1px solid color-mix(in srgb, var(--tone) 22%, transparent);
     background: linear-gradient(
         90deg,
