@@ -1,5 +1,64 @@
 import type { Domain, EquipmentItem } from '../../app/types';
 
+/** 编辑中的词条行：数值留空存 null，保存前由 `pruneDetail` 把这一行丢掉。 */
+export interface DraftRow {
+    key: string;
+    value: number | null;
+    boost: number | null;
+}
+/**
+ * 属性编辑器的草稿：与领域结构一致，只是词条行的数值允许「还没填」。
+ *
+ * 这里逐字段写出来而不是 `Omit<EquipmentDetail, ...>`：`EquipmentDetail` 带
+ * `[field: string]: any` 索引签名，`Omit` 会把显式字段一起抹平，词条数组退化成
+ * `any[]`，`rows.find((row) => ...)` 之类就全是隐式 any。
+ */
+export type DraftDetail = {
+    version: number;
+    base: DraftRow[];
+    extra: DraftRow[];
+    bonus: DraftRow[];
+    melt: DraftRow[];
+    technique: string;
+    effects: string[];
+    forge: number | null;
+    gems: EquipmentGem[];
+    clock: { name: string; level: number | null };
+    suit: string;
+    element: string;
+    durability: number | null;
+    repair: number | null;
+    maker: string;
+    runes: string;
+    jade: EquipmentJade;
+    legacy: string;
+};
+
+/**
+ * 把编辑器的草稿收敛成领域要的属性：没填数值的词条整行丢掉。
+ *
+ * 空行留着会被 `validateEquipmentDetails` 判成「请填写…的数值」——用户只是点了一下
+ * 「添加」还没填，不该被当成错误拦下来。反过来说，填了 0 的行必须保留：0 与「没记录」
+ * 在装备属性里是两件事。
+ */
+export function pruneDetail(draft: DraftDetail): EquipmentDetail {
+    const rows = (list: DraftRow[]): EquipmentRow[] =>
+        list
+            .filter((row) => row.key && row.value !== null)
+            .map((row) => ({
+                key: row.key,
+                value: Number(row.value),
+                boost: row.boost == null ? null : Number(row.boost),
+            }));
+    return {
+        ...draft,
+        base: rows(draft.base),
+        extra: rows(draft.extra),
+        bonus: rows(draft.bonus),
+        melt: rows(draft.melt),
+    } as EquipmentDetail;
+}
+
 /** 属性行的视觉分组，只决定文字颜色，不参与语义。 */
 export type PropertyKind = 'attribute' | 'gem' | 'special' | 'upgrade' | 'legacy';
 

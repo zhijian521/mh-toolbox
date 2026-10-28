@@ -77,6 +77,33 @@ export interface EquipmentItem extends RecordEntry {
     ocrText?: string;
     createdAt?: number;
 }
+/**
+ * 粘贴 / 截图解析出来的装备草稿。
+ *
+ * 字段由 `parseEquipmentText` 按行填，识别不出的一律留空串，由用户在核对列表里补；
+ * `details` 只在调用方自己构造了结构化属性时出现，否则领域会从文本属性再解析一次。
+ */
+export interface EquipmentDraft {
+    name: string;
+    slot: string;
+    level: number | '';
+    attributes: string;
+    special: string;
+    gems: string;
+    note: string;
+    jadeBase: string;
+    jadeExtra1: string;
+    jadeExtra2: string;
+    dustLevel: number | '';
+    holes: number | '';
+    durability: number | '';
+    hole1: string;
+    hole2: string;
+    hole3: string;
+    /** 原始粘贴文本，入库后留在 `ocrText` 里便于回查。 */
+    ocrText: string;
+    details?: EquipmentDetail;
+}
 /** 角色加上装备方案：由 `equipmentProfile` 保证结构完整，缺字段时现场补齐。 */
 export interface EquipmentProfile extends Character {
     equipmentSets: Array<{ name: string; slots: Record<string, string> }>;
@@ -584,8 +611,20 @@ export interface Domain {
     validateEquipmentDetails(slot: string, level: unknown, detail: EquipmentDetail): void;
     equipmentDetailsSnapshot(slot: string, detail: EquipmentDetail): EquipmentSnapshot;
     gearLogsOf(id: string): RecordEntry[];
+    /** 粘贴文本导入：解析单件、转成档案、校验、批量入库都由领域负责，页面只做核对。 */
+    equipmentImportLimits: { count: number; bytes: number; pixels: number };
+    parseEquipmentText(text: string): EquipmentDraft;
+    equipmentImportRecord(draft: EquipmentDraft, characterId: string): Record<string, unknown>;
+    /** 返回空串表示可以入库；否则是给用户看的补齐提示。 */
+    equipmentImportError(draft: EquipmentDraft, characterId: string): string;
+    importEquipment(
+        drafts: EquipmentDraft[],
+        options: { characterId: string; index: number | null },
+    ): Promise<{ created: number; reused: number; equipped: number; stored: number }>;
     assignEquipment(characterId: string, index: number, slot: string, id: string): void;
     copyEquipmentSet(characterId: string, from: number, to: number): void;
+    /** 三条一起改：名称会出现在选装标题与「已在本套」提示里，重名分不清指向哪一套。 */
+    renameEquipmentSet(characterId: string, names: string[]): void;
     /** 同步方法，调用方必须套 `commitEquipment`，否则改完不落盘。 */
     saveEquipment(data: Record<string, unknown>, id?: string): EquipmentItem;
     /** 同步方法，调用方必须套 `commitEquipment`。 */

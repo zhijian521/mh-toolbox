@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { EquipmentItem, EquipmentProfile } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import BaseModal from '../../components/BaseModal.vue';
 import BaseNumber from '../../components/BaseNumber.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
+import EquipmentFields from './EquipmentFields.vue';
+import { pruneDetail, type DraftDetail } from './properties';
 
 const props = defineProps<{
     /** 编辑时传入；新增时为空。 */
@@ -20,13 +22,11 @@ const rules = app.rules();
 /**
  * 新增 / 编辑装备档案。
  *
- * 这一批只管「这件装备是什么」：角色、部位、名称、等级、持有状态、备注。结构化属性
- * （词条、宝石、特技、玉魄灵尘）留给下一批的属性编辑器——它们的校验规则比这里复杂得多，
- * 混在一起会让这个弹窗变成第二个领域层。
+ * 属性区是独立组件（`EquipmentFields`），按部位生成八组字段；这里只管档案字段与保存。
  *
- * 两个临时约束，等属性编辑器就位后解除：
- * 1. 新增时不能选玉魄：玉魄必须同时提供三条属性与开光信息，没有属性区就填不出合法档案。
- * 2. 编辑时不能改部位：属性按部位分组，换了部位却留着旧词条会得到一条部位与词条对不上的档案。
+ * 部位可以改，且每个部位各留一份属性草稿：先按武器填了伤害、发现点错部位改成头盔、
+ * 再改回武器时，刚才填的东西不该白丢。换部位后旧词条仍然留在草稿里，但保存前由领域
+ * 按新部位严格校验，不支持的属性会明确报错，而不是悄悄带着一条对不上的词条存下来。
  */
 const editing = computed(() => props.eq || null);
 const characterId = ref(props.eq?.characterId || props.profile.id);
@@ -39,21 +39,37 @@ const equipNow = ref(!!props.context);
 const dirty = ref(false);
 const error = ref('');
 
+/** 每个部位一份属性草稿，换回来还能接着填。 */
+const drafts = new Map<string, DraftDetail>();
+function draftFor(target: string): DraftDetail {
+    // 编辑已有档案时取它自己的属性，其余部位从空属性开始。
+    if (props.eq && target === props.eq.slot)
+        return rules.equipmentDetails(props.eq) as unknown as DraftDetail;
+    return rules.emptyEquipmentDetails() as unknown as DraftDetail;
+}
+const detail = ref<DraftDetail>(draftFor(slot.value));
+watch(slot, (next, previous) => {
+    drafts.set(previous, detail.value);
+    detail.value = drafts.get(next) || draftFor(next);
+});
+// 属性区直接改草稿对象、不逐项发事件，所以用深监听统一标脏。
+watch(detail, () => (dirty.value = true), { deep: true });
+
 const characterOptions = computed(() =>
     app.characters.map((item) => ({ value: item.id, label: item.name })),
 );
-/** 新增时排除玉魄：它必须同时提供三条属性与开光信息，这一批还没有属性编辑器。 */
-const slotOptions = computed(() =>
-    rules.slots
-        .filter((item) => (props.eq ? true : !rules.isJade(item)))
-        .map((item) => ({ value: item, label: item })),
-);
+const slotOptions = computed(() => rules.slots.map((item) => ({ value: item, label: item })));
 const statusOptions = computed(() => [
     { value: 'stored', label: '持有' },
     { value: 'sold', label: '已出售' },
 ]);
 /** 存完是否顺手穿上：只在新增、且部位能穿时才问。 */
 const canEquipNow = computed(() => !editing.value && slot.value !== '其他');
+const attributesHint = computed(() =>
+    rules.equipmentRule(slot.value).kind === 'other'
+        ? '「其他」没有固定词条，属性只能记在下面的原有内容里。'
+        : '按游戏里显示的属性逐项填写，留空表示未记录。',
+);
 
 async function save() {
     if (app.busy) return;
@@ -62,24 +78,29 @@ async function save() {
         error.value = '请填写装备名称';
         return;
     }
+    const jade = rules.isJade(slot.value);
+    const details = pruneDetail(detail.value);
+    /**
+     * 玉魄必须有「一条基础 + 两条附加」。
+     *
+     * 领域对玉魄的严格校验只管格式，空属性本身是合法的——但那样会存下一件在栏里
+     * 只有名字、看不出是什么的玉魄。导入路径也有同一条要求，两处保持一致。
+     */
+    if (jade && (details.base.length < 1 || details.extra.length < 2)) {
+        error.value = '玉魄需要一条基础属性和两条附加属性';
+        return;
+    }
     try {
         const record: Record<string, unknown> = {
             characterId: characterId.value,
             slot: slot.value,
             name: name.value.trim(),
             // 玉魄没有装备等级，领域保存时也会把它置空，这里先按空串传。
-            level: rules.isJade(slot.value) ? '' : level.value === '' ? '' : Number(level.value),
+            level: jade ? '' : level.value === '' ? '' : Number(level.value),
             status: status.value,
             note: note.value.trim(),
+            details,
         };
-        /**
-         * 编辑时把现有属性原样回写。
-         *
-         * 不传的话领域会走玉魄分支要求 `jade`，普通装备则会静默保留旧 `details`——
-         * 两条路径对「只改了个备注」这种事都不友好。回写一次等于让旧文本属性顺手
-         * 规范化成结构化的第 1 版，读取路径的 `repairEquipmentDetails` 已保证它能过校验。
-         */
-        if (props.eq) record.details = rules.equipmentDetails(props.eq);
         await app.execute((domain) =>
             domain.commitEquipment(() => {
                 const saved = domain.saveEquipment(record, props.eq?.id);
@@ -103,13 +124,11 @@ async function save() {
 <template>
     <BaseModal
         :title="editing ? '编辑装备档案' : '新增装备档案'"
+        wide
         :busy="app.busy"
         :dirty="dirty"
         @close="emit('close')"
     >
-        <p v-if="editing" class="hint">
-            属性词条在下一批的属性编辑器里维护；这里改的是档案信息，不会动已有属性。
-        </p>
         <form id="equipment-form" class="form-grid eq-form" @submit.prevent="save">
             <label>
                 角色
@@ -126,7 +145,6 @@ async function save() {
                     v-model="slot"
                     label="装备部位"
                     :options="slotOptions"
-                    :disabled="!!editing"
                     @update:model-value="dirty = true"
                 />
             </label>
@@ -175,6 +193,13 @@ async function save() {
                     @input="dirty = true"
                 ></textarea>
             </label>
+            <div class="full attrs">
+                <div class="attrs-head">
+                    <h3>属性</h3>
+                    <span class="hint">{{ attributesHint }}</span>
+                </div>
+                <EquipmentFields v-model="detail" :part="slot" />
+            </div>
         </form>
         <p v-if="error" class="error form-error" role="alert">{{ error }}</p>
         <template #footer="{ close }">
@@ -198,6 +223,26 @@ async function save() {
     display: flex;
     align-items: center;
     gap: 7px;
+}
+.attrs {
+    margin-top: 2px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+}
+.attrs-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.attrs-head h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+.attrs-head .hint {
+    min-width: 0;
+    font-size: 11.5px;
 }
 .check input {
     width: 15px;

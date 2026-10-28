@@ -384,7 +384,7 @@ export default function install(D, _U, _gateway, _localStorage) {
             async importEquipment(drafts, { characterId, index }) {
                 return this.commitEquipment(() => {
                     if (!drafts.length || drafts.length > this.equipmentImportLimits.count)
-                        throw new Error('请选择 1～30 张装备截图');
+                        throw new Error('请选择 1～30 件装备');
                     const profile = this.equipmentProfile(characterId);
                     if (index !== null && ![0, 1, 2].includes(index))
                         throw new Error('请选择有效的装备方案');

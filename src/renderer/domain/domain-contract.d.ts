@@ -296,6 +296,7 @@ interface Domain {
     clearEquipmentReferences: (id: string) => void;
     assignEquipment: (characterId: string, index: number, slot: string, id: string) => void;
     copyEquipmentSet: (characterId: string, from: number, to: number) => void;
+    renameEquipmentSet: (characterId: string, names: string[]) => void;
     /** 同步落盘：调用方已经在 commitEquipment 事务内，因此不经 Promise。 */
     saveEquipment: (data: any, id?: string) => any;
     commitEquipment: (change: () => any) => Promise<any>;

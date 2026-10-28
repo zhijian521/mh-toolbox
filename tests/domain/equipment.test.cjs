@@ -278,3 +278,130 @@ test('保存失败回滚方案、装备和售出关联，重试不会留下重�
     );
     assert.equal(JSON.stringify(D.state), beforeSale);
 });
+
+test('方案改名：三条一起校验，空名、超长与重名都拒绝，保存后随档案读回', () => {
+    const D = domain();
+    assert.throws(() => D.renameEquipmentSet('c1', ['日常', '']), /3 套/);
+    assert.throws(() => D.renameEquipmentSet('c1', ['日常', '比武', '  ']), /不能为空/);
+    assert.throws(() => D.renameEquipmentSet('c1', ['日常', '比武', '备'.repeat(21)]), /20 个字/);
+    assert.throws(() => D.renameEquipmentSet('c1', ['日常', '日常', '备用']), /不能重复/);
+    D.renameEquipmentSet('c1', [' 日常 ', '比武', '备用']);
+    assert.deepEqual(
+        D.charById('c1').equipmentSets.map((set) => set.name),
+        ['日常', '比武', '备用'],
+    );
+    const restored = domain(JSON.parse(JSON.stringify(D.state)));
+    assert.equal(restored.charById('c1').equipmentSets[0].name, '日常');
+});
+
+test('结构化属性保存后写进快照文本：宝石、特效、负数熔炼都按原样留住', () => {
+    const D = domain();
+    const eq = D.saveEquipment({
+        characterId: 'c1',
+        slot: '武器',
+        name: '测试剑',
+        level: 120,
+        status: 'stored',
+        details: {
+            ...D.emptyEquipmentDetails(),
+            base: [
+                { key: 'damage', value: 480, boost: null },
+                { key: 'hit', value: 530, boost: null },
+            ],
+            extra: [{ key: 'strength', value: 32, boost: null }],
+            bonus: [{ key: 'damage', value: 20, boost: null }],
+            melt: [{ key: 'damage', value: -12, boost: null }],
+            technique: '野兽之力',
+            effects: ['永不磨损'],
+            forge: 10,
+            gems: [{ type: '太阳石', level: 10 }],
+        },
+    });
+    assert.equal(eq.attributes, '伤害 +480\n命中 +530\n力量 +32\n伤害 +20');
+    assert.equal(eq.special, '特技：野兽之力\n特效：永不磨损');
+    assert.equal(eq.gems, '锻炼等级 10\n太阳石 ×10');
+    // 熔炼不进快照文本，但结构化属性里必须还在：负数加成是最容易被抹成 0 的值。
+    assert.equal(eq.details.melt[0].value, -12);
+    const restored = domain(JSON.parse(JSON.stringify(D.state)));
+    const saved = restored.state.equipment.find((item) => item.id === eq.id);
+    assert.equal(restored.equipmentDetails(saved).melt[0].value, -12);
+    assert.equal(restored.equipmentDetails(saved).gems[0].level, 10);
+});
+
+test('玉魄走结构化属性保存：基础与两条附加写回文本字段，灵尘与开光保留', () => {
+    const D = domain();
+    const eq = D.saveEquipment({
+        characterId: 'c1',
+        slot: '玉魄·阳',
+        name: '上古玉魄·阳',
+        status: 'stored',
+        level: '',
+        details: {
+            ...D.emptyEquipmentDetails(),
+            base: [{ key: 'damage', value: 15, boost: null }],
+            extra: [
+                { key: 'damage', value: 8, boost: null },
+                { key: 'physicalCrit', value: 10, boost: null },
+            ],
+            jade: {
+                dust: 8,
+                assault: '奇袭法术',
+                chance: 12.5,
+                holes: 2,
+                enchantments: ['野兽之力', '放下屠刀'],
+            },
+            durability: 280,
+        },
+    });
+    assert.equal(eq.jade.base, '伤害 +15');
+    assert.equal(eq.jade.extra1, '伤害 +8');
+    assert.equal(eq.jade.extra2, '物理暴击等级 +10');
+    assert.equal(eq.jade.dustLevel, 8);
+    assert.deepEqual(eq.jade.enchantments, ['野兽之力', '放下屠刀']);
+    const detail = D.equipmentDetails(D.state.equipment.find((item) => item.id === eq.id));
+    assert.equal(detail.jade.assault, '奇袭法术');
+    assert.equal(detail.jade.chance, 12.5);
+    assert.equal(detail.durability, 280);
+});
+
+test('灵饰词条可带强化加成，超量与重复仍被拦下', () => {
+    const D = domain();
+    const eq = D.saveEquipment({
+        characterId: 'c1',
+        slot: '戒指',
+        name: '测试戒指',
+        status: 'stored',
+        details: {
+            ...D.emptyEquipmentDetails(),
+            base: [{ key: 'damage', value: 30, boost: 5 }],
+            extra: [
+                { key: 'physicalCrit', value: 48, boost: 6 },
+                { key: 'spellCrit', value: 32, boost: null },
+                { key: 'speed', value: 12, boost: null },
+            ],
+        },
+    });
+    assert.equal(D.equipmentDetails(eq).base[0].boost, 5);
+    assert.throws(
+        () =>
+            D.saveEquipment(
+                {
+                    characterId: 'c1',
+                    slot: '戒指',
+                    name: '四条附加',
+                    status: 'stored',
+                    details: {
+                        ...D.emptyEquipmentDetails(),
+                        extra: [
+                            { key: 'physicalCrit', value: 1, boost: null },
+                            { key: 'spellCrit', value: 2, boost: null },
+                            { key: 'speed', value: 3, boost: null },
+                            { key: 'damage', value: 4, boost: null },
+                        ],
+                    },
+                },
+                undefined,
+            ),
+        /附加属性数量/,
+    );
+});

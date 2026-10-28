@@ -1383,7 +1383,7 @@ app.on('browser-window-created', (_event, win) => {
                 '还没有档案，格子都是空位',
             );
 
-            // 新增一件武器：这一批只填档案信息，属性词条留给下一批的编辑器。
+            // 新增一件武器：只填档案，属性留空也是合法档案（属性编辑器另有一步验证）。
             await click('＋ 新增装备');
             await until(() => !!document.querySelector('#equipment-form'), '新增装备弹窗');
             await field('[name="name"]', '测试武器');
@@ -1462,6 +1462,149 @@ app.on('browser-window-created', (_event, win) => {
             const keptTx = disk().transactions.find((tx) => tx.amount === 300);
             assert.ok(keptTx, '账本流水保留');
             assert.equal(keptTx.equipmentId, undefined, '只解除关联');
+
+            // ---- 属性编辑器：词条、宝石、特效都写进结构化属性 ----
+            await click('＋ 新增装备');
+            await until(() => !!document.querySelector('#equipment-form'), '新增装备弹窗');
+            await field('[name="name"]', '测试剑');
+            await field('[name="level"]', '130');
+            await field('[name="eq-base-damage"]', '480');
+            await field('[name="eq-base-hit"]', '530');
+            await field('[name="eq-forge"]', '8');
+            // 附加属性：先加一行，再选属性、填数值。
+            await read(() => document.querySelector('.modal .group-head .add').click());
+            await choose('附加属性', '力量');
+            await field('.modal .row input[type="number"]', '32');
+            // 特效与宝石：勾选框直接点 input，标签结构变了也不会让用例失效。
+            await read(() => {
+                const check = [...document.querySelectorAll('.modal .checks .check')].find(
+                    (element) => element.textContent.trim() === '永不磨损',
+                );
+                check.querySelector('input').click();
+            });
+            await read(() => {
+                const gem = [...document.querySelectorAll('.modal .gem')].find((element) =>
+                    element.textContent.includes('太阳石'),
+                );
+                gem.querySelector('input[type="checkbox"]').click();
+            });
+            await read(() => {
+                const gem = [...document.querySelectorAll('.modal .gem')].find((element) =>
+                    element.textContent.includes('太阳石'),
+                );
+                const input = gem.querySelector('input[type="number"]');
+                input.value = '8';
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            await click('登记装备');
+            await until(() => !document.querySelector('#equipment-form'), '属性已保存');
+            await untilDisk(
+                () =>
+                    disk().equipment.some((eq) => eq.name === '测试剑' && eq.details?.forge === 8),
+                '结构化属性落盘',
+            );
+            const crafted = disk().equipment.find((eq) => eq.name === '测试剑');
+            assert.equal(crafted.details.base.length, 2, '主要属性两条');
+            assert.equal(crafted.details.base[0].key, 'damage');
+            assert.equal(crafted.details.extra[0].key, 'strength');
+            assert.equal(crafted.details.extra[0].value, 32);
+            assert.deepEqual(crafted.details.effects, ['永不磨损']);
+            assert.equal(crafted.details.gems[0].type, '太阳石', '宝石勾选写入');
+            assert.equal(crafted.details.gems[0].level, 8);
+            assert.equal(crafted.attributes, '伤害 +480\n命中 +530\n力量 +32', '快照文本同步');
+
+            // ---- 方案改名：三条一起校验，改完随档案读回 ----
+            await click('搭配');
+            await until(() => document.querySelectorAll('.eq-plan').length === 3, '回到搭配');
+            await click('改名');
+            await until(() => !!document.querySelector('#plan-form'), '改名弹窗');
+            await field('[name="set-0"]', '日常');
+            await field('[name="set-1"]', '比武');
+            await field('[name="set-2"]', '任务');
+            await click('保存名称');
+            await until(() => !document.querySelector('#plan-form'), '改名保存');
+            await untilDisk(
+                () => disk().characters[0].equipmentSets[2].name === '任务',
+                '方案名落盘',
+            );
+            assert.equal(
+                await read(
+                    () =>
+                        document.querySelectorAll('.eq-plan')[1].querySelector('span').textContent,
+                ),
+                '比武',
+                '标签跟着变',
+            );
+
+            // 先穿一件：复制断言要有可比的内容，空方案复制空方案说明不了问题。
+            await read(() => document.querySelectorAll('.eq-slot')[2].click());
+            await until(() => !!document.querySelector('.eq-picker'), '选装弹窗');
+            await read(() => {
+                const button = [...document.querySelectorAll('.eq-pick')].find((item) =>
+                    item.textContent.includes('测试剑'),
+                );
+                button.click();
+            });
+            await until(() => !document.querySelector('.modal'), '穿上测试剑');
+            await untilDisk(
+                () => !!disk().characters[0].equipmentSets[0].slots['武器'],
+                '方案一穿上测试剑',
+            );
+
+            // ---- 复制方案：把正在查看的这套覆盖到另一套 ----
+            await click('复制方案');
+            await until(() => !!document.querySelector('#plan-form'), '复制弹窗');
+            await click('覆盖目标方案');
+            await until(() => !document.querySelector('#plan-form'), '复制完成');
+            await untilDisk(
+                () => !!disk().characters[0].equipmentSets[1].slots['武器'],
+                '方案二拿到武器引用',
+            );
+            assert.equal(
+                disk().characters[0].equipmentSets[1].slots['武器'],
+                disk().characters[0].equipmentSets[0].slots['武器'],
+                '复制的是引用，不是新档案',
+            );
+            assert.equal(disk().equipment.length, 1, '复制不新增档案');
+
+            // ---- 粘贴导入：两件文本，一件按名称认出部位，一件按后缀 ----
+            await click('粘贴导入');
+            await until(() => !!document.querySelector('[name="paste"]'), '导入弹窗');
+            await field(
+                '[name="paste"]',
+                '名称：霜寒剑\n装备等级：130\n伤害 +500\n命中 +540\n\n名称：流云履\n装备等级：120\n防御 +86\n敏捷 +35',
+            );
+            await click('解析文本');
+            await until(() => document.querySelectorAll('.modal .item').length === 2, '解析出两件');
+            assert.equal(
+                await read(() => document.querySelectorAll('.modal .item.bad').length),
+                0,
+                '两件都识别出部位，没有待补齐项',
+            );
+            await read(() => {
+                const button = [...document.querySelectorAll('.modal button')].find((element) =>
+                    element.textContent.trim().startsWith('入库'),
+                );
+                button.click();
+            });
+            await until(() => !document.querySelector('.modal'), '导入完成');
+            await untilDisk(() => disk().equipment.length === 3, '两件都落盘');
+            const imported = disk().equipment.find((eq) => eq.name === '霜寒剑');
+            assert.equal(imported.slot, '武器');
+            assert.equal(imported.level, 130);
+            assert.equal(imported.details.base.length, 2, '属性文本解析成结构化属性');
+            assert.equal(imported.details.base[0].value, 500);
+            assert.equal(
+                disk().equipment.find((eq) => eq.name === '流云履').slot,
+                '鞋子',
+                '名称后缀认出部位',
+            );
+            assert.ok(imported.ocrText.includes('霜寒剑'), '原文留在档案里可回查');
+            assert.equal(
+                await read(() => document.querySelectorAll('.eq-row').length),
+                4,
+                '导入后自动切到仓库，包含表头与三件档案',
+            );
 
             await read(() => document.querySelector('a[href="#/settings"]').click());
             await until(() => !!document.querySelector('.settings-page'), '设置页面');

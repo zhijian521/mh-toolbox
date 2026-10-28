@@ -9,6 +9,7 @@ const emit = defineEmits<{
     pick: [slot: string];
     detail: [eq: EquipmentItem];
     soul: [];
+    plan: [mode: 'rename' | 'copy'];
 }>();
 const app = useApplication();
 const rules = app.rules();
@@ -89,20 +90,46 @@ function isPending(slot: string) {
                         使用此套
                     </button>
                 </div>
-                <div class="eq-plan-tabs" role="group" :aria-label="profile.name + '的装备方案'">
-                    <button
-                        v-for="(item, index) in profile.equipmentSets"
-                        :key="index"
-                        type="button"
-                        class="eq-plan"
-                        :class="{ on: index === viewed, active: index === active }"
-                        :aria-pressed="index === viewed"
-                        :title="`方案 ${index + 1}：${item.name}`"
-                        @click="setViewed(index)"
+                <div class="eq-plan-row">
+                    <div
+                        class="eq-plan-tabs"
+                        role="group"
+                        :aria-label="profile.name + '的装备方案'"
                     >
-                        <b>{{ index + 1 }}</b>
-                        <span>{{ item.name }}</span>
-                    </button>
+                        <button
+                            v-for="(item, index) in profile.equipmentSets"
+                            :key="index"
+                            type="button"
+                            class="eq-plan"
+                            :class="{ on: index === viewed, active: index === active }"
+                            :aria-pressed="index === viewed"
+                            :title="`方案 ${index + 1}：${item.name}`"
+                            @click="setViewed(index)"
+                        >
+                            <b>{{ index + 1 }}</b>
+                            <span>{{ item.name }}</span>
+                        </button>
+                    </div>
+                    <div class="eq-plan-actions">
+                        <button
+                            class="btn compact"
+                            type="button"
+                            :disabled="app.busy"
+                            title="给三套方案改名"
+                            @click="emit('plan', 'rename')"
+                        >
+                            改名
+                        </button>
+                        <button
+                            class="btn compact"
+                            type="button"
+                            :disabled="app.busy"
+                            :title="'把「' + set.name + '」的搭配复制到另一套'"
+                            @click="emit('plan', 'copy')"
+                        >
+                            复制方案
+                        </button>
+                    </div>
                 </div>
                 <div class="eq-gear-grid">
                     <EquipmentSlot
@@ -215,8 +242,21 @@ function isPending(slot: string) {
     color: var(--green);
     font-size: 11.5px;
 }
+.eq-plan-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+}
 .eq-plan-tabs {
     display: flex;
+    flex: 1;
+    min-width: 0;
+    gap: 6px;
+}
+/* 改名与复制都作用于「当前这套」，因此贴着方案标签放，而不是丢进页面顶栏。 */
+.eq-plan-actions {
+    display: flex;
+    flex: none;
     gap: 6px;
 }
 .eq-plan {

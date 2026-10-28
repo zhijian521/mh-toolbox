@@ -150,5 +150,5 @@ test('后续行校验和落盘失败均整体回滚，重试不重复；无效�
         assert.match(D.equipmentImportError({ ...draft, level }, 'c1'), /等级/);
     await assert.rejects(D.importEquipment([draft], { characterId: 'c1', index: 3 }), /方案/);
     await assert.rejects(D.importEquipment([draft], { characterId: 'missing', index: 0 }), /角色/);
-    await assert.rejects(D.importEquipment([], { characterId: 'c1', index: 0 }), /截图/);
+    await assert.rejects(D.importEquipment([], { characterId: 'c1', index: 0 }), /1～30/);
 });

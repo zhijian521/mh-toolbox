@@ -319,6 +319,35 @@ export default function install(D, U, _gateway, _localStorage) {
             },
 
             /**
+             * 三套方案改名。
+             *
+             * 名称只是标签，不参与搭配与账本；但会出现在选装弹窗标题、仓库的「已在本套」
+             * 提示和详情页里，空名或重名会让这些地方出现空白标题、或分不清指的是哪一套，
+             * 所以三条一起校验完再写。
+             *
+             * @this {Domain}
+             * @param {string} characterId
+             * @param {string[]} names 三条名称，顺序与方案一致
+             * @returns {void}
+             */
+            renameEquipmentSet(characterId, names) {
+                const character = this.equipmentProfile(characterId);
+                const total = character.equipmentSets.length;
+                if (!Array.isArray(names) || names.length !== total)
+                    throw new Error('请填写 ' + total + ' 套方案的名称');
+                const trimmed = names.map((name) => String(name == null ? '' : name).trim());
+                if (trimmed.some((name) => !name)) throw new Error('方案名称不能为空');
+                if (trimmed.some((name) => name.length > 20))
+                    throw new Error('方案名称最多 20 个字');
+                if (new Set(trimmed).size !== trimmed.length) throw new Error('方案名称不能重复');
+                character.equipmentSets.forEach(
+                    (/** @type {any} */ set, /** @type {number} */ index) => {
+                        set.name = trimmed[index];
+                    },
+                );
+            },
+
+            /**
              * @this {Domain}
              * @param {any} data
              * @param {string} [id]

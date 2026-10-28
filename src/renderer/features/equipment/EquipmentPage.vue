@@ -10,7 +10,9 @@ import PageHeader from '../../components/PageHeader.vue';
 import EquipmentBoard from './EquipmentBoard.vue';
 import EquipmentDetail from './EquipmentDetail.vue';
 import EquipmentEditor from './EquipmentEditor.vue';
+import EquipmentImportDialog from './EquipmentImportDialog.vue';
 import EquipmentPickDialog from './EquipmentPickDialog.vue';
+import EquipmentPlanDialog from './EquipmentPlanDialog.vue';
 import EquipmentWarehouse from './EquipmentWarehouse.vue';
 import GearLogDialog from './GearLogDialog.vue';
 import SoulJadeDialog from './SoulJadeDialog.vue';
@@ -41,6 +43,9 @@ const editor = ref<{
 const removing = ref<EquipmentItem | null>(null);
 const removeError = ref('');
 const soulOpen = ref(false);
+/** 改名 / 复制：都作用于「正在查看的那一套」，入口在方案标签旁边。 */
+const planDialog = ref<'rename' | 'copy' | null>(null);
+const importOpen = ref(false);
 
 const characterOptions = computed(() =>
     app.characters.map((item) => ({ value: item.id, label: item.name })),
@@ -123,6 +128,11 @@ function cancelRemove() {
     removing.value = null;
     removeError.value = '';
 }
+/** 导入完直接切到仓库：刚进来的几件就在列表顶上，不用自己找。 */
+function imported() {
+    importOpen.value = false;
+    tab.value = 'warehouse';
+}
 </script>
 
 <template>
@@ -131,6 +141,15 @@ function cancelRemove() {
             <div class="eq-character">
                 <BaseSelect v-model="character" label="装备角色筛选" :options="characterOptions" />
             </div>
+            <button
+                class="btn"
+                type="button"
+                :disabled="app.busy || !app.characters.length"
+                title="粘贴游戏里的装备属性文本，一次可导入多件"
+                @click="importOpen = true"
+            >
+                粘贴导入
+            </button>
             <button
                 class="btn primary"
                 type="button"
@@ -182,6 +201,7 @@ function cancelRemove() {
                 @pick="openPick"
                 @detail="detail = $event"
                 @soul="soulOpen = true"
+                @plan="planDialog = $event"
             />
             <EquipmentWarehouse
                 v-else
@@ -233,6 +253,19 @@ function cancelRemove() {
         :context="editor.context"
         @close="editor = null"
         @saved="editor = null"
+    />
+    <EquipmentPlanDialog
+        v-if="planDialog && profile"
+        :profile="profile"
+        :mode="planDialog"
+        @close="planDialog = null"
+        @saved="planDialog = null"
+    />
+    <EquipmentImportDialog
+        v-if="importOpen && profile"
+        :profile="profile"
+        @close="importOpen = false"
+        @saved="imported"
     />
     <BaseModal v-if="removing" title="删除装备档案" :busy="app.busy" @close="cancelRemove">
         <p>确定删除「{{ removing.name }}」吗？</p>
