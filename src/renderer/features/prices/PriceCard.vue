@@ -41,6 +41,15 @@ const label = computed(() => rules.priceLabel(props.current ? props.current.pric
 const updateText = computed(() => (props.current ? props.current.date.slice(5) : '未记录'));
 const logCount = computed(() => props.item.logs.length);
 
+/**
+ * 涨跌幅：10% 以下保留一位小数，再往上取整。
+ * 一律取整会把 2.5% 写成 3%、7.1% 写成 7%——物价刚好在那几个点上有差别，磨掉就没意义了；
+ * 而 10% 以上的整数位已经够用，多一位反而让徽章变宽。
+ */
+function percentText(pct: number) {
+    return (pct < 10 ? Number(pct.toFixed(1)) : Math.round(pct)) + '%';
+}
+
 /** 涨跌徽章只放百分比，具体金额与基准日期挂在 title 上，省一行的宽度。 */
 const badge = computed(() => {
     const change = props.change;
@@ -51,7 +60,8 @@ const badge = computed(() => {
      */
     const since = change.since === props.current?.date ? '同日上一条' : change.since;
     const amount = rules.priceLabel(Math.abs(change.delta));
-    const money = amount.value + ' ' + amount.unit;
+    // 不到一万时单位是空的，直接拼会留一个尾随空格（「涨 80 」）。
+    const money = amount.unit ? amount.value + ' ' + amount.unit : amount.value;
     if (change.delta === 0) {
         return { dir: 'flat', text: '持平', title: '与 ' + since + ' 同价' };
     }
@@ -60,7 +70,7 @@ const badge = computed(() => {
     return {
         dir: up ? 'up' : 'down',
         arrow: up ? '▲' : '▼',
-        text: pct === null ? money : pct.toFixed(pct < 1 ? 1 : 0) + '%',
+        text: pct === null ? money : percentText(pct),
         title: '较 ' + since + (up ? ' 涨 ' : ' 跌 ') + money,
     };
 });
