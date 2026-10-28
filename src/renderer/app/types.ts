@@ -52,6 +52,49 @@ export interface RecordEntry {
     characterId?: string;
     [key: string]: unknown;
 }
+/** 装备被哪几套方案引用。`active` 表示挂在当前使用的那一套上。 */
+export interface EquipmentReference {
+    characterId: string;
+    index: number;
+    name: string;
+    active: boolean;
+}
+/**
+ * 装备档案。
+ *
+ * 属性走 `details`（结构见全局的 `EquipmentDetail`），玉魄另有 `jade` 存基础/附加三条
+ * 与灵尘、开光信息。`level` 对玉魄无意义，由领域在保存时置空。
+ */
+export interface EquipmentItem extends RecordEntry {
+    characterId: string;
+    slot: string;
+    name: string;
+    level: number | string | null;
+    status: string;
+    note: string;
+    details?: EquipmentDetail;
+    jade?: Record<string, unknown>;
+    ocrText?: string;
+    createdAt?: number;
+}
+/** 角色加上装备方案：由 `equipmentProfile` 保证结构完整，缺字段时现场补齐。 */
+export interface EquipmentProfile extends Character {
+    equipmentSets: Array<{ name: string; slots: Record<string, string> }>;
+    activeEquipmentSet: number;
+    viewedEquipmentSet: number;
+    pendingEquipmentSlots: string[];
+    soulJade: { unlocked: boolean; attribute: string; level: number };
+}
+/** 记变动的入参：`sync` 为真时同时写一条账号账本流水并双向关联。 */
+export interface GearLogInput {
+    date: string;
+    action: string;
+    currency: string;
+    channel: string;
+    amount: number | string;
+    note?: string;
+    sync?: boolean;
+}
 /** 时间范围筛选的状态：预设键与它算出的起止日（手改日期后变成 `custom`）。 */
 export interface DateRangeValue {
     preset: string;
@@ -244,7 +287,7 @@ export interface AppData {
     schemaVersion: number;
     characters: Character[];
     transactions: Transaction[];
-    equipment: RecordEntry[];
+    equipment: EquipmentItem[];
     goals: Goal[];
     sessions: RecordEntry[];
     gearLogs: RecordEntry[];
@@ -514,6 +557,43 @@ export interface Domain {
     syncAccountEarnings(
         dates: string[],
     ): Promise<Array<{ date: string; characterId: string; amount: number }>>;
+    // 装备与三套方案
+    slots: string[];
+    equipmentGroups: Record<string, { name: string; slots: string[] }>;
+    equipmentStatuses: Record<string, string>;
+    equipmentSetNames: string[];
+    soulAttributes: string[];
+    equipmentStats: Record<string, string>;
+    equipmentTechniques: string[];
+    equipmentClockEffects: string[];
+    gearActions: Array<{ v: string; t: string; dir: number }>;
+    gearAction(value: string): { v: string; t: string; dir: number };
+    isJade(slot: string): boolean;
+    equipmentRule(slot: string): EquipmentRule;
+    /** 首次访问时补齐全套方案结构；旧档缺的字段在此一次收敛。 */
+    equipmentProfile(characterId: string): EquipmentProfile;
+    equipmentById(id: string): EquipmentItem | undefined;
+    /** 由引用关系派生：`active` / `standby` / `stored` / `sold`。 */
+    equipmentStatus(eq: EquipmentItem, references?: EquipmentReference[]): string;
+    equipmentReferences(id: string): EquipmentReference[];
+    equipmentReferenceIndex(characterId: string): Map<string, EquipmentReference[]>;
+    equipmentSearchText(eq: EquipmentItem): string;
+    equipmentStatText(row: EquipmentRow): string;
+    equipmentDetails(eq: EquipmentItem): EquipmentDetail;
+    emptyEquipmentDetails(): EquipmentDetail;
+    validateEquipmentDetails(slot: string, level: unknown, detail: EquipmentDetail): void;
+    equipmentDetailsSnapshot(slot: string, detail: EquipmentDetail): EquipmentSnapshot;
+    gearLogsOf(id: string): RecordEntry[];
+    assignEquipment(characterId: string, index: number, slot: string, id: string): void;
+    copyEquipmentSet(characterId: string, from: number, to: number): void;
+    /** 同步方法，调用方必须套 `commitEquipment`，否则改完不落盘。 */
+    saveEquipment(data: Record<string, unknown>, id?: string): EquipmentItem;
+    /** 同步方法，调用方必须套 `commitEquipment`。 */
+    removeEquipment(id: string): void;
+    /** 装备写入的统一事务：失败回滚，避免留下半套方案或重复流水。 */
+    commitEquipment<T>(change: () => T): Promise<T>;
+    /** 记一条变动；`sync` 为真时同时写账号流水，自己 commit。 */
+    recordEquipmentChange(id: string, data: GearLogInput): Promise<unknown>;
     // 物价卡片（独立功能，不参与角色筛选与账本统计）
     priceCategories: string[];
     orderedPrices(items?: PriceItem[]): PriceItem[];

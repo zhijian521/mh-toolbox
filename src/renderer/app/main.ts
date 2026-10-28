@@ -4,6 +4,7 @@ import { createRouter, createWebHashHistory } from 'vue-router';
 import App from './App.vue';
 import AccountsPage from '../features/accounts/AccountsPage.vue';
 import CharactersPage from '../features/characters/CharactersPage.vue';
+import EquipmentPage from '../features/equipment/EquipmentPage.vue';
 import GoalsPage from '../features/goals/GoalsPage.vue';
 import IncomePage from '../features/income/IncomePage.vue';
 import OverviewPage from '../features/overview/OverviewPage.vue';
@@ -27,6 +28,7 @@ const router = createRouter({
             })),
         { path: '/accounts', component: AccountsPage },
         { path: '/characters', component: CharactersPage },
+        { path: '/equipment', component: EquipmentPage },
         { path: '/goals', component: GoalsPage },
         { path: '/income', component: IncomePage },
         { path: '/overview', component: OverviewPage },

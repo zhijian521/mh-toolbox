@@ -1365,6 +1365,104 @@ app.on('browser-window-created', (_event, win) => {
                 '回到总览',
             );
 
+            // ---- 装备：三套方案、换装、记变动、删除 ----
+            await read(() => document.querySelector('a[href="#/equipment"]').click());
+            await until(
+                () => document.querySelector('.page-header h1')?.textContent === '装备',
+                '装备页',
+            );
+            assert.equal(
+                await read(() => document.querySelectorAll('.eq-slot').length),
+                12,
+                '常规 6 格 + 灵饰 4 格 + 玉魄 2 格',
+            );
+            assert.equal(await read(() => document.querySelectorAll('.eq-plan').length), 3);
+            assert.equal(
+                await read(() => document.querySelectorAll('.eq-slot.filled').length),
+                0,
+                '还没有档案，格子都是空位',
+            );
+
+            // 新增一件武器：这一批只填档案信息，属性词条留给下一批的编辑器。
+            await click('＋ 新增装备');
+            await until(() => !!document.querySelector('#equipment-form'), '新增装备弹窗');
+            await field('[name="name"]', '测试武器');
+            await field('[name="level"]', '120');
+            await click('登记装备');
+            await until(() => !document.querySelector('#equipment-form'), '装备已登记');
+            await untilDisk(() => disk().equipment.length === 1, '装备落盘');
+            assert.equal(disk().equipment[0].slot, '武器');
+            assert.equal(
+                disk().equipment[0].characterId,
+                disk().characters[0].id,
+                '挂在当前角色上',
+            );
+
+            // 点空位选装：格子 → 选装弹窗 → 选中即穿到方案一。
+            await read(() => document.querySelectorAll('.eq-slot')[2].click());
+            await until(() => !!document.querySelector('.eq-picker'), '选装弹窗');
+            await read(() => {
+                const button = [...document.querySelectorAll('.eq-pick')].find((item) =>
+                    item.textContent.includes('测试武器'),
+                );
+                button.click();
+            });
+            await until(() => !document.querySelector('.modal'), '选装完成');
+            await untilDisk(
+                () =>
+                    disk().characters[0].equipmentSets[0].slots['武器'] === disk().equipment[0].id,
+                '已穿到方案一',
+            );
+
+            // 切到第二套：方案只存引用，切换本身也要落盘。
+            await read(() => document.querySelectorAll('.eq-plan')[1].click());
+            await untilDisk(() => disk().characters[0].viewedEquipmentSet === 1, '切到方案二');
+            await until(
+                () => document.querySelectorAll('.eq-slot.filled').length === 0,
+                '方案二还是空栏',
+            );
+            await read(() => document.querySelectorAll('.eq-plan')[0].click());
+            await until(
+                () => document.querySelectorAll('.eq-slot.filled').length === 1,
+                '切回方案一',
+            );
+
+            // 记一次变动：默认同时记进账号账本，双向关联。
+            await click('仓库');
+            await until(() => !!document.querySelector('.eq-table'), '装备仓库');
+            await click('记变动');
+            await until(() => !!document.querySelector('#gear-log-form'), '记变动弹窗');
+            await field('[name="amount"]', '300');
+            await click('记录变动');
+            await until(() => !document.querySelector('#gear-log-form'), '变动已记录');
+            await untilDisk(
+                () =>
+                    disk().transactions.some(
+                        (tx) => tx.equipmentId === disk().equipment[0].id && tx.amount === 300,
+                    ),
+                '变动进了账号账本',
+            );
+            const gearTx = disk().transactions.find(
+                (tx) => tx.equipmentId === disk().equipment[0].id,
+            );
+            assert.equal(gearTx.ledger, 'account', '装备买卖记在账号账本');
+            assert.equal(gearTx.kind, 'expense', '购入是支出');
+            assert.equal(disk().gearLogs.length, 1, '时间线有一条变动');
+
+            // 删除档案：流水保留、只解除关联。
+            await click('删除');
+            await until(
+                () => document.querySelector('.modal')?.textContent.includes('删除装备档案'),
+                '删除确认',
+            );
+            await read(() => document.querySelector('.modal .btn.danger').click());
+            await until(() => !document.querySelector('.modal'), '装备已删除');
+            await untilDisk(() => disk().equipment.length === 0, '档案已删除');
+            assert.equal(disk().gearLogs.length, 0, '变动记录一并删除');
+            const keptTx = disk().transactions.find((tx) => tx.amount === 300);
+            assert.ok(keptTx, '账本流水保留');
+            assert.equal(keptTx.equipmentId, undefined, '只解除关联');
+
             await read(() => document.querySelector('a[href="#/settings"]').click());
             await until(() => !!document.querySelector('.settings-page'), '设置页面');
             fs.writeFileSync(
@@ -1412,7 +1510,7 @@ app.on('browser-window-created', (_event, win) => {
             assert.deepEqual(errors, []);
             clearTimeout(watchdog);
             console.log(
-                'PASS Electron: isolation, character CRUD, drafts, rollback, school change, history, ordering, restart, goals, accounts, income, overview, import/export/wipe',
+                'PASS Electron: isolation, character CRUD, drafts, rollback, school change, history, ordering, restart, goals, accounts, income, overview, equipment, import/export/wipe',
             );
             app.exit(0);
         } catch (error) {
