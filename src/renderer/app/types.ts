@@ -100,6 +100,28 @@ export interface AccountStats {
     fees: number;
     count: number;
 }
+/**
+ * 收益账本汇总，来自领域 `earningsStats`。
+ *
+ * 物品记录不计入收支：持有中的物品只算进 `itemEstimate` / `itemCount`（按剩余数量估值），
+ * 卖出时才由成交记录产生收入。`hourly` 为 null 表示当前范围没有在线时长，不能倒推出时薪。
+ */
+export interface EarningsStats {
+    income: number;
+    expense: number;
+    net: number;
+    cashNet: number;
+    reserveNet: number;
+    reserveIncome: number;
+    /** 手工记录里填的时长合计；在线计时器的时长算在 `onlineMinutes`。 */
+    minutes: number;
+    count: number;
+    itemEstimate: number;
+    itemCount: number;
+    onlineMinutes: number;
+    cardCost: number;
+    hourly: number | null;
+}
 /** 目标跟随的养成项目；`key` 只在技能与修炼分类下非空。 */
 export interface GoalTracking {
     category: string;
@@ -365,11 +387,25 @@ export interface Domain {
         changes: { targetId: string; position: 'before' | 'after' },
     ): Promise<unknown>;
     // 账号与收益账本
+    incomeCats: string[];
+    expenseCats: string[];
     accountCats: string[];
     channels: string[];
+    /** 物品状态文案：`held` / `sold` / `self`。 */
+    itemStatuses: Record<string, string>;
     accounts(list?: Transaction[]): Transaction[];
     txIn(characterId: string, from: string, to: string, ledger?: string): Transaction[];
     accountStats(txs: Transaction[], currency: string): AccountStats;
+    /** 只按记录算收支，不含在线时长与点卡成本（那两项来自 sessions）。 */
+    stats(txs: Transaction[]): Omit<EarningsStats, 'onlineMinutes' | 'cardCost' | 'hourly'>;
+    earningsStats(
+        characterId: string,
+        from: string,
+        to: string,
+        includeActive?: boolean,
+    ): EarningsStats;
+    /** 物品剩余数量（获得数量减去已成交数量）。 */
+    itemRemaining(tx: Transaction): number;
     saveTransaction(input: unknown, id?: string): Promise<Transaction>;
     removeTransaction(id: string): Promise<unknown>;
 }

@@ -5,6 +5,7 @@ import App from './App.vue';
 import AccountsPage from '../features/accounts/AccountsPage.vue';
 import CharactersPage from '../features/characters/CharactersPage.vue';
 import GoalsPage from '../features/goals/GoalsPage.vue';
+import IncomePage from '../features/income/IncomePage.vue';
 import SettingsPage from '../features/settings/SettingsPage.vue';
 import PendingPage from '../features/pending/PendingPage.vue';
 import { sections } from './navigation';
@@ -25,6 +26,7 @@ const router = createRouter({
         { path: '/accounts', component: AccountsPage },
         { path: '/characters', component: CharactersPage },
         { path: '/goals', component: GoalsPage },
+        { path: '/income', component: IncomePage },
         { path: '/settings', component: SettingsPage },
         { path: '/:pathMatch(.*)*', redirect: '/characters' },
     ],

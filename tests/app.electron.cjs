@@ -887,6 +887,90 @@ app.on('browser-window-created', (_event, win) => {
             await click('关闭');
             await until(() => !document.querySelector('.modal'), '关闭账号记录');
 
+            // ---- 收益页：菜单已迁移、记一笔、汇总、记录弹窗、删除 ----
+            await read(() => document.querySelector('a[href="#/income"]').click());
+            await until(() => !!document.querySelector('.income-totals'), '收益页');
+            assert.equal(
+                await read(() =>
+                    document.querySelector('a[href="#/income"]').textContent.includes('待迁移'),
+                ),
+                false,
+                '收益页已迁移，菜单不再挂角标',
+            );
+            assert.equal(
+                await read(() => document.querySelector('.recent-footer b')?.textContent),
+                '0',
+                '本月还没有收益记录',
+            );
+
+            await click('＋ 记一笔');
+            await until(() => !!document.querySelector('#income-form'), '记收益弹窗');
+            assert.equal(
+                await read(() =>
+                    document.querySelector('[aria-label="记账币种"]').textContent.trim(),
+                ),
+                '梦幻币 · 万',
+                '收益账本只走梦幻币与储备金',
+            );
+            await choose('收益分类', '捉鬼');
+            await field('[name="amount"]', '1200');
+            await submit('#income-form');
+            await until(() => !document.querySelector('#income-form'), '保存收益');
+            let earning = disk().transactions.find((item) => item.ledger === 'earnings');
+            assert.equal(earning.category, '捉鬼');
+            assert.equal(earning.kind, 'income');
+            assert.equal(earning.currency, 'cash');
+            assert.equal(earning.amount, 1200);
+            assert.equal(earning.recordType, 'money');
+
+            await click('＋ 记一笔');
+            await until(() => !!document.querySelector('#income-form'), '记收益支出');
+            await choose('收支方向', '支出');
+            await choose('收益分类', '修理装备');
+            await field('[name="amount"]', '80');
+            await submit('#income-form');
+            await until(() => !document.querySelector('#income-form'), '保存收益支出');
+            earning = disk().transactions.find((item) => item.category === '修理装备');
+            assert.equal(earning.kind, 'expense');
+            assert.equal(earning.ledger, 'earnings');
+
+            // 1200 - 80 = 1120
+            assert.equal(
+                await read(() =>
+                    document.querySelector('.income-totals .card .net b').textContent.trim(),
+                ),
+                '1120 万',
+                '净收益按收入减支出',
+            );
+
+            await click('查看记录');
+            await until(() => !!document.querySelector('.record-head'), '收益记录弹窗');
+            assert.equal(
+                await read(() => document.querySelectorAll('.record-row').length),
+                2,
+                '两笔收益记录',
+            );
+            assert.equal(
+                await read(() =>
+                    document.querySelector('.record-filters .seg-btn.on')?.textContent.trim(),
+                ),
+                '本月',
+                '收益记录继承页面区间',
+            );
+            await click('删除');
+            await until(() => document.querySelectorAll('.modal').length === 2, '收益删除确认');
+            await click('确认删除');
+            await until(
+                () => document.querySelectorAll('.record-row').length === 1,
+                '收益记录减少',
+            );
+            assert.equal(
+                disk().transactions.filter((item) => item.ledger === 'earnings').length,
+                1,
+            );
+            await click('关闭');
+            await until(() => !document.querySelector('.modal'), '关闭收益记录');
+
             await read(() => document.querySelector('a[href="#/settings"]').click());
             await until(() => !!document.querySelector('.settings-page'), '设置页面');
             fs.writeFileSync(
@@ -934,7 +1018,7 @@ app.on('browser-window-created', (_event, win) => {
             assert.deepEqual(errors, []);
             clearTimeout(watchdog);
             console.log(
-                'PASS Electron: isolation, character CRUD, drafts, rollback, school change, history, ordering, restart, goals, accounts, import/export/wipe',
+                'PASS Electron: isolation, character CRUD, drafts, rollback, school change, history, ordering, restart, goals, accounts, income, import/export/wipe',
             );
             app.exit(0);
         } catch (error) {

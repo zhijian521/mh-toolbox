@@ -130,7 +130,7 @@ const unit = computed(() => props.goal.unit || '万');
                     <NumberValue class="goal-num-pct" :value="summary.pct" unit="%" />
                 </span>
                 <span>
-                    <NumberValue class="goal-num-current" :value="goal.current" :unit="unit" />
+                    <NumberValue class="goal-num-current" :value="summary.current" :unit="unit" />
                     <span class="goal-separator">/</span>
                     <NumberValue :value="goal.target" :unit="unit" />
                 </span>
