@@ -4,6 +4,7 @@ import type { DateRangeValue, Transaction } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import { plain } from '../../services/desktop';
 import { U } from '../../domain/util.js';
+import { POINTS_PER_HOUR } from '../../domain/online.js';
 import {
     QUICK_MONEY_ITEM,
     quickItemById,
@@ -63,6 +64,8 @@ const editing = ref<Transaction | null>(null);
 const recordsOpen = ref(false);
 const priceTarget = ref<{ item: CatalogItem; thenAdd: boolean; once: boolean } | null>(null);
 const onlineMode = ref<'start' | 'backfill' | 'adjust' | null>(null);
+/** 调整开始时间时，改的是哪一段计时。 */
+const adjustingId = ref('');
 const settingsOpen = ref(false);
 /** 批量设价弹窗：四十个固定价物品逐个右键太费事，给它一条 CSV 通道。 */
 const bulkOpen = ref(false);
@@ -82,9 +85,9 @@ const records = computed<Transaction[]>(() => {
         .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
 });
 /** 正在计时的会话；秒表与统计分别按自己的节拍刷新。 */
-const active = computed(() => {
+const actives = computed(() => {
     void app.data;
-    return rules.state.activeSession;
+    return rules.runningSessions();
 });
 /** 秒表用的时钟：只让「00:12:34」走字，不触发任何统计计算。 */
 const now = ref(Date.now());
@@ -94,34 +97,48 @@ let clock: ReturnType<typeof setInterval> | null = null;
 let statClock: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
     clock = setInterval(() => {
-        if (active.value) now.value = Date.now();
+        if (actives.value.length) now.value = Date.now();
     }, 1000);
     statClock = setInterval(() => {
-        if (active.value) statTick.value = Date.now();
+        if (actives.value.length) statTick.value = Date.now();
     }, 10000);
 });
 onBeforeUnmount(() => {
     if (clock) clearInterval(clock);
     if (statClock) clearInterval(statClock);
 });
-watch(active, () => {
+watch(actives, () => {
     // 开始/结束计时的瞬间要立刻对一次，不能等下一个十秒。
     now.value = Date.now();
     statTick.value = Date.now();
 });
-const elapsedText = computed(() => {
-    const start = Number(active.value?.startAt) || 0;
-    if (!start) return '';
+const pad2 = (value: number) => String(value).padStart(2, '0');
+function elapsedOf(startAt?: number) {
+    const start = Number(startAt) || 0;
+    if (!start) return '00:00:00';
     const diff = Math.max(0, now.value - start);
-    const pad = (value: number) => String(value).padStart(2, '0');
     return (
-        pad(Math.floor(diff / 3600000)) +
+        pad2(Math.floor(diff / 3600000)) +
         ':' +
-        pad(Math.floor(diff / 60000) % 60) +
+        pad2(Math.floor(diff / 60000) % 60) +
         ':' +
-        pad(Math.floor(diff / 1000) % 60)
+        pad2(Math.floor(diff / 1000) % 60)
     );
-});
+}
+/**
+ * 顶部那条「谁在线、各自多久」。
+ *
+ * 错峰计时下每个号一段，所以这里是一个列表而不是一个秒表：先起一个号、中途再加
+ * 两个号、最后分两次退出，全都在这条上直接操作。
+ */
+const liveList = computed(() =>
+    actives.value.map((session) => ({
+        id: String(session.id),
+        characterId: String(session.characterId || ''),
+        name: rules.charName(String(session.characterId || '')),
+        elapsed: elapsedOf(Number(session.startAt)),
+    })),
+);
 const stats = computed(() => {
     void app.data;
     // 计时中时长与点卡都在累加，十秒重算一次就够；每秒跑一遍纯属浪费。
@@ -204,7 +221,7 @@ const statCards = computed(() => {
             key: 'card',
             label: '点卡消耗',
             value: U.fmtMoney(s.cardCost),
-            note: quick.value.accounts + ' 角色 · 每小时 6 点',
+            note: '每号每小时 ' + POINTS_PER_HOUR + ' 点 · 按实际在线号计',
             tone: 'out',
         },
         {
@@ -292,38 +309,67 @@ async function syncAccount(dates: string[]) {
 }
 /** 开始计时：参数取「点卡参数」里的角色数与单价，结算时按每小时 6 点算成本。 */
 /**
- * 开始游戏：先问这次几个号在线、点卡什么价。
+ * 开始游戏 / 加入角色：先问这次上哪几个号、点卡什么价。
  *
- * 以前直接拿设置里的角色数开计时，但补记按实际勾选算——同一天两个入口算出来的
- * 点卡会对不上，而用户往往这两个入口都用。
+ * 已经有号在计时时也能打开——弹窗只列出还没在线的角色，这正是「中途加两个号」。
+ * 以前这里用 `if (active) return` 直接挡掉，于是只能是「一批同起同落」。
  */
 function startGame() {
-    if (app.busy || active.value) return;
+    if (app.busy) return;
     remember();
     onlineMode.value = 'start';
 }
-/** 结束计时：落会话与点卡流水，顺手把涉及的那几天同步进账号账本。 */
-async function stopGame() {
-    const session = active.value;
-    if (!session || app.busy) return;
+/** 调整某一段的开始时间：点顶部那个号的时间，或者按钮默认调最早的一段。 */
+function openAdjust(id?: string) {
+    if (app.busy || !actives.value.length) return;
+    remember();
+    adjustingId.value = id || String(actives.value[0].id);
+    onlineMode.value = 'adjust';
+}
+/** 结束一个号：只结算这一段，其余角色继续各自计时。 */
+async function stopOne(id: string) {
+    await stopSessions([id]);
+}
+/** 全部结束：一次结算所有在跑的段（同一批提交，失败整体回滚）。 */
+async function stopAll() {
+    await stopSessions(actives.value.map((session) => String(session.id)));
+}
+/**
+ * 结算若干段计时。
+ *
+ * 不再一段一个请求：`stopSessions` 在领域里一次 commit，退三个号要么都成功、
+ * 要么整体回滚，不会出现「退了两个、第三个失败」之后账上只剩一半。
+ */
+async function stopSessions(ids: string[]) {
+    if (!ids.length || app.busy) return;
     try {
         const done = (await app.execute((domain) =>
-            domain.saveSession(
-                { ...session, mode: 'range', endAt: Date.now(), source: 'timer' },
-                String(session.id),
-            ),
-        )) as unknown as StoppedSession;
-        await syncAccount(dayList(Number(done.startAt), Number(done.endAt)));
-        app.notify(
-            '本段在线 ' +
-                U.fmtMinutes(Number(done.minutes)) +
-                '，点卡 −' +
-                U.fmtMoney(Number(done.cost)) +
-                '，账号收益已更新',
+            domain.stopSessions(ids),
+        )) as unknown as StoppedSession[];
+        const dates = new Set<string>();
+        done.forEach((item) =>
+            dayList(Number(item.startAt), Number(item.endAt)).forEach((date) => dates.add(date)),
         );
+        await syncAccount(Array.from(dates));
+        app.notify(stopText(done));
     } catch (failure) {
         app.notify(failure instanceof Error ? failure.message : String(failure), true);
     }
+}
+/** 结算提示：单段点名报时长，多段只报合计，不足 1 分钟的段单独说清楚。 */
+function stopText(done: StoppedSession[]) {
+    if (!done.length) return '这段不足 1 分钟，未产生点卡，计时已取消';
+    const minutes = done.reduce((sum, item) => sum + (Number(item.minutes) || 0), 0);
+    const cost = done.reduce((sum, item) => sum + (Number(item.cost) || 0), 0);
+    const tail = ' · 点卡 −' + U.fmtMoney(cost) + '，账号收益已更新';
+    if (done.length === 1)
+        return (
+            rules.charName(String(done[0].characterId)) +
+            ' 在线 ' +
+            U.fmtMinutes(Number(done[0].minutes)) +
+            tail
+        );
+    return done.length + ' 段已结算 · 合计在线 ' + U.fmtMinutes(minutes) + tail;
 }
 function remember() {
     const focused = document.activeElement;
@@ -470,21 +516,42 @@ async function onlineSaved(dates: string[]) {
 <template>
     <PageHeader title="收益" description="物品速记 · 在线时长与点卡 · 物品卖出后才计入收入">
         <template #actions>
-            <span v-if="active" class="live" aria-live="polite">
-                <span class="dot" aria-hidden="true"></span>
-                {{ elapsedText }} · {{ rules.charName(String(active.characterId ?? '')) }}
-            </span>
+            <ul v-if="liveList.length" class="live-list">
+                <li v-for="item in liveList" :key="item.id" class="live">
+                    <span class="dot" aria-hidden="true"></span>
+                    <button
+                        type="button"
+                        class="live-name"
+                        :disabled="app.busy"
+                        title="调整这个号的开始时间"
+                        @click="openAdjust(item.id)"
+                    >
+                        {{ item.name }}
+                    </button>
+                    <span class="live-time">{{ item.elapsed }}</span>
+                    <button
+                        type="button"
+                        class="live-stop"
+                        :disabled="app.busy"
+                        :aria-label="'结束 ' + item.name + ' 的计时'"
+                        :title="'结束 ' + item.name + '，其余角色继续计时'"
+                        @click="stopOne(item.id)"
+                    >
+                        ✕
+                    </button>
+                </li>
+            </ul>
             <button class="btn" :disabled="app.busy" @click="onlineMode = 'backfill'">
                 补在线时长
             </button>
-            <button v-if="active" class="btn" :disabled="app.busy" @click="onlineMode = 'adjust'">
+            <button v-if="liveList.length" class="btn" :disabled="app.busy" @click="openAdjust()">
                 调整开始时间
             </button>
-            <button v-if="!active" class="btn primary" :disabled="app.busy" @click="startGame">
-                ▶ 开始游戏
+            <button class="btn primary" :disabled="app.busy" @click="startGame">
+                {{ liveList.length ? '＋ 加入角色' : '▶ 开始游戏' }}
             </button>
-            <button v-else class="btn danger" :disabled="app.busy" @click="stopGame">
-                ■ 结束游戏
+            <button v-if="liveList.length" class="btn danger" :disabled="app.busy" @click="stopAll">
+                ■ 全部结束
             </button>
         </template>
     </PageHeader>
@@ -681,6 +748,7 @@ async function onlineSaved(dates: string[]) {
         v-if="onlineMode"
         :mode="onlineMode"
         :character="character"
+        :session-id="adjustingId"
         @close="onlineMode = null"
         @saved="onlineSaved"
     />
@@ -723,21 +791,65 @@ async function onlineSaved(dates: string[]) {
 .chip svg {
     color: var(--gold);
 }
+.live-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
 .live {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding-right: 4px;
+    gap: 5px;
+    padding: 3px 5px 3px 8px;
+    border: 1px solid var(--line-2);
+    border-radius: 999px;
+    background: var(--paper-2);
     color: var(--muted);
     font-size: 12.5px;
     font-variant-numeric: tabular-nums;
 }
 .live .dot {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: var(--red);
     animation: live-pulse 1.6s ease-in-out infinite;
+}
+/* 名字就是「改这个号的开始时间」的入口：按时长挨着放，点哪个改哪个。 */
+.live-name {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 110ms ease;
+}
+.live-name:hover:not(:disabled) {
+    color: var(--gold);
+}
+.live-time {
+    color: var(--muted);
+}
+.live-stop {
+    padding: 0 3px;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 110ms ease;
+}
+.live-stop:hover:not(:disabled) {
+    color: var(--red);
 }
 @keyframes live-pulse {
     0%,

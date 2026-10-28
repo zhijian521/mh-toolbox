@@ -181,7 +181,7 @@ test('门派模板保留自定义技能与 0 等级，技能列表保存不共�
 
 test('备份边界拒绝单价文件和未来版本；替换失败保留活动计时，成功携带覆盖前备份选项', async () => {
     const D = fixture();
-    D.state.activeSession = { id: 'active', characterId: 'c1', startAt: Date.now() };
+    D.state.activeSessions = [{ id: 'active', characterId: 'c1', startAt: Date.now() }];
     const snapshot = JSON.stringify(D.state);
     for (const invalid of [
         { 1: 1000 },
@@ -200,7 +200,7 @@ test('备份边界拒绝单价文件和未来版本；替换失败保留活动�
         options = value;
     };
     await D.replaceState({ characters: [], transactions: [] });
-    assert.equal(D.state.activeSession, null);
+    assert.equal(D.state.activeSessions.length, 0);
     assert.equal(options.backupReason, 'import');
 });
 
@@ -222,8 +222,8 @@ test('CSV 包含 BOM、单位、引号换行与公式防护，物品不带库存
 
 test('活动在线汇总不修改缓存值；角色及日期筛选生效', async () => {
     const D = fixture();
-    await D.startSession('c1');
-    D.state.activeSession.startAt -= 3600000;
+    await D.startSessions(['c1']);
+    D.state.activeSessions[0].startAt -= 3600000;
     const settled = D.earningsStats('all', '', '');
     const snapshot = JSON.stringify(settled);
     const active = D.includeActiveEarnings(settled, 'all', '', '');

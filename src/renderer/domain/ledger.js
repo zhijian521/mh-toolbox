@@ -162,20 +162,19 @@ export default function install(D, U, _gateway, _localStorage) {
                                 },
                             );
                             /* 计时中的会话也要算进来：它还没有流水，但当天的点卡已经在涨，
-                               实时同步要把它算成负数，否则账号里的数字会比收益页好看。 */
-                            const active = this.state.activeSession;
+                               实时同步要把它算成负数，否则账号里的数字会比收益页好看。
+                               错峰计时下活跃段是复数，逐个按「到此刻为止」结算一份。 */
                             this.state.sessions
                                 .concat(
-                                    active
-                                        ? [
-                                              this.makeSession(
-                                                  Object.assign({}, active, {
-                                                      mode: 'range',
-                                                      endAt: Date.now(),
-                                                  }),
-                                              ),
-                                          ]
-                                        : [],
+                                    this.runningSessions().map(
+                                        /** @param {any} session */ (session) =>
+                                            this.makeSession(
+                                                Object.assign({}, session, {
+                                                    mode: 'range',
+                                                    endAt: Date.now(),
+                                                }),
+                                            ),
+                                    ),
                                 )
                                 .forEach(
                                     /** @param {any} session */ (session) => {

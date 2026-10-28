@@ -61,17 +61,55 @@ export default function install(D, U, _gateway, _localStorage) {
                 state.sessions = state.sessions.map(
                     /** @param {any} s */ (s) => normalizeRoster(s),
                 );
-                const active =
-                    data.activeSession &&
-                    typeof data.activeSession === 'object' &&
-                    !Array.isArray(data.activeSession)
-                        ? data.activeSession
-                        : null;
-                state.activeSession =
-                    active &&
-                    state.characters.some(/** @param {any} c */ (c) => c.id === active.characterId)
-                        ? normalizeRoster(active)
-                        : null;
+                /* 计时中的会话：新形状是数组（每个角色一段），老形状是单个对象。
+                   老段若带多成员 roster，就地拆成单角色段——运行时永远只有单角色计时，
+                   结束某一段不必再写拆分逻辑；拆出的段人数恒为 1，成本之和与
+                   「一段 × 人数」完全相等，账不会变。 */
+                const raw = Array.isArray(data.activeSessions)
+                    ? data.activeSessions
+                    : data.activeSession &&
+                        typeof data.activeSession === 'object' &&
+                        !Array.isArray(data.activeSession)
+                      ? [data.activeSession]
+                      : [];
+                state.activeSessions = [];
+                raw.forEach(
+                    /** @param {any} session */ (session) => {
+                        if (!session || typeof session !== 'object' || Array.isArray(session))
+                            return;
+                        /* 成员取 roster 与 characterId 的并集，顺序稳定，指向已删除角色的丢弃。 */
+                        const members = Array.from(
+                            new Set(
+                                (Array.isArray(session.roster) ? session.roster : [])
+                                    .concat(session.characterId || [])
+                                    .filter(
+                                        /** @param {any} id */ (id) =>
+                                            typeof id === 'string' &&
+                                            state.characters.some(
+                                                /** @param {any} c */ (c) => c.id === id,
+                                            ),
+                                    ),
+                            ),
+                        );
+                        if (!members.length) return;
+                        members.forEach(
+                            /** @param {string} id */ (id) => {
+                                const segment = Object.assign({}, session, {
+                                    /* 拆出来的段沿用原 id 前缀，重复归一不会再变一次。 */
+                                    id:
+                                        members.length > 1
+                                            ? String(session.id) + '-' + id
+                                            : session.id,
+                                    characterId: id,
+                                    /* 单角色段的人数恒为 1：多开的总成本由多段相加，不再相乘。 */
+                                    accounts: 1,
+                                });
+                                delete segment.roster;
+                                state.activeSessions.push(segment);
+                            },
+                        );
+                    },
+                );
                 state.transactions.forEach(function (/** @type {any} */ tx) {
                     if (
                         tx.sessionId ||
@@ -126,6 +164,26 @@ export default function install(D, U, _gateway, _localStorage) {
             },
 
             /**
+             * 正在计时的会话清单。
+             *
+             * 每个在线角色各自一段：先开一个号、中途再加两个号、最后分两次退出，
+             * 都是互不影响的三段独立计时。老档里的多成员段在 `normalizeOnline`
+             * 已经拆成单角色段，所以这里不处理 roster 多于一人以外的形状。
+             *
+             * @this {Domain}
+             * @returns {any[]}
+             */
+            runningSessions() {
+                const list = Array.isArray(this.state.activeSessions)
+                    ? this.state.activeSessions
+                    : [];
+                return list.filter(
+                    /** @param {any} s */ (s) =>
+                        s !== null && typeof s === 'object' && !Array.isArray(s),
+                );
+            },
+
+            /**
              * 当前正在计时的角色清单；没有计时返回空数组。
              *
              * 速记按它决定「这笔收益记给谁」：单开时就是那一个号，多开时按人数均分。
@@ -135,7 +193,16 @@ export default function install(D, U, _gateway, _localStorage) {
              * @returns {string[]}
              */
             onlineRoster() {
-                return this.rosterOf(this.state.activeSession);
+                /** @type {Set<string>} */
+                const ids = new Set();
+                this.runningSessions().forEach(
+                    /** @param {any} session */ (session) => {
+                        this.rosterOf(session).forEach(
+                            /** @param {string} id */ (id) => ids.add(id),
+                        );
+                    },
+                );
+                return Array.from(ids);
             },
 
             /**
@@ -215,11 +282,15 @@ export default function install(D, U, _gateway, _localStorage) {
                 )
                     return '结束时间需晚于开始时间';
                 if (session.endAt > Date.now()) return '结束时间不能晚于当前时间';
-                const active = this.state.activeSession;
+                /* 计时中的每一段都要参与重叠判断：错峰开始多个号时，活跃段是复数。 */
+                const running = this.runningSessions().filter(
+                    /** @param {any} s */ (s) => s.id !== ignoreActiveId,
+                );
                 const others = this.state.sessions.concat(
-                    active && active.id !== ignoreActiveId
-                        ? [Object.assign({}, active, { mode: 'range', endAt: Date.now() })]
-                        : [],
+                    running.map(
+                        /** @param {any} s */ (s) =>
+                            Object.assign({}, s, { mode: 'range', endAt: Date.now() }),
+                    ),
                 );
                 /* 重叠按「在线角色」判：两个号同时在线时，它们各自的时段本来就会撞在一起，
                    只看主角色的话，第二个号永远加不进同一段计时。 */
@@ -351,12 +422,104 @@ export default function install(D, U, _gateway, _localStorage) {
             },
 
             /**
+             * 把一段正在计时的会话结算成历史记录：写会话、同步点卡流水、从活跃清单摘掉。
+             *
+             * 只改内存，调用方必须已经在外层 `commitOnline` 里——批量结束要「全有或全无」，
+             * 逐段各自提交会让「退了一半」的中间态留在磁盘上。
+             *
+             * @this {Domain}
+             * @param {string} sessionId
+             * @param {any} [patch] 覆盖字段；`endAt` 缺省取此刻
+             * @returns {any} 结算后的会话；时长为 0 时返回 null（这段直接被撤掉）
+             */
+            settleRunning(sessionId, patch) {
+                const running = this.runningSessions().find(
+                    /** @param {any} s */ (s) => s.id === sessionId,
+                );
+                if (!running) throw new Error('该次计时已结束，请刷新后查看');
+                const merged = Object.assign({}, running, patch, { mode: 'range' });
+                if (!Number.isFinite(merged.endAt)) merged.endAt = Date.now();
+                if (!merged.source) merged.source = 'timer';
+                const session = this.makeSession(merged);
+                /* 时长恰好为 0（同一毫秒内点了开始又点结束）：还没扣点卡，直接撤掉这段，
+                   不写一条 0 元的空账。这也不能当成错误——「全部结束」时若有一个号刚上线，
+                   不能让整批回滚。有秒数但不足 1 分钟的仍照常记，与改造前的边界一致。 */
+                if (!(session.minutes > 0)) {
+                    this.state.activeSessions = this.runningSessions().filter(
+                        /** @param {any} s */ (s) => s.id !== sessionId,
+                    );
+                    return null;
+                }
+                const error = this.sessionError(session, sessionId);
+                if (error) throw new Error(error);
+                this.state.sessions = this.state.sessions
+                    .filter(/** @param {any} s */ (s) => s.id !== session.id)
+                    .concat(session);
+                this.syncSession(session);
+                /* 只摘掉被结束的这一段：错峰退出时其余角色继续各自计时。 */
+                this.state.activeSessions = this.runningSessions().filter(
+                    /** @param {any} s */ (s) => s.id !== sessionId,
+                );
+                return session;
+            },
+
+            /**
+             * 结束一段或多段计时（单号退出、全部结束走同一个入口）。
+             *
+             * 一次 commit 结算全部：要么都落盘，要么整体回滚，不会出现「退了两个、
+             * 第三个失败」之后账上只剩一半的中间态。
+             *
+             * @this {Domain}
+             * @param {string[]} sessionIds
+             * @returns {Promise<any[]>}
+             */
+            async stopSessions(sessionIds) {
+                const ids = Array.from(
+                    new Set(
+                        (Array.isArray(sessionIds) ? sessionIds : []).filter(
+                            /** @param {any} id */ (id) => typeof id === 'string' && id,
+                        ),
+                    ),
+                );
+                if (!ids.length) throw new Error('请选择要结束的计时');
+                /* 一段都不在跑，说明别处已经结算过；这个判断放在 commit 之外，
+                   避免抛错触发回滚把已经摘掉的段又装回来。 */
+                if (
+                    !ids.some(
+                        /** @param {string} id */ (id) =>
+                            this.runningSessions().some(/** @param {any} s */ (s) => s.id === id),
+                    )
+                )
+                    throw new Error('该次计时已结束，请刷新后查看');
+                return this.commitOnline(() => {
+                    /* 已经不存在的段直接跳过：连点两次不会把第二段算成错误。
+                       时长为 0 的段由 `settleRunning` 撤掉并返回 null，这里过滤掉。 */
+                    return ids
+                        .filter(
+                            /** @param {string} id */ (id) =>
+                                this.runningSessions().some(
+                                    /** @param {any} s */ (s) => s.id === id,
+                                ),
+                        )
+                        .map(/** @param {string} id */ (id) => this.settleRunning(id))
+                        .filter(/** @param {any} session */ (session) => session !== null);
+                });
+            },
+
+            /**
+             * 保存一段在线记录。
+             *
+             * `finishActiveId` 是「结束计时」这一种保存，转交给 `settleRunning`；
+             * 除此之外的保存（补记、编辑历史会话）不会碰到活跃清单。
+             *
              * @this {Domain}
              * @param {any} input
              * @param {string} [finishActiveId]
              * @returns {Promise<any>}
              */
             async saveSession(input, finishActiveId) {
+                if (finishActiveId)
+                    return this.commitOnline(() => this.settleRunning(finishActiveId, input));
                 const old =
                     input.id &&
                     this.state.sessions.find(/** @param {any} s */ (s) => s.id === input.id);
@@ -367,27 +530,15 @@ export default function install(D, U, _gateway, _localStorage) {
                         input,
                     ),
                 );
-                const error = this.sessionError(session, finishActiveId);
+                const error = this.sessionError(session);
                 if (error) throw new Error(error);
-                if (
-                    finishActiveId &&
-                    (!this.state.activeSession || this.state.activeSession.id !== finishActiveId)
-                )
-                    throw new Error('该次计时已结束，请刷新后查看');
                 return this.commitOnline(() => {
-                    const error = this.sessionError(session, finishActiveId);
-                    if (error) throw new Error(error);
-                    if (
-                        finishActiveId &&
-                        (!this.state.activeSession ||
-                            this.state.activeSession.id !== finishActiveId)
-                    )
-                        throw new Error('该次计时已结束');
+                    const problem = this.sessionError(session);
+                    if (problem) throw new Error(problem);
                     this.state.sessions = this.state.sessions
                         .filter(/** @param {any} s */ (s) => s.id !== session.id)
                         .concat(session);
                     this.syncSession(session);
-                    if (finishActiveId) this.state.activeSession = null;
                     return session;
                 });
             },
@@ -424,47 +575,66 @@ export default function install(D, U, _gateway, _localStorage) {
             },
 
             /**
-             * 开始计时。`roster` 是这次同时在线的角色清单，缺省时只记 `characterId` 一个，
-             * 与改造前完全一致；多开时点卡由 `syncSession` 按清单平摊。
+             * 开始计时：为每个还没在线的角色各开一段。
+             *
+             * 已经在线上的角色会被跳过，所以这个入口既用来「起第一排号」，也用来
+             * 「中途再加几个号」——不会有同一角色两段重叠计时。每段的人数恒为 1，
+             * 多开的总成本由多段相加，与改造前的「一段 × 人数」完全等价。
              *
              * @this {Domain}
-             * @param {string} characterId
-             * @param {string[]} [roster]
-             * @returns {Promise<any>}
+             * @param {string[]} characterIds
+             * @returns {Promise<any[]>} 这次新建的会话段
              */
-            async startSession(characterId, roster) {
-                if (this.state.activeSession) throw new Error('已有未结束的在线记录，请先处理');
-                const members = (Array.isArray(roster) ? roster : []).filter(
-                    /** @param {any} id */ (id) => this.charById(id),
+            async startSessions(characterIds) {
+                const members = Array.from(
+                    new Set(
+                        (Array.isArray(characterIds) ? characterIds : []).filter(
+                            /** @param {any} id */ (id) => this.charById(id),
+                        ),
+                    ),
                 );
-                if (!members.length && this.charById(characterId)) members.push(characterId);
-                if (!members.length) throw new Error('请先选择归属角色');
-                /* 主角色仍取页面手上的那个（筛选/勾选第一项），保证会话的归属显示与旧数据同构。 */
-                const primary = members.includes(characterId) ? characterId : members[0];
-                const active = Object.assign(
-                    {
-                        id: U.uid(),
-                        characterId: primary,
-                        startAt: Date.now(),
-                        createdAt: Date.now(),
-                    },
-                    members.length > 1 ? { roster: members } : {},
-                    this.state.quickSettings,
-                );
+                if (!members.length) throw new Error('请先选择角色');
+                const settings = this.state.quickSettings || {};
+                const spawn = () => {
+                    const online = new Set(this.onlineRoster());
+                    const now = Date.now();
+                    return members
+                        .filter((/** @type {string} */ id) => !online.has(id))
+                        .map((/** @type {string} */ id) => ({
+                            id: U.uid(),
+                            characterId: id,
+                            startAt: now,
+                            createdAt: now,
+                            /* 单角色段：人数在这里恒为 1，多开靠段数表达。 */
+                            accounts: 1,
+                            cardPrice: Number(settings.cardPrice) || 0,
+                        }));
+                };
+                if (!spawn().length) throw new Error('所选角色都已在计时中');
                 return this.commitOnline(() => {
-                    if (this.state.activeSession) throw new Error('已有未结束的在线记录，请先处理');
-                    this.state.activeSession = active;
-                    return active;
+                    /* 落盘前再算一次：连点两次时第二批可能已经在线了。 */
+                    const list = spawn();
+                    if (!list.length) throw new Error('所选角色都已在计时中');
+                    this.state.activeSessions = this.runningSessions().concat(list);
+                    return list;
                 });
             },
 
             /**
+             * 把某一段正在计时的起点改到真实上线时间。
+             *
+             * `sessionId` 缺省取第一段，保持单段调用可用；错峰计时时页面会带具体那一段。
+             *
              * @this {Domain}
              * @param {number} startAt
+             * @param {string} [sessionId]
              * @returns {Promise<any>}
              */
-            async adjustSessionStart(startAt) {
-                const active = this.state.activeSession;
+            async adjustSessionStart(startAt, sessionId) {
+                const running = this.runningSessions();
+                const active = sessionId
+                    ? running.find(/** @param {any} s */ (s) => s.id === sessionId)
+                    : running[0];
                 if (!active) throw new Error('没有正在计时的记录');
                 const candidate = this.makeSession(
                     Object.assign({}, active, { mode: 'range', startAt, endAt: Date.now() }),
@@ -472,18 +642,20 @@ export default function install(D, U, _gateway, _localStorage) {
                 const error = this.sessionError(candidate, active.id);
                 if (error) throw new Error(error);
                 return this.commitOnline(() => {
-                    if (!this.state.activeSession || this.state.activeSession.id !== active.id)
-                        throw new Error('该次计时已结束');
-                    const current = this.makeSession(
-                        Object.assign({}, this.state.activeSession, {
+                    const current = this.runningSessions().find(
+                        /** @param {any} s */ (s) => s.id === active.id,
+                    );
+                    if (!current) throw new Error('该次计时已结束');
+                    const next = this.makeSession(
+                        Object.assign({}, current, {
                             mode: 'range',
                             startAt,
                             endAt: Date.now(),
                         }),
                     );
-                    const error = this.sessionError(current, active.id);
-                    if (error) throw new Error(error);
-                    this.state.activeSession.startAt = startAt;
+                    const problem = this.sessionError(next, active.id);
+                    if (problem) throw new Error(problem);
+                    current.startAt = startAt;
                 });
             },
 
@@ -496,18 +668,15 @@ export default function install(D, U, _gateway, _localStorage) {
              */
             onlineStats(charId, from, to, includeActive) {
                 const result = { minutes: 0, cost: 0, liveCost: 0, count: 0 };
-                const active = this.state.activeSession;
+                const running = includeActive ? this.runningSessions() : [];
+                const liveIds = new Set(running.map(/** @param {any} s */ (s) => s.id));
                 const sessions = this.state.sessions.concat(
-                    includeActive && active
-                        ? [
-                              this.makeSession(
-                                  Object.assign({}, active, {
-                                      mode: 'range',
-                                      endAt: Date.now(),
-                                  }),
-                              ),
-                          ]
-                        : [],
+                    running.map(
+                        /** @param {any} s */ (s) =>
+                            this.makeSession(
+                                Object.assign({}, s, { mode: 'range', endAt: Date.now() }),
+                            ),
+                    ),
                 );
                 sessions.forEach(
                     /** @param {any} session */
@@ -525,8 +694,7 @@ export default function install(D, U, _gateway, _localStorage) {
                         slices.forEach((slice) => {
                             result.minutes += slice.minutes;
                             result.cost += slice.cost * share;
-                            if (active && session.id === active.id)
-                                result.liveCost += slice.cost * share;
+                            if (liveIds.has(session.id)) result.liveCost += slice.cost * share;
                         });
                     },
                 );
@@ -563,20 +731,25 @@ export default function install(D, U, _gateway, _localStorage) {
              */
             includeActiveEarnings(settled, charId, from, to) {
                 const stats = Object.assign({}, settled);
-                const active = this.state.activeSession;
-                const roster = this.rosterOf(active);
                 const single = !!charId && charId !== 'all';
-                if (!active || (single && !roster.includes(charId))) return stats;
-                const share = single ? 1 / Math.max(1, roster.length) : 1;
-                const session = this.makeSession(
-                    Object.assign({}, active, { mode: 'range', endAt: Date.now() }),
+                const running = this.runningSessions();
+                if (!running.length) return stats;
+                running.forEach(
+                    /** @param {any} active */ (active) => {
+                        const roster = this.rosterOf(active);
+                        if (single && !roster.includes(charId)) return;
+                        const share = single ? 1 / Math.max(1, roster.length) : 1;
+                        const session = this.makeSession(
+                            Object.assign({}, active, { mode: 'range', endAt: Date.now() }),
+                        );
+                        this.sessionSlices(session).forEach((slice) => {
+                            if ((from && slice.date < from) || (to && slice.date > to)) return;
+                            stats.onlineMinutes += slice.minutes;
+                            stats.cardCost += slice.cost * share;
+                            stats.expense += slice.cost * share;
+                        });
+                    },
                 );
-                this.sessionSlices(session).forEach((slice) => {
-                    if ((from && slice.date < from) || (to && slice.date > to)) return;
-                    stats.onlineMinutes += slice.minutes;
-                    stats.cardCost += slice.cost * share;
-                    stats.expense += slice.cost * share;
-                });
                 stats.net = stats.income - stats.expense;
                 stats.hourly =
                     stats.onlineMinutes > 0 ? stats.net / (stats.onlineMinutes / 60) : null;

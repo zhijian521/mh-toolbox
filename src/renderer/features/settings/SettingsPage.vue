@@ -352,8 +352,9 @@ async function wipe() {
             条收支记录、{{ importCandidate.equipment.length }} 件装备。
         </p>
         <p>这会替换 V2 当前数据。原备份文件保持完整。</p>
-        <p v-if="importCandidate.activeSession" class="hint">
-            备份包含未结束的在线计时，将保留记录，待收益模块迁移后处理。
+        <p v-if="importCandidate.activeSessions.length" class="hint">
+            备份包含
+            {{ importCandidate.activeSessions.length }} 段未结束的在线计时，导入后照旧继续计时。
         </p>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
         <template #footer="{ close }">

@@ -530,10 +530,14 @@ export default function install(D, U, _gateway, _localStorage) {
                         (/** @type {any} */ log) =>
                             log.characterId === id || equipmentIds.has(log.equipmentId),
                     ).length,
-                    activeSession:
-                        this.state.activeSession && this.state.activeSession.characterId === id
-                            ? 1
-                            : 0,
+                    /* 该角色是否正在计时：错峰计时下活跃段是复数，逐段看清单，返回 0/1 保持页面契约。 */
+                    activeSession: this.runningSessions().some(
+                        /** @param {any} session */ (session) =>
+                            session.characterId === id ||
+                            (Array.isArray(session.roster) && session.roster.includes(id)),
+                    )
+                        ? 1
+                        : 0,
                 };
                 return {
                     ...counts,
@@ -572,8 +576,14 @@ export default function install(D, U, _gateway, _localStorage) {
                         (/** @type {any} */ log) =>
                             log.characterId !== id && !equipmentIds.has(log.equipmentId),
                     );
-                    if (this.state.activeSession && this.state.activeSession.characterId === id)
-                        this.state.activeSession = null;
+                    /* 删掉角色就把它那段计时一并撤掉，其余角色继续各自计时。
+                       必须看原始字段：`rosterOf` 会把已删角色的 id 过滤掉，
+                       用它判断就永远撤不掉。 */
+                    this.state.activeSessions = this.runningSessions().filter(
+                        /** @param {any} session */ (session) =>
+                            session.characterId !== id &&
+                            !(Array.isArray(session.roster) && session.roster.includes(id)),
+                    );
                 });
             },
         }),

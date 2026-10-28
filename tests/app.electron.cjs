@@ -1053,7 +1053,7 @@ app.on('browser-window-created', (_event, win) => {
             await click('开始计时');
             await until(() => !!document.querySelector('.live'), '计时中');
             await new Promise((resolve) => setTimeout(resolve, 1100));
-            await click('■ 结束游戏');
+            await click('■ 全部结束');
             await until(() => !document.querySelector('.live'), '计时结束');
             assert.equal(disk().sessions.length, 1, '计时结束后落一条会话');
             assert.equal(
@@ -1091,7 +1091,7 @@ app.on('browser-window-created', (_event, win) => {
             await click('开始计时');
             await until(() => !!document.querySelector('.live'), '第二局计时中');
             await new Promise((resolve) => setTimeout(resolve, 1100));
-            await click('■ 结束游戏');
+            await click('■ 全部结束');
             await until(() => !document.querySelector('.live'), '第二局计时结束');
             await untilDisk(() => settleRows().length === 1, '第二局同步完成');
             assert.equal(settleRows()[0].id, firstSettleId, '改的是原来那条，不是新增');
@@ -1296,6 +1296,35 @@ app.on('browser-window-created', (_event, win) => {
             );
             await click('关闭');
             await until(() => !document.querySelector('.modal'), '关闭收益记录');
+
+            // ---- 错峰计时：单号能先退，已在线的不重复加入 ----
+            await click('▶ 开始游戏');
+            await until(() => !!document.querySelector('#online-form'), '错峰开始弹窗');
+            await click('开始计时');
+            await until(() => document.querySelectorAll('.live').length === 1, '单号计时中');
+            await click('＋ 加入角色');
+            await until(() => !!document.querySelector('#online-form'), '加入角色弹窗');
+            assert.equal(
+                await read(() => document.querySelectorAll('.who-chip.on-line').length),
+                1,
+                '已在计时的号显示为在线中',
+            );
+            assert.equal(
+                await read(() => document.querySelectorAll('.who-chip.on').length),
+                0,
+                '没有可加入的号时默认一个都不勾',
+            );
+            await click('加入');
+            await until(() => !!document.querySelector('.form-error'), '无可加入角色拦截');
+            await click('取消');
+            await until(() => !document.querySelector('#online-form'), '关闭加入弹窗');
+            // 点号后面的 ✕ 就能单独退，不必等「全部结束」。
+            await read(() => {
+                document.querySelector('.live-stop').click();
+                return true;
+            });
+            await until(() => !document.querySelector('.live'), '单号结束');
+            await untilDisk(() => disk().activeSessions.length === 0, '单号结束落盘');
 
             // ---- 总览：三块聚合、14 天趋势、口径与明细页一致 ----
             await read(() => document.querySelector('a[href="#/overview"]').click());

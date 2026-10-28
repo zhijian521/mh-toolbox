@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useApplication } from '../../stores/application';
 import { U } from '../../domain/util.js';
 import { POINTS_PER_HOUR } from '../../domain/online.js';
@@ -8,37 +8,67 @@ import BaseDate from '../../components/BaseDate.vue';
 import BaseNumber from '../../components/BaseNumber.vue';
 
 /**
- * 开始一局计时、补记在线时长，以及把正在计时那一段的起点改到真实上线时间。
+ * 开始/加入计时、补记在线时长，以及把某一段的起点改到真实上线时间。
  *
  * 三个模式共用同一组输入（哪些号在线、点卡单价），区别只在落库方式：
- * 开始走 `startSession`，补录写一条 `mode: 'duration'` 的会话，调整起点走
- * `adjustSessionStart`（结束时间仍是现在）。
+ * 开始走 `startSessions`（每个号一段，已在线的跳过），补录写一条 `mode: 'duration'`
+ * 的会话，调整起点走 `adjustSessionStart`（结束时间仍是现在）。
  *
- * 在线角色是多选：勾了几个就按几个结算点卡，「同时在线角色数」不再是单独一个输入框。
- * 开始游戏也用同一份勾选——之前这里固定读设置里的角色数，而补记按勾选算，
- * 同一天两个入口算出来的点卡对不上。
+ * **开始模式不再要求「没有正在计时的记录」**：已经开着的号在列表里显示为「在线中」
+ * 且不可勾选，勾上的只会是这次新加的号。于是「先起一个、玩一会再加两个」这种错峰
+ * 玩法不需要先全部结束。
  *
  * 点卡折算与校验都交给领域（`makeSession` / `sessionError`），页面不另算一遍，
  * 否则「6 点 / 小时 × 角色数 × 单价」的公式就有第二份实现。
  */
-const props = defineProps<{ mode: 'start' | 'backfill' | 'adjust'; character?: string }>();
+const props = defineProps<{
+    mode: 'start' | 'backfill' | 'adjust';
+    character?: string;
+    sessionId?: string;
+}>();
 /** `saved` 带出受影响的那几天，页面据此把账号里的「游戏收益」重新同步一遍。 */
 const emit = defineEmits<{ close: []; saved: [dates: string[]] }>();
 const app = useApplication();
 const rules = app.rules();
 const quick = rules.state.quickSettings || { accounts: 5, cardPrice: 15000 };
-const active = rules.state.activeSession;
-const started = new Date(Number(active?.startAt) || Date.now());
+/** 正在计时的段；开始模式要跳过这些角色，调整模式要选其中一段。 */
+const running = rules.runningSessions();
+const onlineIds = new Set<string>();
+running.forEach((session) => {
+    rules.rosterOf(session).forEach((id) => onlineIds.add(String(id)));
+});
+/** 调整起点作用于哪一段：页面点的那一段，其次最早的一段。 */
+const targetId = ref(String(props.sessionId || running[0]?.id || ''));
+const target = computed(
+    () => running.find((session) => String(session.id) === targetId.value) || running[0] || null,
+);
+const initial = new Date(Number(target.value?.startAt) || Date.now());
 
 /** 补录：忘记点「开始游戏」后的补救。调整起点：计时已经开始，把起点往回拨。 */
 const backfill = computed(() => props.mode === 'backfill');
 /** 开始：只问这次几个号在线、点卡什么价，时长从现在开始算。 */
 const starting = computed(() => props.mode === 'start');
+/** 调整起点：多开时要能选中具体的号。 */
+const adjusting = computed(() => props.mode === 'adjust');
 const title = computed(() =>
-    starting.value ? '开始游戏' : backfill.value ? '补记在线时长' : '调整开始时间',
+    starting.value
+        ? running.length
+            ? '加入角色'
+            : '开始游戏'
+        : backfill.value
+          ? '补记在线时长'
+          : '调整开始时间',
 );
-/** 在线角色：默认全选，勾了几个就按几个算点卡。 */
-const selected = ref<string[]>(app.characters.map((item) => item.id));
+/**
+ * 在线角色：开始模式默认勾上还没在线的全部，补记保持全选。
+ *
+ * 已在计时的角色不参与勾选——同一角色叠出两段计时会让点卡按双份扣。
+ */
+const selected = ref<string[]>(
+    starting.value
+        ? app.characters.filter((item) => !onlineIds.has(item.id)).map((item) => item.id)
+        : app.characters.map((item) => item.id),
+);
 const accounts = computed(() => selected.value.length);
 /** 点卡流水挂在页面筛选的那个角色上；它被取消勾选时退回第一个选中的。 */
 const characterId = computed(() =>
@@ -46,9 +76,9 @@ const characterId = computed(() =>
         ? props.character
         : selected.value[0] || '',
 );
-const date = ref(backfill.value ? U.today() : U.fmtDate(started));
-const hours = ref<number | string>(backfill.value ? 2 : started.getHours());
-const minutes = ref<number | string>(backfill.value ? 0 : started.getMinutes());
+const date = ref(backfill.value ? U.today() : U.fmtDate(initial));
+const hours = ref<number | string>(backfill.value ? 2 : initial.getHours());
+const minutes = ref<number | string>(backfill.value ? 0 : initial.getMinutes());
 const price = ref<number | string>(quick.cardPrice / 10000);
 const note = ref('');
 const dirty = ref(false);
@@ -56,12 +86,21 @@ const error = ref('');
 
 /** 勾选顺序固定按角色页的排序，结算归属才稳定。 */
 function toggle(id: string) {
+    if (onlineIds.has(id)) return;
     const next = selected.value.includes(id)
         ? selected.value.filter((item) => item !== id)
         : [...selected.value, id];
     selected.value = app.characters.filter((item) => next.includes(item.id)).map((item) => item.id);
     dirty.value = true;
 }
+/** 换一个号调整起点时，日期与时刻要跟着那一段走。 */
+watch(targetId, () => {
+    const at = new Date(Number(target.value?.startAt) || Date.now());
+    date.value = U.fmtDate(at);
+    hours.value = at.getHours();
+    minutes.value = at.getMinutes();
+    dirty.value = true;
+});
 
 /** 同一个数字在两种模式下含义不同：补录是时长，调整起点是「几点几分」。 */
 const span = computed(() => (Number(hours.value) || 0) * 60 + (Number(minutes.value) || 0));
@@ -97,10 +136,11 @@ const hourCost = computed(
 );
 const preview = computed(() => {
     if (starting.value) {
-        if (!accounts.value) return '至少选一个在线角色';
+        if (!accounts.value) return '没有可加入的角色：勾上的号都已在计时中';
         return (
+            '新增 ' +
             accounts.value +
-            ' 个角色 · 每小时 ' +
+            ' 个号 · 每小时 ' +
             POINTS_PER_HOUR * accounts.value +
             ' 点 · 约 ' +
             U.fmtMoney(hourCost.value) +
@@ -109,7 +149,10 @@ const preview = computed(() => {
     }
     if (!backfill.value) {
         const elapsed = Math.max(0, Date.now() - startAt.value) / 60000;
-        return '改后本次已在线 ' + (elapsed / 60).toFixed(2) + ' 小时';
+        const name = target.value
+            ? rules.charName(String(target.value.characterId || '')) + ' '
+            : '';
+        return name + '改后本次已在线 ' + (elapsed / 60).toFixed(2) + ' 小时';
     }
     const record = draft.value;
     if (!(record.minutes > 0)) return '填写时长后预览点卡费用';
@@ -133,7 +176,7 @@ async function save() {
     error.value = '';
     if (starting.value) {
         if (!accounts.value) {
-            error.value = '至少选一个在线角色';
+            error.value = '没有可加入的角色：勾上的号都已在计时中';
             return;
         }
         const priceValue = Math.round((Number(price.value) || 0) * 10000);
@@ -142,13 +185,18 @@ async function save() {
             return;
         }
         try {
-            // 一次 execute 里先写参数再开始：`startSession` 内部的 commit 会把参数一起落盘，
-            // 分成两次就会出现「参数存了、会话没开」的中间态。
-            await app.execute(async (domain) => {
+            // 一次 execute 里先写参数再开始：`startSessions` 内部的 commit 会把参数一起落盘，
+            // 分成两次就会出现「参数存了、计时没开」的中间态。
+            const created = (await app.execute(async (domain) => {
                 domain.setQuickSettings({ accounts: accounts.value, cardPrice: priceValue });
-                return domain.startSession(characterId.value, selected.value);
-            });
-            app.notify('开始记录游戏时间 · ' + accounts.value + ' 个角色在线');
+                return domain.startSessions(selected.value);
+            })) as unknown as Array<{ id: string }>;
+            app.notify(
+                '开始计时 · 新增 ' +
+                    created.length +
+                    ' 个号' +
+                    (onlineIds.size ? '，另有 ' + onlineIds.size + ' 个号继续计时' : ''),
+            );
             // 刚开始没有点卡流水，不需要重算任何日期的收益。
             emit('saved', []);
         } catch (failure) {
@@ -183,13 +231,26 @@ async function save() {
         }
         return;
     }
+    if (!target.value) {
+        error.value = '没有正在计时的记录';
+        return;
+    }
     if (!Number.isFinite(startAt.value) || startAt.value >= Date.now()) {
         error.value = '开始时间需早于现在';
         return;
     }
     try {
-        await app.execute((domain) => domain.adjustSessionStart(startAt.value));
-        app.notify('已把开始时间改到 ' + date.value + ' ' + timeText());
+        await app.execute((domain) =>
+            domain.adjustSessionStart(startAt.value, String(target.value?.id || '')),
+        );
+        app.notify(
+            '已把 ' +
+                rules.charName(String(target.value.characterId || '')) +
+                ' 的开始时间改到 ' +
+                date.value +
+                ' ' +
+                timeText(),
+        );
         // 起点往回拨可能跨到昨天，那天的点卡（以及当天收益）也要跟着重算。
         emit('saved', daysFrom(startAt.value));
     } catch (failure) {
@@ -217,20 +278,20 @@ function timeText() {
         <p class="hint">
             {{
                 starting
-                    ? '选这次同时在线的角色。点卡按每小时 ' +
+                    ? '勾上这次新上线的号。点卡按每号每小时 ' +
                       POINTS_PER_HOUR +
-                      ' 点 × 角色数折算，结束游戏时自动记进账号。'
+                      ' 点分别计，之后每个号都能单独结束，不用等一起退。'
                     : backfill
                       ? '忘了点「开始游戏」时用这里补一段。点卡按每小时 ' +
                         POINTS_PER_HOUR +
                         ' 点 × 角色数折算，跨天请分两次补。'
-                      : '只把这一段的起点改到实际开始的时间，结束时间仍然是现在。'
+                      : '只把这一段（或选中的那个号）的起点改到实际开始的时间，结束时间仍然是现在。'
             }}
         </p>
         <form id="online-form" class="online-form" @submit.prevent="save">
             <div v-if="backfill || starting" class="who">
                 <span class="who-label">
-                    在线角色
+                    {{ starting ? '这次加入哪些号' : '在线角色' }}
                     <small>{{ accounts }} 个</small>
                 </span>
                 <div class="who-chips">
@@ -239,12 +300,37 @@ function timeText() {
                         :key="item.id"
                         type="button"
                         class="who-chip"
-                        :class="{ on: selected.includes(item.id) }"
+                        :class="{
+                            on: selected.includes(item.id),
+                            'on-line': onlineIds.has(item.id),
+                        }"
                         :aria-pressed="selected.includes(item.id)"
-                        :disabled="app.busy"
+                        :disabled="app.busy || onlineIds.has(item.id)"
+                        :title="onlineIds.has(item.id) ? '已在计时中，不用重复添加' : ''"
                         @click="toggle(item.id)"
                     >
                         {{ item.name }}
+                        <template v-if="onlineIds.has(item.id)">· 在线中</template>
+                    </button>
+                </div>
+            </div>
+            <div v-if="adjusting && running.length > 1" class="who">
+                <span class="who-label">
+                    调整哪个号
+                    <small>{{ running.length }} 个</small>
+                </span>
+                <div class="who-chips">
+                    <button
+                        v-for="item in running"
+                        :key="item.id"
+                        type="button"
+                        class="who-chip"
+                        :class="{ on: String(item.id) === targetId }"
+                        :aria-pressed="String(item.id) === targetId"
+                        :disabled="app.busy"
+                        @click="targetId = String(item.id)"
+                    >
+                        {{ rules.charName(String(item.characterId || '')) }}
                     </button>
                 </div>
             </div>
@@ -319,7 +405,7 @@ function timeText() {
         <template #footer="{ close }">
             <button class="btn" :disabled="app.busy" @click="close">取消</button>
             <button class="btn primary" type="submit" form="online-form" :disabled="app.busy">
-                {{ starting ? '开始计时' : backfill ? '补记' : '保存' }}
+                {{ starting ? (running.length ? '加入' : '开始计时') : backfill ? '补记' : '保存' }}
             </button>
         </template>
     </BaseModal>
@@ -380,6 +466,12 @@ function timeText() {
     background: color-mix(in srgb, var(--red) 12%, var(--paper));
     color: var(--red);
     font-weight: 600;
+}
+/* 已在计时的号：留着可见但不可点，避免同一角色叠出两段计时。 */
+.who-chip.on-line {
+    border-style: dashed;
+    opacity: 0.6;
+    cursor: default;
 }
 .preview {
     margin: 14px 0 0;

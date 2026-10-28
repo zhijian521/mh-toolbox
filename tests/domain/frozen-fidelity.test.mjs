@@ -47,6 +47,9 @@ test('任意可解析的旧档形状都不会让 normalize 抛错', () => {
         { sessions: [null, 5] },
         { activeSession: { characterId: 123 } },
         { activeSession: [] },
+        { activeSessions: 'x' },
+        { activeSessions: [null, 5] },
+        { activeSessions: [{ id: 'a', characterId: 'ghost', startAt: 1 }] },
         { itemPrices: { a: 'x' } },
         { itemPrices: [] },
         { quickSettings: 'x' },
@@ -65,6 +68,7 @@ test('任意可解析的旧档形状都不会让 normalize 抛错', () => {
             'equipment',
             'gearLogs',
             'sessions',
+            'activeSessions',
         ])
             assert.ok(Array.isArray(state[key]), key + ' 应为数组：' + JSON.stringify(input));
     }
@@ -209,7 +213,7 @@ function v1Backup() {
 const frozenKeys = [
     'transactions',
     'sessions',
-    'activeSession',
+    'activeSessions',
     'goals',
     'equipment',
     'gearLogs',

@@ -24,7 +24,8 @@ interface DomainState {
     characters: any[];
     transactions: any[];
     sessions: any[];
-    activeSession: any;
+    /** 计时中的会话：每个在线角色一段，各自起停。 */
+    activeSessions: any[];
     goals: any[];
     equipment: any[];
     gearLogs: any[];
@@ -350,12 +351,15 @@ interface Domain {
     syncSession: (session: any) => void;
     normalizeOnline: (state: any, data: any) => any;
     saveSession: (input: any, finishActiveId?: string) => Promise<any>;
+    settleRunning: (sessionId: string, patch?: any) => any;
+    stopSessions: (sessionIds: string[]) => Promise<any[]>;
     removeSession: (id: string) => void;
-    startSession: (charId: string, roster?: string[]) => Promise<any>;
+    startSessions: (characterIds: string[]) => Promise<any[]>;
+    runningSessions: () => any[];
     rosterOf: (session: any) => string[];
     onlineRoster: () => string[];
     setQuickSettings: (input: { accounts?: number; cardPrice?: number }) => void;
-    adjustSessionStart: (startAt: number) => Promise<any>;
+    adjustSessionStart: (startAt: number, sessionId?: string) => Promise<any>;
     commitOnline: (change: () => any) => Promise<any>;
     _saleList?: any[];
     _saleCount?: number;

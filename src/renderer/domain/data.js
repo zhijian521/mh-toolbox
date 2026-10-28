@@ -20,13 +20,14 @@ export function createData(localStorage) {
     /* 数据层：状态、常量、持久化 */
     /** @type {Domain} */
     const data = /** @type {any} */ ({
-        schemaVersion: 7,
+        schemaVersion: 8,
         state: {
-            schemaVersion: 7,
+            schemaVersion: 8,
             characters: [],
             transactions: [],
             sessions: [],
-            activeSession: null,
+            /* 计时中的会话：每个在线角色一段，各自起停；老档的单个对象由 normalizeOnline 迁移。 */
+            activeSessions: [],
             goals: [],
             equipment: [],
             gearLogs: [],

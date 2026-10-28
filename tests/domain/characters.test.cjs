@@ -265,7 +265,7 @@ test('删除角色失败恢复全部关联，成功删除仅清理该角色与�
     D.state.sessions = [{ id: 's1', characterId: 'c1' }];
     D.state.goals = [{ id: 'g1', characterId: 'c1' }];
     D.state.gearLogs = [{ id: 'l1', equipmentId: 'sword', characterId: 'c1' }];
-    D.state.activeSession = { id: 'active', characterId: 'c1' };
+    D.state.activeSessions = [{ id: 'active', characterId: 'c1' }];
     const snapshot = JSON.stringify(D.state);
     D.persist = async () => {
         throw new Error('模拟删除失败');
@@ -280,7 +280,7 @@ test('删除角色失败恢复全部关联，成功删除仅清理该角色与�
     assert.equal(D.state.transactions[0].id, 't2');
     for (const key of ['equipment', 'gearLogs', 'sessions', 'goals'])
         assert.equal(D.state[key].length, 0);
-    assert.equal(D.state.activeSession, null);
+    assert.equal(D.state.activeSessions.length, 0);
 });
 
 test('统一档案一次保存基础与全部养成，非法数据和写入失败均整体回滚', async () => {
@@ -461,7 +461,7 @@ function removalFixture() {
         { id: 'l2', equipmentId: 'sword', characterId: 'c2' },
         { id: 'l3', equipmentId: 'other', characterId: 'c2' },
     ];
-    D.state.activeSession = { id: 'as1', characterId: 'c1' };
+    D.state.activeSessions = [{ id: 'as1', characterId: 'c1' }];
     return D;
 }
 
@@ -483,7 +483,7 @@ test('删除预览的每一项都等于实际删除量', async () => {
         goals: D.state.goals.length,
         equipment: D.state.equipment.length,
         gearLogs: D.state.gearLogs.length,
-        activeSession: D.state.activeSession ? 1 : 0,
+        activeSession: D.state.activeSessions.length ? 1 : 0,
     };
     await D.removeCharacter('c1');
     const removed = {
@@ -492,7 +492,7 @@ test('删除预览的每一项都等于实际删除量', async () => {
         goals: before.goals - D.state.goals.length,
         equipment: before.equipment - D.state.equipment.length,
         gearLogs: before.gearLogs - D.state.gearLogs.length,
-        activeSession: before.activeSession - (D.state.activeSession ? 1 : 0),
+        activeSession: before.activeSession - (D.state.activeSessions.length ? 1 : 0),
     };
     const counts = plain(summary);
     delete counts.total;

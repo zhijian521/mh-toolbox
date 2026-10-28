@@ -320,7 +320,8 @@ export interface AppData {
     gearLogs: RecordEntry[];
     /** 物价卡片，独立集合，与账本、角色、装备都没有外键。 */
     prices: PriceItem[];
-    activeSession: ActiveSession | null;
+    /** 计时中的会话：每个在线角色一段，各自起停。 */
+    activeSessions: ActiveSession[];
     /** 速记参数：同时在线角色数与每点单价（游戏币）。 */
     quickSettings: { accounts: number; cardPrice: number };
     /** 速记物品的参考单价（游戏币），键是 `game-data/quick-items` 里的 id。 */
@@ -615,8 +616,12 @@ export interface Domain {
     }>;
     /** 速记参数：同时在线角色数与每点单价。 */
     setQuickSettings(input: { accounts?: number; cardPrice?: number }): void;
-    /** 开始计时；`roster` 是这次同时在线的角色，多开时点卡按它平摊。 */
-    startSession(characterId: string, roster?: string[]): Promise<RecordEntry>;
+    /** 开始计时：每个还没在线的角色各开一段，已在线的跳过；返回这次新建的段。 */
+    startSessions(characterIds: string[]): Promise<ActiveSession[]>;
+    /** 正在计时的段，每个在线角色一段，彼此独立起停。 */
+    runningSessions(): ActiveSession[];
+    /** 一段会话覆盖的在线角色；老数据只有 characterId。 */
+    rosterOf(session: RecordEntry): string[];
     /** 正在计时的角色清单，没有计时返回空数组；速记按它决定记给谁。 */
     onlineRoster(): string[];
     /** 把一次速记的金额按在线角色拆开，尾差守恒；返回空数组表示没有可记的角色。 */
@@ -636,7 +641,10 @@ export interface Domain {
         mode?: string;
         [key: string]: unknown;
     }): Array<{ date: string; minutes: number; cost: number }>;
-    adjustSessionStart(startAt: number): Promise<unknown>;
+    adjustSessionStart(startAt: number, sessionId?: string): Promise<unknown>;
+    /** 结束一段或多段计时；一次提交，失败整体回滚。时长为 0 的段直接撤掉。 */
+    stopSessions(sessionIds: string[]): Promise<ActiveSession[]>;
+    settleRunning(sessionId: string, patch?: RecordEntry): ActiveSession | null;
     saveSession(input: RecordEntry, finishActiveId?: string): Promise<RecordEntry>;
     /**
      * 删掉一段在线记录与它结算出的全部点卡流水（同步方法，只改内存，

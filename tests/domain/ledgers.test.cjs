@@ -356,17 +356,15 @@ test('在线校验阻止重叠、反向、未来及无效时长，邻接时段�
 test('角色数上限写不进参数表，但历史超范围的会话仍能结算', async () => {
     const D = onlineDomain();
     assert.throws(() => D.setQuickSettings({ accounts: 30, cardPrice: 15000 }), /1-20/);
-    // 旧版本允许存 30：读取保留、结束计时也必须能结算，否则 activeSession 永远清不掉。
-    D.state.quickSettings = { accounts: 30, cardPrice: 15000 };
-    const active = await D.startSession('c1');
-    assert.equal(active.accounts, 30);
+    // 新计时一律单角色段：人数由段数表达，参数表里的角色数不参与成本换算。
+    const active = (await D.startSessions(['c1']))[0];
+    assert.equal(active.accounts, 1);
+    // 旧版本允许存 30 的会话：读取保留、结束计时也必须能结算，否则会卡在活跃清单里出不来。
+    D.state.activeSessions = [Object.assign({}, active, { accounts: 30 })];
     await D.adjustSessionStart(Date.now() - 3600000);
-    const session = await D.saveSession(
-        Object.assign({}, D.state.activeSession, { mode: 'range', endAt: Date.now() }),
-        active.id,
-    );
-    assert.ok(session.cost > 0);
-    assert.equal(D.state.activeSession, null);
+    const done = await D.stopSessions([active.id]);
+    assert.ok(done[0].cost > 0);
+    assert.equal(D.state.activeSessions.length, 0);
 });
 
 test('删掉一段在线记录会带走它按天拆出的全部点卡流水，不影响别的会话', async () => {
@@ -401,18 +399,29 @@ test('删掉一段在线记录会带走它按天拆出的全部点卡流水，�
     );
 });
 
-test('计时保存参数快照、调整开始时间；结束失败可恢复重试且不重复结算', async () => {
+test('计时固定参数快照、可错峰加号、可调整起点；结束失败可恢复重试且不重复结算', async () => {
     const D = onlineDomain();
-    const active = await D.startSession('c1');
+    const active = (await D.startSessions(['c1']))[0];
     D.state.quickSettings = { accounts: 1, cardPrice: 20000 };
     D.setCharFilter('c2');
-    assert.equal(active.accounts, 5);
-    assert.equal(active.cardPrice, 15000);
+    assert.equal(active.accounts, 1, '每个号一段，人数恒为 1');
+    assert.equal(active.cardPrice, 15000, '开始时固定单价，之后改参数不影响这一段');
     assert.equal(active.characterId, 'c1');
-    await assert.rejects(D.startSession('c2'), /未结束/);
+    /* 错峰加号：已在计时的 c1 被跳过，只给 c2 新起一段，不是报错。 */
+    const second = await D.startSessions(['c1', 'c2']);
+    assert.equal(second.length, 1);
+    assert.equal(second[0].characterId, 'c2');
+    assert.equal(D.runningSessions().length, 2);
+    /* 加入的号能单独结束，不会连带把第一段一起判错。 */
+    D.runningSessions().find((session) => session.id === second[0].id).startAt =
+        Date.now() - 3600000;
+    const dropped = await D.stopSessions([second[0].id]);
+    assert.equal(dropped.length, 1);
+    assert.equal(D.runningSessions().length, 1);
+
     await D.adjustSessionStart(Date.now() - 7200000);
-    const endAt = D.state.activeSession.startAt + 7200000;
-    const input = Object.assign({}, D.state.activeSession, {
+    const endAt = D.state.activeSessions[0].startAt + 7200000;
+    const input = Object.assign({}, D.state.activeSessions[0], {
         mode: 'range',
         endAt,
         source: 'timer',
@@ -421,18 +430,19 @@ test('计时保存参数快照、调整开始时间；结束失败可恢复重�
         throw new Error('磁盘写入失败');
     };
     await assert.rejects(D.saveSession(input, active.id), /磁盘/);
-    assert.equal(D.state.activeSession.id, active.id);
-    assert.equal(D.state.sessions.length, 0);
-    assert.equal(D.state.transactions.length, 0);
+    assert.equal(D.state.activeSessions[0].id, active.id);
+    /* 写入失败只影响这一段：先前单独结算的 c2 那段还在，不会被这次回滚带走。 */
+    assert.equal(D.state.sessions.length, 1);
+    assert.equal(D.state.sessions[0].characterId, 'c2');
     D.persist = async () => {};
     const session = await D.saveSession(input, active.id);
-    assert.equal(session.cost, 90);
+    assert.equal(session.cost, 18);
     assert.equal(session.characterId, 'c1');
-    assert.equal(D.state.activeSession, null);
+    assert.equal(D.state.activeSessions.length, 0);
     await assert.rejects(D.saveSession(input, active.id), /已结束/);
-    assert.equal(D.state.sessions.length, 1);
+    assert.equal(D.state.sessions.length, 2);
     D.state = D.normalize(JSON.parse(JSON.stringify(D.state)));
-    assert.equal(D.state.sessions[0].id, session.id);
+    assert.ok(D.state.sessions.some((item) => item.id === session.id));
 });
 
 test('收益实时同步成账号「游戏收益」：一天一条、覆盖前值、为 0 时删掉', async () => {

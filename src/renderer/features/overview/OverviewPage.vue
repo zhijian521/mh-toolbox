@@ -45,7 +45,7 @@ const tick = ref(Date.now());
 let clock: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
     clock = setInterval(() => {
-        if (rules.state.activeSession) tick.value = Date.now();
+        if (rules.runningSessions().length) tick.value = Date.now();
     }, 30000);
 });
 onBeforeUnmount(() => {
