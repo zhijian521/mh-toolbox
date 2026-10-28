@@ -78,6 +78,27 @@ function registerIpc({ app, store, logger, theme, getWindow }) {
         logger.info('主题切换为 ' + state.theme + '（当前' + (state.dark ? '深色' : '浅色') + '）');
         return state;
     });
+    /*
+     * 外链：主窗口把 window.open 全拒、will-navigate 也拦着（见 main.cjs），
+     * 点 `<a href>` 不会有任何反应，必须由主进程交给系统浏览器。
+     * 只放行白名单里的 https 域名——将来某处若把字符串拼进 URL，也递不进任意地址。
+     */
+    const externalHosts = new Set(['github.com', 'polyformproject.org']);
+    handle('openExternal', async (value) => {
+        let target;
+        try {
+            target = new URL(String(value));
+        } catch {
+            throw new Error('链接格式不正确');
+        }
+        if (target.protocol !== 'https:' || !externalHosts.has(target.hostname)) {
+            logger.warn('拒绝了白名单之外的外链：' + target.href);
+            throw new Error('只能打开项目相关的官方链接');
+        }
+        await shell.openExternal(target.href);
+        logger.info('在系统浏览器打开 ' + target.href);
+        return { ok: true };
+    });
     /**
      * 装备截图识别。
      *

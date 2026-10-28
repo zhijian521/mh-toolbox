@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('mhV2', {
     // 外观：偏好存在主进程，切换要走主进程才能改到 prefers-color-scheme。
     getTheme: () => ipcRenderer.invoke('mhv2:getTheme'),
     setTheme: (theme) => ipcRenderer.invoke('mhv2:setTheme', theme),
+    // 外链一律交给系统浏览器：窗口把 window.open 与导航都拦了，`<a>` 点不开。
+    openExternal: (url) => ipcRenderer.invoke('mhv2:openExternal', url),
     onWindowStateChanged: (listener) => {
         const handler = (_event, state) => listener(state);
         ipcRenderer.on('mhv2:windowStateChanged', handler);

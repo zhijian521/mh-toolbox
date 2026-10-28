@@ -429,6 +429,8 @@ export interface DesktopGateway {
     onWindowStateChanged(listener: (state: WindowState) => void): () => void;
     getTheme(): Promise<ThemeState>;
     setTheme(theme: ThemePreference): Promise<ThemeState>;
+    /** 在系统浏览器打开外链。主进程只放行项目相关的 https 域名。 */
+    openExternal(url: string): Promise<{ ok: boolean }>;
     // 装备截图识别：图片只在内存里过一遍，识别完不保留。
     recognizeEquipment(
         image: string,

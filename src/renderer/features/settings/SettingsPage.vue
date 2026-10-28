@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import AppIcon from '../../components/AppIcon.vue';
 import BaseModal from '../../components/BaseModal.vue';
 import PageHeader from '../../components/PageHeader.vue';
 import { useApplication } from '../../stores/application';
@@ -33,6 +34,21 @@ async function chooseTheme(next: ThemePreference) {
     if (busy.value || themePreference.value === next) return;
     try {
         await setTheme(next);
+    } catch (failure) {
+        app.notify(failure instanceof Error ? failure.message : String(failure), true);
+    }
+}
+/*
+ * 开源与许可。地址写死在这里；主进程只放行 github.com 与 polyformproject.org，
+ * 所以哪怕将来拼错域名，也只会打不开，不会把任意地址交给系统浏览器。
+ * 窗口把 window.open 与导航都拦着，`<a>` 走 @click.prevent + IPC 才点得动，
+ * 保留 href 是为了右键能复制地址、悬停能看到真实 URL。
+ */
+const projectUrl = 'https://github.com/zhijian521/mh-toolbox';
+const licenseUrl = 'https://polyformproject.org/licenses/noncommercial/1.0.0';
+async function openLink(url: string) {
+    try {
+        await desktop().openExternal(url);
     } catch (failure) {
         app.notify(failure instanceof Error ? failure.message : String(failure), true);
     }
@@ -149,6 +165,41 @@ async function wipe() {
                 </div>
             </dl>
             <p class="hint">V2 使用独立数据目录，与当前版本分别保存。</p>
+        </section>
+        <section class="paper-section">
+            <h2>开源与许可</h2>
+            <p>本项目源码公开在 GitHub：可以自己运行、改代码，也可以把改过的版本再发布。</p>
+            <!--
+                强调不用行内 <strong>：prettier 会把它拆到单独一行，Vue 的空白压缩
+                就会在中文里塞进一个空格。改用左侧红条，视觉上同样有分量。
+            -->
+            <p class="license-notice">
+                它用的不是可以商用的开源许可，而是 PolyForm Noncommercial
+                1.0.0——任何以营利为目的的使用都不在授权范围内。
+            </p>
+            <dl class="license-terms">
+                <div class="allow">
+                    <dt>可以</dt>
+                    <dd>
+                        运行、复制与修改源码；再发布原版或改后的版本；个人学习、研究与娱乐使用；公益、教育、科研与政府机构使用。
+                    </dd>
+                </div>
+                <div class="deny">
+                    <dt>不可以</dt>
+                    <dd>打包出售、收费分发、随硬件或服务捆绑销售，以及其他任何商业用途。</dd>
+                </div>
+            </dl>
+            <div class="license-links">
+                <a :href="projectUrl" @click.prevent="openLink(projectUrl)">
+                    <AppIcon name="external" :size="13" />
+                    <span>github.com/zhijian521/mh-toolbox</span>
+                </a>
+                <a :href="licenseUrl" @click.prevent="openLink(licenseUrl)">
+                    <AppIcon name="external" :size="13" />
+                    <span>许可证全文</span>
+                </a>
+            </div>
+            <p class="hint">再发布时请一并保留许可证与版权声明，并注明原仓库地址。</p>
         </section>
         <section class="paper-section">
             <h2>清空数据</h2>
@@ -275,6 +326,69 @@ async function wipe() {
 .data-path {
     overflow-wrap: anywhere;
     font-size: 12px;
+}
+/*
+ * 「不是可商用的开源许可」这句是这张卡片唯一要人记住的话，给一道红条压住，
+ * 不用行内加粗：prettier 拆行后中文会多出一个空格，改样式更稳。
+ */
+.license-notice {
+    padding: 9px 12px;
+    border-left: 2px solid color-mix(in srgb, var(--red) 55%, transparent);
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--red) 6%, var(--paper));
+    color: color-mix(in srgb, var(--ink) 90%, var(--muted));
+}
+/*
+ * 许可条款：左侧二字标签（可以 / 不可以）当作行首的判词，右侧跟具体内容。
+ * 标签固定 48px 宽，两行内容的正文才能对齐成一条竖线，读起来像一张清单。
+ */
+.license-terms {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin: 2px 0 16px;
+}
+.license-terms > div {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 10px;
+}
+.license-terms dt {
+    font-size: 12px;
+    line-height: 21px;
+    letter-spacing: 0.5px;
+}
+.license-terms dd {
+    line-height: 21px;
+}
+.license-terms .allow dt {
+    color: var(--green);
+}
+.license-terms .deny dt {
+    color: var(--red);
+}
+.license-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    margin-bottom: 12px;
+}
+/* 全局 a 去掉了下划线，这里用一道同色细线把「可点」说明白。 */
+.license-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding-bottom: 2px;
+    color: var(--gold);
+    border-bottom: 1px solid color-mix(in srgb, var(--gold) 38%, transparent);
+    transition:
+        color 120ms ease,
+        border-color 120ms ease;
+}
+.license-links a:hover {
+    color: var(--ink);
+    border-bottom-color: color-mix(in srgb, var(--ink) 45%, transparent);
 }
 @media (max-width: 1150px) {
     .settings-page {

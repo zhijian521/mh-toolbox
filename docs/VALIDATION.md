@@ -1095,3 +1095,28 @@ CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都�
 **排版按需求走。** 展开态两个按钮水平居中（实测按钮组中心 100px、底栏中心 99.5px，差的是四舍五入）；收起态改上下两行（两按钮中心 x 均为 32px、y 相差 32px），64px 宽的窄栏里仍居中。底栏不再有文字，`padding` 从 `8px 15px` 改成 `9px 0`。侧栏底色本身就是 `--paper-2`，与全局 `.icon-button:hover` 同色等于没有反馈，这一处换成深一档的 `--panel-3`。
 
 **验证方式：** 临时 profile 起应用，用 `executeJavaScript` 实际点按钮，读回 `aria-label` 与按钮矩形，再 `capturePage` 截图。浅 → 深 → 收起 → 浅 → 展开进设置页，设置页显示「深色」选中，说明两处确实同源。18px 下图标偏小，另把 `svg` 临时放大到 56px 截了一次，确认太阳（圆 + 八道短光线）与月亮（月牙）在 `1.6px` 细线风格下形状完整，没有断笔。
+
+## 设置页新增「开源与许可」卡片，许可证从 MIT 改为非商业
+
+日期：2026-10-28。起因：想在应用里说清「源码公开、可以改、可以再发布，但不许拿它收费」。查证时发现仓库 `LICENSE` 是 MIT（`LICENSE:5-9` 原文含 `and/or sell`），与「不许收费」直接冲突——界面写禁止、许可证写允许，实际以许可证为准，写了反而误导。用户选择改许可证，因此本次一并换掉。范围：`LICENSE`、`package.json`（`license` 字段）、`README.md`（新增「许可」一节）、`features/settings/SettingsPage.vue`、`components/AppIcon.vue`（`external` 图标）、`main/ipc.cjs`（`openExternal` 通道）、`preload/preload.cjs`、`app/types.ts`、`docs/ARCHITECTURE.md`。
+
+| 检查            | 结果                       |
+| --------------- | -------------------------- |
+| 格式化          | `prettier --check .` 通过  |
+| ESLint          | 0 错误 0 警告              |
+| 类型检查        | `vue-tsc --noEmit` 0 错误  |
+| 领域与隔离测试  | 117 项通过 0 失败          |
+| Vite 生产构建   | 通过                       |
+| Electron 端到端 | PASS（`app.electron.cjs`） |
+
+**许可证换成 PolyForm Noncommercial 1.0.0。** 正文取自 SPDX 官方文本（`spdx/license-list-data`），逐段照抄，只把 markdown 的 `##` 与加粗去掉、把 `[Distribution License](#...)` 这类锚点链接改成纯文本。开头加 `Required Notice: Copyright (c) 2026 zhijian (https://github.com/zhijian521/mh-toolbox)`——PolyForm 的 Notices 一节要求再分发者传递这行，写在许可证里比写在卡片里更可靠。`package.json` 的 `license` 同步为 SPDX 标识 `PolyForm-Noncommercial-1.0.0`。
+
+**代价必须写在明面上。** 非商业许可不属于 OSI 意义上的开源，所以卡片与 README 都写「源码公开」而不是「开源」；标题保留「开源与许可」是为了让人找得到这张卡。另外历史提交确实以 MIT 发布过，已获得 MIT 副本的人不受本次变更约束，这句也写进了 README —— 不写等于假装 MIT 没存在过。
+
+**外链需要新通道。** `main.cjs:56-57` 把 `window.open` 全部拒绝、`will-navigate` 一律 `preventDefault`，所以 `<a href>` 点了毫无反应。新增 `mhV2.openExternal`，主进程只放行 `https` 且 hostname 为 `github.com` / `polyformproject.org` 的地址，其余记日志后抛错。链接仍保留 `href`（右键可复制、悬停看得到真实地址），点击走 `@click.prevent` + IPC。
+
+**不去掉 `<strong>`，而是换掉强调方式。** 原句用 `<strong>不是可以商用的开源许可</strong>`，prettier 会把它拆到单独一行，Vue 的空白压缩就在中文里塞进一个空格（`但它用的 不是`）。改成左侧红条的 `.license-notice` 段落，视觉分量更足，也不受模板换行影响。
+
+**验证：** 临时 profile 起应用，读回卡片结构与链接：`{"title":"开源与许可","terms":[可以/不可以两条],"links":[github.com/zhijian521/mh-toolbox, 许可证全文]}`，两个 `href` 与常量一致。白名单两路都验了拒绝路径：`https://example.com/steal` 与 `http://github.com/...` 均返回「只能打开项目相关的官方链接」。合法地址未实际点击（会真的拉起系统浏览器），`shell.openExternal` 是 Electron 标准 API，风险在参数而不在调用。
+
+**排版代价：** 设置页第六张卡片让内容高度从 748px 涨到 869px，需要滚动才能看全底部那行提示。截图核对了滚动到底后的完整形态：红条段落、可以/不可以两行、两个链接、末尾小字都在，没有裁切。

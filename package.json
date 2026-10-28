@@ -7,7 +7,7 @@
     "main": "src/main/main.cjs",
     "description": "梦幻养老助手 Vue 重构版，使用独立数据目录",
     "author": "zhijian",
-    "license": "MIT",
+    "license": "PolyForm-Noncommercial-1.0.0",
     "engines": {
         "node": ">=22.12.0"
     },
