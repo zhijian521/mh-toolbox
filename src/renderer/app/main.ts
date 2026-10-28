@@ -10,8 +10,6 @@ import IncomePage from '../features/income/IncomePage.vue';
 import OverviewPage from '../features/overview/OverviewPage.vue';
 import PricesPage from '../features/prices/PricesPage.vue';
 import SettingsPage from '../features/settings/SettingsPage.vue';
-import PendingPage from '../features/pending/PendingPage.vue';
-import { sections } from './navigation';
 import { reportRendererError } from './error-reporting';
 import '../assets/styles.css';
 
@@ -19,13 +17,6 @@ const router = createRouter({
     history: createWebHashHistory(),
     routes: [
         { path: '/', redirect: '/overview' },
-        ...sections
-            .filter((section) => section.pending)
-            .map(({ path, title, icon }) => ({
-                path,
-                component: PendingPage,
-                props: { title, icon },
-            })),
         { path: '/accounts', component: AccountsPage },
         { path: '/characters', component: CharactersPage },
         { path: '/equipment', component: EquipmentPage },

@@ -48,12 +48,11 @@ onMounted(() => {
                     :key="section.path"
                     :to="section.path"
                     class="nav-item"
-                    :title="section.title + (section.pending ? ' · 待迁移' : '')"
+                    :title="section.title"
                     :aria-label="section.title"
                 >
                     <AppIcon :name="section.icon" />
                     <span v-if="!collapsed">{{ section.title }}</span>
-                    <small v-if="section.pending && !collapsed" aria-hidden="true">待迁移</small>
                 </RouterLink>
             </nav>
             <footer class="sidebar-footer">
@@ -227,15 +226,6 @@ onMounted(() => {
 }
 .nav-item:not(.router-link-active):hover {
     background: var(--warn-bg);
-}
-.nav-item small {
-    font-size: 10px;
-    margin-left: auto;
-    color: var(--muted);
-    border: 1px solid color-mix(in srgb, var(--line-2) 50%, transparent);
-    border-radius: 3px;
-    padding: 1px 4px;
-    line-height: 15px;
 }
 /*
  * 只剩两个图标按钮，居中摆。原来左边那行「本地保存 · 独立数据」是启动时的自我

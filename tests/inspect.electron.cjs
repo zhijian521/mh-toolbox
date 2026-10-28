@@ -39,7 +39,7 @@ const character = (id, name, school, server, skills) => ({
 fs.writeFileSync(
     path.join(directory, 'mh-tool-v2/data.json'),
     JSON.stringify({
-        schemaVersion: 6,
+        schemaVersion: 7,
         transactions: [],
         characters: [
             character('c1', '轻舟', '大唐官府', '紫禁城', [

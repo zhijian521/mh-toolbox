@@ -20,8 +20,10 @@
 
 ## 2. 接入路由与菜单
 
-- `app/navigation.ts`：该页的 `pending` 改为 `false`，菜单自动去掉「待迁移」角标。
-- `app/main.ts`：`pending` 的条目会自动映射到 `PendingPage`；改为 `false` 后必须补一条显式路由，否则页面没有组件可渲染。
+- `app/navigation.ts`：在 `sections` 里加一项（`title` / `icon` / `path`）。
+- `app/main.ts`：在 `routes` 里补一条显式路由，否则菜单点了没有组件可渲染。
+
+> 早期用 `pending: true` 把未完成的页面映射到占位页，全部页面迁移完成后这套机制已删除（2026-10-28）。
 
 ## 3. 页面骨架
 

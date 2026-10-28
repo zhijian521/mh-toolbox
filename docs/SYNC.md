@@ -1,4 +1,4 @@
-# 当前版本与 V2 同步记录
+# V1 归档与同步记录
 
 ## 初始基线
 
@@ -15,25 +15,7 @@
 
 处理一个差异时：记录来源文件/提交及功能意图，适配到 Vue 组件或领域模块，迁移相应回归用例，验证后在本记录追加条目。由于初始基线固定，已处理文件仍可能出现在差异输出中，须结合本记录判断是否还有后续变化。
 
-新数据 schema 先迁移、验证后再允许导入。完整重构验收前再对当前版本做一次全模块对齐。
-
-## 第一阶段期间检测到的待同步变化
-
-以下为开发期间的一次检查结果，最新结果以命令输出为准。当前版本仍在修改，尚未把这些新变化合入 V2：
-
-- 装备规则、导入与界面：`equipment-fields.js`、`equipment-import.js`、`ui-equipment.js`、`views/equipment-import.js`、`views/equipment.js`。
-- 当前版本开发热更新：`layout/dev.js`。
-- 装备回归：`equipment-fields.electron.cjs`、`equipment-fields.test.cjs`。
-- 文档：README、ARCHITECTURE、CHANGELOG、LEDGERS、STYLE_GUIDE、新增 EQUIPMENT_FIELDS。
-
-本批次共 14 项，留待装备与通用组件阶段审核。该记录描述当时的检查结果。
-
-## 2026-10-27 目录调整
-
-- V2 从 `v2/` 提升到仓库根目录，后续安装、开发、检查和构建均在根目录运行。
-- 原根目录的完整 V1 工程归档到 `migration/baseline/`，保留原有源码、资源、文档与测试；本机依赖与构建产物同批搬入，随后按需清理（见下节）。
-- 初始文本快照移到 `migration/initial-baseline/`，初始采集信息与文件哈希保持不变；状态脚本继续对比归档 V1 与初始基线。
-- CI 分别在根目录检查 V2、在 `migration/baseline/` 检查 V1。目录调整不涉及业务规则、数据 schema 或应用数据目录的变更。
+新数据 schema 先迁移、验证后再允许导入。
 
 ## 2026-10-27 归档依赖与构建产物清理
 

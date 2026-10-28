@@ -924,13 +924,6 @@ app.on('browser-window-created', (_event, win) => {
             await read(() => document.querySelector('a[href="#/income"]').click());
             await until(() => !!document.querySelector('.stat-grid'), '收益页');
             assert.equal(
-                await read(() =>
-                    document.querySelector('a[href="#/income"]').textContent.includes('待迁移'),
-                ),
-                false,
-                '收益页已迁移，菜单不再挂角标',
-            );
-            assert.equal(
                 await read(() => document.querySelector('.loot-footer b')?.textContent),
                 '0',
                 '本日还没有收益记录',
@@ -1309,13 +1302,6 @@ app.on('browser-window-created', (_event, win) => {
             await until(
                 () => document.querySelector('.board-title h2')?.textContent === '日常收益',
                 '总览页',
-            );
-            assert.equal(
-                await read(() =>
-                    document.querySelector('a[href="#/overview"]').textContent.includes('待迁移'),
-                ),
-                false,
-                '总览已迁移，菜单不再挂角标',
             );
             // 五张卡：净收益领头，物品只取收益页口径（按速记标价），没有「持有估值」。
             assert.equal(
