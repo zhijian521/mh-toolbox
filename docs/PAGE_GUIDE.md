@@ -73,9 +73,7 @@
 
 ## 9. 文档同步
 
-- `docs/ROADMAP.md`：更新该模块的状态列。
-- `docs/VALIDATION.md`：追加一节，写日期、范围与检查结果表格。
-- `docs/SYNC.md`：若本次涉及 V1 归档里的差异，记录来源与适配结论。
+- `docs/VALIDATION.md`：追加一节，写日期、范围与检查结果表格；若本次对照过 V1 实现，把来源 commit 与适配结论写在同一节里。
 - `docs/ARCHITECTURE.md`：目录职责或分层发生变化时才改，不要往里堆页面细节。
 
 ## 10. 反模式
