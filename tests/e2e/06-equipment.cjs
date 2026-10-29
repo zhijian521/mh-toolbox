@@ -88,6 +88,30 @@ module.exports = async function equipment(env) {
     );
     await click('记变动');
     await until(() => !!document.querySelector('#gear-log-form'), '记变动弹窗');
+    /*
+     * 变动日期必填：「清空」这颗按钮不该出现。
+     *
+     * 以前能清空再保存，就写出一条 `date: ''` 的流水——默认「本月」筛不到它、
+     * 时间线上日期是空白，用户只看到账本少了一笔。领域那边也补了校验，两层都验。
+     */
+    await read(() => document.querySelector('.date-trigger[aria-label="变动日期"]').click());
+    await until(() => !!document.querySelector('.date-popover'), '变动日期日历');
+    assert.equal(
+        await read(() =>
+            [...document.querySelectorAll('.date-popover .btn')].some(
+                (button) => button.textContent.trim() === '清空',
+            ),
+        ),
+        false,
+        '必填日期不给「清空」',
+    );
+    // 选「今天」只是把日历收起来：日期本来就是今天，值不变。
+    await read(() =>
+        [...document.querySelectorAll('.date-popover .btn')]
+            .find((button) => button.textContent.trim() === '今天')
+            .click(),
+    );
+    await until(() => !document.querySelector('.date-popover'), '选今天收起日历');
     await field('[name="amount"]', '300');
     await click('记录变动');
     await until(() => !document.querySelector('#gear-log-form'), '变动已记录');
@@ -308,11 +332,23 @@ module.exports = async function equipment(env) {
         '上古玉魄·阳',
         '识别出玉魄名称',
     );
+    /*
+     * 核对时改名，入库要存改后的值。
+     *
+     * 这条链路是「输入框 emit rename → 队列写回草稿 → 入库读草稿」，2026-10-29 拆
+     * 弹窗时重接过一遍；端到端原来只验 OCR 结果落盘，链路断了也看不出来。
+     */
+    await field('.shot-meta input', '测试改名玉魄');
+    assert.equal(
+        await read(() => document.querySelector('.shot-meta input')?.value),
+        '测试改名玉魄',
+        '改名留在输入框里',
+    );
     await click('入库 1 件');
     await untilDisk(() => disk().equipment.length === 4, '识别结果落盘');
     const shotJade = disk().equipment.find((eq) => eq.slot === '玉魄·阳');
     assert.ok(shotJade, '按名称认出这是玉魄·阳');
-    assert.equal(shotJade.name, '上古玉魄·阳');
+    assert.equal(shotJade.name, '测试改名玉魄', '入库的是核对时改过的名称');
     assert.equal(shotJade.details.jade.dust, 2, '识别出灵尘等级');
     assert.equal(shotJade.details.jade.assault, '奇袭法术', '识别出奇袭类型');
     assert.equal(shotJade.details.jade.chance, 0.5, '识别出奇袭概率');
@@ -331,9 +367,10 @@ module.exports = async function equipment(env) {
     assert.ok(shotJade.ocrText.includes('灵尘等级'), '识别原文留在档案里可回查');
 
     // ---- 列表只摆装备本身的属性：灵尘、开光这类配置留给详情 ----
+    // 找的是改过名的那一行：列表跟着改名走，说明入库写的就是草稿里的名称。
     const warehouseRow = await read(() => {
         const row = [...document.querySelectorAll('.eq-row')].find((element) =>
-            element.textContent.includes('上古玉魄·阳'),
+            element.textContent.includes('测试改名玉魄'),
         );
         return row
             ? [...row.querySelectorAll('.eq-prop')].map((line) => line.textContent.trim())
@@ -362,7 +399,7 @@ module.exports = async function equipment(env) {
     );
     await read(() => {
         [...document.querySelectorAll('.eq-row')]
-            .find((element) => element.textContent.includes('上古玉魄·阳'))
+            .find((element) => element.textContent.includes('测试改名玉魄'))
             .querySelector('.eq-name-button')
             .click();
     });

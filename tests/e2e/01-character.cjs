@@ -194,6 +194,41 @@ module.exports = async function characters(env) {
         await read(() => document.activeElement?.getAttribute('aria-label')),
         '移除此技能',
     );
+    /*
+     * 只填等级、不填名称的技能行：保存要明确拦下来并跳到那一分区。
+     * 2026-10-29 之前名称框挂着原生 `required`：点保存被浏览器悄悄拦下，`submit`
+     * 根本不派发，页面自己的错误区一个字都不显示，气泡还多半指着已经滚出视野的行
+     * ——表现就是「点了没反应」。现在由 `save()` 判断，所以这里能断言到具体文案。
+     */
+    const lastLevel = '.skill-rows > .skill-row:last-child input[type="number"]';
+    await click('＋ 添加技能');
+    await until(
+        (count) => document.querySelectorAll('.skill-row').length === count + 1,
+        '加一行空技能',
+        order.length,
+    );
+    await field(lastLevel, '5');
+    const skillsBefore = disk().characters[0].progress.schoolSkills.length;
+    await submit('#character-form');
+    await until(
+        () => (document.querySelector('.form-error')?.textContent || '').includes('补上名称'),
+        '无名技能行被拦下',
+    );
+    assert.ok(await read(() => !!document.querySelector('#character-form')), '拦下时不关弹窗');
+    assert.equal(
+        await read(() =>
+            document.querySelector('.section-nav [aria-current="location"]')?.textContent.trim(),
+        ),
+        '师门技能',
+        '出错的技能行在师门技能分区，就跳过去',
+    );
+    assert.equal(
+        disk().characters[0].progress.schoolSkills.length,
+        skillsBefore,
+        '被拦下时一个字都没落盘',
+    );
+    // 把等级也清掉，这一行成了纯空行：保存时直接丢弃，不该再拦。
+    await field(lastLevel, '');
     // 分区导航跟随滚动，而不是只在点击时切换。
     const bodyMetrics = await read(() => {
         const body = document.querySelector('.modal-body');
@@ -229,6 +264,12 @@ module.exports = async function characters(env) {
             .characters[0].progress.schoolSkills.map((item) => item.name)
             .slice(0, 3),
         [order[2], order[1], order[0]],
+    );
+    // 刚才那行纯空白技能：保存成功，而且没有作为一条「无名技能」留在档案里。
+    assert.equal(
+        disk().characters[0].progress.schoolSkills.length,
+        order.length,
+        '完全空白的技能行在保存时被丢掉',
     );
 
     await click('养成记录');

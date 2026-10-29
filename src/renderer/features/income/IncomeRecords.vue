@@ -274,7 +274,8 @@ async function deleted(dates: string[]) {
                 <span class="ops"></span>
             </div>
             <ul ref="listEl" class="record-list">
-                <li v-for="tx in visible" :key="tx.id" class="record-row">
+                <!-- `data-record` 与账号页的 `.recent-row` 一致：端到端点名某一行时不必靠文字匹配。 -->
+                <li v-for="tx in visible" :key="tx.id" class="record-row" :data-record="tx.id">
                     <span class="cell-date">
                         {{ tx.date }}
                         <small>· {{ rules.charName(tx.characterId) }}</small>
