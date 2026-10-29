@@ -59,63 +59,103 @@ export function pruneDetail(draft: DraftDetail): EquipmentDetail {
     } as EquipmentDetail;
 }
 
-/** 属性行的视觉分组，只决定文字颜色，不参与语义。 */
-export type PropertyKind = 'attribute' | 'gem' | 'special' | 'upgrade' | 'legacy';
+/** 属性行的视觉分组：决定左侧标签的颜色，也决定它是不是一枚「类别签」。 */
+export type PropertyKind = 'base' | 'extra' | 'gem' | 'special' | 'upgrade' | 'legacy';
+
+/** 一行里并排的一段词条：属性名与数值分开存，窄处才好只在两者之间换行。 */
+export interface PropertySegment {
+    name: string;
+    num: string;
+}
 
 export interface PropertyRow {
     label: string;
     value: string;
+    /**
+     * 一行里并排的若干段词条。界面按段渲染：段与段之间可以断行，段内的属性名与数值
+     * 也允许断行（窄卡片里「物理暴击等级 +18」放不下），但两半各自不再拆开。
+     */
+    segments?: PropertySegment[];
     kind: PropertyKind;
+    /** 类别签（基础 / 双加 / 宝石 / 锻炼）带底色；普通字段名（特技、符石…）只有灰字。 */
+    tag?: boolean;
 }
 
 /**
- * 一条词条写成「伤害 +480 [强化 +30]」。
+ * 一条词条拆成「伤害」+「+480 [强化 +30]」。
  *
  * 领域里的 `equipmentStatText` 用的是 ASCII 连字符，界面上负号要写成 U+2212 才和
- * 页面其它数字一致，所以这里自己拼而不直接用它。
+ * 页面其它数字一致，所以这里自己拼而不直接用它。名称与数值分开返回，是为了窄格子
+ * 里只在两者之间断行——整条不许断会在 145px 的玉魄格里被裁掉半个字。
  */
-function statText(label: string, row: EquipmentRow) {
+function statSegment(label: string, row: EquipmentRow): PropertySegment {
     const sign = row.value >= 0 ? '+' : '−';
     const boost = row.boost == null ? '' : ` [${row.boost >= 0 ? '+' : '−'}${Math.abs(row.boost)}]`;
-    return `${label} ${sign}${Math.abs(row.value)}${boost}`;
+    return { name: label, num: `${sign}${Math.abs(row.value)}${boost}` };
 }
 
 /**
  * 把装备属性摊平成「标签 + 值」的行。格子、仓库、选装、详情四处共用同一份口径。
  *
- * 主要属性合成一行（游戏里就是并排显示的两条），其余每条一行。**一处不折叠**：
- * 2026-10-29 用户要求「属性全部展示、不折叠」，所以原先只在详情里出现的钟灵石、
- * 套装、符石、灵尘、奇袭、开光孔、原有属性，现在四处都列出来——它们是这件装备的
- * 完整配置，收起来反而要挨个点开比对。
+ * 分成三层，越往下越像「配置」而不是「属性」：
  *
- * 反过来，五行、耐久、修理失败、制造者**不列**：这四项不参与比较，也不影响要不要
- * 换装，摆进格子只会把真正要看的属性挤下去。数据仍然完整保存，编辑器里照旧能改。
+ * 1. **类别签**（带底色的标签）：基础 / 双加（灵饰叫附加、玉魄叫加成）/ 宝石 / 锻炼。
+ *    同类词条并排成一行——游戏里它们本来就是同一条属性行里的几段，拆成三行只是把
+ *    格子撑高；合成一行才能一眼读出「这件装备总共有多少力敏」。
+ * 2. **字段签**（灰字标签）：特技、特效、钟灵石、熔炼、符石、原有属性。
+ * 3. **玉魄的养成档**：灵尘等级、奇袭、开光孔固定压在最后——它们说的是这件玉魄练到
+ *    什么程度，和上面的词条不是一回事。
  *
- * 属性为空时返回空数组而不是占位行：调用方需要区分「没录」和「录了但是 0」，
- * 由各自决定要不要显示「未录入属性」。
+ * **不展示**：五行、耐久、修理失败、制造者（数据仍在，编辑器可改），以及钟灵石的
+ * 套装效果（2026-10-29 用户要求去掉：套装名又长又不参与比较）。属性为空时返回空
+ * 数组而不是占位行：调用方需要区分「没录」和「录了但是 0」。
  */
 export function propertyRows(rules: Domain, eq: EquipmentItem): PropertyRow[] {
     const detail = rules.equipmentDetails(eq);
     const rule = rules.equipmentRule(eq.slot);
     const label = (key: string) => rules.equipmentStats[key] || key;
     const rows: PropertyRow[] = [];
-    const add = (name: string, value: unknown, kind: PropertyKind = 'attribute') => {
-        if (value === '' || value == null || value === undefined) return;
-        rows.push({ label: name, value: String(value), kind });
+    const push = (
+        name: string,
+        value: string | number | null | undefined | PropertySegment[],
+        kind: PropertyKind,
+        tag = false,
+    ) => {
+        if (value === '' || value == null) return;
+        if (Array.isArray(value)) {
+            const segments = value.filter((item) => item.name !== '' || item.num !== '');
+            if (!segments.length) return;
+            rows.push({
+                label: name,
+                value: segments.map((item) => `${item.name} ${item.num}`).join(' · '),
+                segments: segments.length > 1 ? segments : undefined,
+                kind,
+                tag,
+            });
+            return;
+        }
+        rows.push({ label: name, value: String(value), kind, tag });
     };
+    /** 一组词条并排成一行，中间用间隔号分开。 */
+    const line = (list: EquipmentRow[]) => list.map((row) => statSegment(label(row.key), row));
 
-    if (detail.base.length)
-        add('', detail.base.map((row) => statText(label(row.key), row)).join(' · '), 'attribute');
-    detail.extra.forEach((row) => add('', statText(label(row.key), row), 'attribute'));
+    if (detail.base.length) push('基础', line(detail.base), 'base', true);
+    if (detail.extra.length)
+        push(
+            rule.kind === 'accessory' ? '附加' : rule.kind === 'jade' ? '加成' : '双加',
+            line(detail.extra),
+            'extra',
+            true,
+        );
     // 宝石属性里与主要属性同 key 的不再重复列一遍，否则「伤害」会出现两次。
-    detail.bonus
-        .filter((row) => !detail.base.some((base) => base.key === row.key))
-        .forEach((row) => add('宝石', statText(label(row.key), row), 'gem'));
-    detail.melt.forEach((row) => add('熔炼', statText(label(row.key), row), 'attribute'));
-    add('特技', detail.technique, 'special');
-    detail.effects.forEach((effect) => add('特效', effect, 'special'));
+    const bonus = detail.bonus.filter((row) => !detail.base.some((base) => base.key === row.key));
+    if (bonus.length) push('宝石', line(bonus), 'gem', true);
+    if (detail.melt.length) push('熔炼', line(detail.melt), 'base');
+
+    push('特技', detail.technique, 'special');
+    detail.effects.forEach((effect) => push('特效', effect, 'special'));
     if (detail.clock.name)
-        add('钟灵石', `${detail.clock.name} ${detail.clock.level} 级`, 'special');
+        push('钟灵石', `${detail.clock.name} ${detail.clock.level} 级`, 'special');
 
     // 锻炼段数、宝石与精炼合成一行：它们都是「这件装备打到什么程度」。
     const socket: string[] = [];
@@ -130,30 +170,33 @@ export function propertyRows(rules: Domain, eq: EquipmentItem): PropertyRow[] {
         ),
     );
     if (socket.length)
-        add(
-            rule.kind === 'accessory' ? '精炼' : detail.forge === null ? '宝石' : '锻炼',
+        push(
+            // 只填了宝石、没填段数时别也叫「宝石」——上面已经有一组宝石属性了。
+            rule.kind === 'accessory' ? '精炼' : detail.forge === null ? '镶嵌' : '锻炼',
             socket.join(' '),
             'upgrade',
+            true,
         );
 
-    add('套装', detail.suit, 'special');
-    add('符石', detail.runes, 'upgrade');
+    push('符石', detail.runes, 'upgrade');
+    push('原有属性', detail.legacy, 'legacy');
+
+    /* 玉魄：灵尘、奇袭、开光一律垫底，与上面的词条用一档更淡的标签隔开。 */
     if (rule.kind === 'jade') {
-        if (detail.jade.dust !== null) add('灵尘', `${detail.jade.dust} 级`, 'upgrade');
+        if (detail.jade.dust !== null) push('灵尘', `${detail.jade.dust} 级`, 'upgrade', true);
         if (detail.jade.assault)
             // 游戏里写「奇袭法术」，标签已经是「奇袭」，值里再去掉这两个字，
             // 否则列表读起来是「奇袭 奇袭法术 0.5%」。
-            add(
+            push(
                 '奇袭',
                 String(detail.jade.assault).replace(/^奇袭/, '') +
                     (detail.jade.chance == null ? '' : ` ${detail.jade.chance}%`),
                 'special',
             );
-        if (detail.jade.holes) add('开光', `${detail.jade.holes} 孔`, 'upgrade');
+        if (detail.jade.holes) push('开光', `${detail.jade.holes} 孔`, 'upgrade');
         detail.jade.enchantments.forEach((value, index) =>
-            add(`孔 ${index + 1}`, value || '未强化', 'special'),
+            push(`孔 ${index + 1}`, value || '未强化', 'special'),
         );
     }
-    if (detail.legacy) add('原有属性', detail.legacy, 'legacy');
     return rows;
 }
