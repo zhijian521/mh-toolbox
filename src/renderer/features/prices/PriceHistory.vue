@@ -75,7 +75,10 @@ async function remove(log: PriceLog) {
             </div>
             <div class="summary-side">
                 <span class="summary-label">当前价</span>
-                <span class="summary-count">共 {{ total }} 条 · 分类 {{ item.category }}</span>
+                <span class="summary-count">
+                    共 {{ total }} 条 · 分类 {{ item.category
+                    }}{{ item.sub ? ' / ' + item.sub : '' }}
+                </span>
             </div>
         </div>
 

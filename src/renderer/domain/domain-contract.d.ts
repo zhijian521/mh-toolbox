@@ -148,6 +148,7 @@ interface Domain {
     slots: string[];
     schools: string[];
     priceCategories: string[];
+    priceGroups: Array<{ name: string; subs: string[] }>;
     auxiliarySkillNames: string[];
     goalTypes: Array<{ v: string; t: string }>;
     gearActions: Array<{ v: string; t: string; dir: number }>;

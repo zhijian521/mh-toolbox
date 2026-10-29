@@ -76,22 +76,23 @@ const badge = computed(() => {
 });
 
 /**
- * 分类色的色调：常见分类固定，自定义分类按名称散列到同一组颜色里，保证每次打开一致。
+ * 分类色的色调：一级固定，自定义一级（理论上不存在，读取时已兜到「其他」）按名称散列。
  *
- * 令牌色直接引 var()，卡面自己带的两套取值；这里几个写死的褐 / 橄榄 / 黛 / 紫
- * 用 light-dark() 各给一份——暗底上原来的深色几乎看不见，卡片会变成没分类的灰块。
+ * 颜色跟着一级走、字号跟二级走：同一大类的卡片一眼是同一片色，卡面上写的是最具体的
+ * 那一层（「归墟」而不是「任务产出」）。令牌色直接引 var()，卡面自己带的两套取值；
+ * 这里几个写死的褐 / 橄榄 / 黛 / 紫用 light-dark() 各给一份——暗底上原来的深色几乎
+ * 看不见，卡片会变成没分类的灰块。
  */
 const tone = computed(() => {
     const fixed: Record<string, string> = {
-        兽决: 'var(--gold)',
-        内丹: 'var(--blue)',
-        宝石: 'var(--red)',
-        五宝: 'light-dark(#8a5a2b, #c49a6a)',
-        环装: 'light-dark(#6b7b52, #9db083)',
-        材料: 'light-dark(#7a6a53, #b3a184)',
-        符石: 'light-dark(#3d5a6c, #8aa7b8)',
-        药品: 'var(--green)',
+        装备灵饰: 'light-dark(#6b7b52, #9db083)',
         召唤兽: 'light-dark(#8a6a8a, #b99cc0)',
+        兽决内丹: 'var(--gold)',
+        宝石符石: 'var(--red)',
+        打造材料: 'light-dark(#7a6a53, #b3a184)',
+        消耗补给: 'var(--green)',
+        任务产出: 'light-dark(#8a5a2b, #c49a6a)',
+        通货账号: 'var(--blue)',
         其他: 'var(--muted)',
     };
     const name = props.item.category || '其他';
@@ -108,6 +109,11 @@ const tone = computed(() => {
     for (const char of name) hash = (hash * 31 + char.codePointAt(0)!) % 997;
     return pool[hash % pool.length];
 });
+/** 卡面标签取最具体的一层：有子类写子类，没有才退回一级。 */
+const tag = computed(() => props.item.sub || props.item.category);
+const tagTitle = computed(() =>
+    props.item.sub ? props.item.category + ' · ' + props.item.sub : props.item.category,
+);
 
 /**
  * 走势线跟着价格走：viewBox 固定，线宽由 `non-scaling-stroke` 兜住，
@@ -144,7 +150,7 @@ const sparkPoints = computed(() => {
         <span class="tag-hole right" aria-hidden="true"></span>
 
         <header class="card-top">
-            <span class="card-category">{{ item.category }}</span>
+            <span class="card-category" :title="tagTitle">{{ tag }}</span>
             <span v-if="badge" class="card-badge" :class="badge.dir" :title="badge.title">
                 {{ badge.arrow }} {{ badge.text }}
             </span>

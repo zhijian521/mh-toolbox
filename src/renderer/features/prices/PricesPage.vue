@@ -18,12 +18,16 @@ import PriceLogEditor from './PriceLogEditor.vue';
  * 一个独立功能：只读写 `state.prices`，不参与角色筛选、不进账本、也不影响速记单价。
  * 卡片顺序、当前价、涨跌口径全部来自领域层，页面只做筛选、排序与弹窗编排——
  * 排序放在页面里，是因为「按价格排」属于看数据的临时视角，不该写进档案。
+ *
+ * 分类是两级：左侧竖排一级（装备灵饰、召唤兽、兽决内丹……），选中之后右侧顶上出一排
+ * 二级 chips。一级常驻可见，是因为它回答的是「我在看哪一块行情」；二级只在选了一级
+ * 之后出现，三十多个子类全铺在页面上会把卡片挤到看不见。
  */
 const app = useApplication();
 const rules = app.rules();
 const content = ref<HTMLElement>();
 const addButton = ref<HTMLButtonElement>();
-const filters = reactive({ category: '', keyword: '', sort: 'updated' });
+const filters = reactive({ group: '', sub: '', keyword: '', sort: 'updated' });
 const editing = ref<{ item?: PriceItem } | null>(null);
 const logging = ref<{ item: PriceItem; log?: PriceLog } | null>(null);
 const history = ref<PriceItem | null>(null);
@@ -35,15 +39,26 @@ const items = computed<PriceItem[]>(() => {
     void app.data;
     return rules.orderedPrices(rules.state.prices) as PriceItem[];
 });
-const categoryOptions = computed(() => {
-    const used = items.value.map((item) => item.category).filter(Boolean);
-    return [
-        { value: '', label: `全部类型 ${items.value.length}` },
-        ...[...new Set([...rules.priceCategories, ...used])].map((name) => ({
-            value: name,
-            label: name,
-        })),
-    ];
+/** 一级目录，顺序固定；条数为 0 的也列出来，免得用户以为这一块不能记。 */
+const groups = computed(() =>
+    rules.priceGroups.map((group) => ({
+        name: group.name,
+        subs: group.subs,
+        count: items.value.filter((item) => item.category === group.name).length,
+    })),
+);
+/**
+ * 当前一级下能选的二级：目录里的 + 这张档里出现过的自建子类。
+ *
+ * 自建的也要列出来，否则用户自己写过的子类只能靠搜索找到，筛选里永远看不见。
+ */
+const subChips = computed(() => {
+    const current = groups.value.find((group) => group.name === filters.group);
+    if (!current) return [];
+    const used = items.value
+        .filter((item) => item.category === filters.group && item.sub)
+        .map((item) => item.sub);
+    return [...new Set([...current.subs, ...used])];
 });
 const sortOptions = [
     { value: 'updated', label: '最近更新' },
@@ -56,9 +71,10 @@ const sortOptions = [
 const entries = computed<PriceItem[]>(() => {
     const keyword = filters.keyword.trim().toLocaleLowerCase();
     const list = items.value.filter((item) => {
-        if (filters.category && item.category !== filters.category) return false;
+        if (filters.group && item.category !== filters.group) return false;
+        if (filters.sub && item.sub !== filters.sub) return false;
         if (!keyword) return true;
-        return [item.name, item.category, item.unit, item.note]
+        return [item.name, item.category, item.sub, item.unit, item.note]
             .join(' ')
             .toLocaleLowerCase()
             .includes(keyword);
@@ -86,9 +102,18 @@ const entries = computed<PriceItem[]>(() => {
     });
 });
 const filtered = computed(
-    () => !!filters.keyword.trim() || !!filters.category || filters.sort !== 'updated',
+    () =>
+        !!filters.keyword.trim() || !!filters.group || !!filters.sub || filters.sort !== 'updated',
 );
-/** 编辑时传一份去代理的副本：弹窗里改的是草稿，不碰快照。 */
+/** 选中的一级一件都没有：这不是「筛选没命中」，是这一块还没开始记，文案要分开。 */
+const groupVoid = computed(
+    () => !!filters.group && !groups.value.some((g) => g.name === filters.group && g.count),
+);
+/** 切一级就清掉二级：上一组的子类名套在新组上，必然什么都不剩。 */
+function pickGroup(name: string) {
+    filters.group = filters.group === name ? '' : name;
+    filters.sub = '';
+}
 function editItem(item: PriceItem) {
     editing.value = { item: plain(item) as PriceItem };
 }
@@ -111,7 +136,7 @@ function changeOf(item: PriceItem) {
     return rules.priceChange(item);
 }
 function resetFilters() {
-    Object.assign(filters, { category: '', keyword: '', sort: 'updated' });
+    Object.assign(filters, { group: '', sub: '', keyword: '', sort: 'updated' });
 }
 /** 保存后把焦点交给卡片上的对应按钮；卡片被筛掉时退回新建按钮，别让焦点掉回 body。 */
 async function focusCard(id: string, action = '记价') {
@@ -192,59 +217,125 @@ async function remove() {
         </template>
     </PageHeader>
     <div ref="content" class="page-content">
-        <div v-if="items.length" class="price-filters">
-            <label class="filter-field filter-category">
-                类型
-                <BaseSelect
-                    v-model="filters.category"
-                    label="按类型筛选"
-                    :options="categoryOptions"
-                />
-            </label>
-            <label class="filter-field filter-keyword">
-                关键字
-                <input
-                    v-model="filters.keyword"
-                    type="search"
-                    aria-label="搜索物品、分类或备注"
-                    placeholder="物品、分类或备注"
-                />
-            </label>
-            <label class="filter-field filter-sort">
-                排序
-                <BaseSelect v-model="filters.sort" label="排序方式" :options="sortOptions" />
-            </label>
-            <button v-if="filtered" class="text-button reset" @click="resetFilters">
-                清除筛选
-            </button>
-        </div>
-
         <div v-if="!items.length" class="empty">
             <AppIcon name="coin" :size="38" />
             <h2>记下第一个价</h2>
             <p>按物品建一张卡，之后每次看到新行情就记一条，涨跌和走势会自己算出来。</p>
             <button class="btn" :disabled="app.busy" @click="editing = {}">新建物价卡片</button>
         </div>
-        <div v-else-if="!entries.length" class="empty">
-            <AppIcon name="coin" :size="38" />
-            <h2>没有符合条件的物品</h2>
-            <p>换个类型或关键字试试。</p>
-            <button class="btn" @click="resetFilters">清除筛选</button>
-        </div>
-        <div v-else class="price-grid">
-            <PriceCard
-                v-for="item in entries"
-                :key="item.id"
-                :item="item"
-                :current="currentOf(item)"
-                :change="changeOf(item)"
-                :trend="trendOf(item)"
-                :busy="app.busy"
-                @log="logging = { item }"
-                @history="history = item"
-                @edit="editItem(item)"
-                @remove="removeItem(item)"
-            />
+        <div v-else class="price-layout">
+            <nav class="price-nav" aria-label="物品类型">
+                <button
+                    type="button"
+                    class="price-nav-item"
+                    :class="{ on: !filters.group }"
+                    :aria-pressed="!filters.group"
+                    @click="pickGroup('')"
+                >
+                    <span>全部</span>
+                    <b>{{ items.length }}</b>
+                </button>
+                <button
+                    v-for="group in groups"
+                    :key="group.name"
+                    type="button"
+                    class="price-nav-item"
+                    :class="{ on: filters.group === group.name, void: !group.count }"
+                    :aria-pressed="filters.group === group.name"
+                    @click="pickGroup(group.name)"
+                >
+                    <span>{{ group.name }}</span>
+                    <b>{{ group.count }}</b>
+                </button>
+            </nav>
+
+            <div class="price-main">
+                <div class="price-filters">
+                    <!--
+                        二级 chips 跟随选中一级：选了「任务产出」才出现藏宝图、五宝、归墟这些。
+                        「全部」那颗是「这一大块里不分小节」，与左侧的「全部」不是一回事。
+                    -->
+                    <div
+                        v-if="subChips.length"
+                        class="sub-chips"
+                        role="group"
+                        aria-label="按子类筛选"
+                    >
+                        <button
+                            type="button"
+                            class="sub-chip"
+                            :class="{ on: !filters.sub }"
+                            :aria-pressed="!filters.sub"
+                            @click="filters.sub = ''"
+                        >
+                            全部
+                        </button>
+                        <button
+                            v-for="name in subChips"
+                            :key="name"
+                            type="button"
+                            class="sub-chip"
+                            :class="{ on: filters.sub === name }"
+                            :aria-pressed="filters.sub === name"
+                            @click="filters.sub = filters.sub === name ? '' : name"
+                        >
+                            {{ name }}
+                        </button>
+                    </div>
+                    <div class="filter-row">
+                        <label class="filter-field filter-keyword">
+                            关键字
+                            <input
+                                v-model="filters.keyword"
+                                type="search"
+                                aria-label="搜索物品、类型、子类或备注"
+                                placeholder="物品、类型或备注"
+                            />
+                        </label>
+                        <label class="filter-field filter-sort">
+                            排序
+                            <BaseSelect
+                                v-model="filters.sort"
+                                label="排序方式"
+                                :options="sortOptions"
+                            />
+                        </label>
+                        <button v-if="filtered" class="text-button reset" @click="resetFilters">
+                            清除筛选
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="groupVoid" class="empty">
+                    <AppIcon name="coin" :size="34" />
+                    <h2>「{{ filters.group }}」还没有记录</h2>
+                    <p>这一类里的东西可以直接建卡，建好之后会出现在这里。</p>
+                    <button class="btn" :disabled="app.busy" @click="editing = {}">
+                        新建物价卡片
+                    </button>
+                </div>
+                <div v-else-if="!entries.length" class="empty">
+                    <AppIcon name="coin" :size="34" />
+                    <h2>没有符合条件的物品</h2>
+                    <p>换个类型、子类或关键字试试。</p>
+                    <button class="btn" @click="resetFilters">清除筛选</button>
+                </div>
+                <div v-else class="price-grid">
+                    <PriceCard
+                        v-for="item in entries"
+                        :key="item.id"
+                        :item="item"
+                        :current="currentOf(item)"
+                        :change="changeOf(item)"
+                        :trend="trendOf(item)"
+                        :busy="app.busy"
+                        @log="logging = { item }"
+                        @history="history = item"
+                        @edit="editItem(item)"
+                        @remove="removeItem(item)"
+                    />
+                </div>
+            </div>
         </div>
     </div>
 
@@ -284,20 +375,115 @@ async function remove() {
 </template>
 
 <style scoped>
+/*
+ * 左侧一级目录 + 右侧卡片。目录固定 148px：中文四字一级名加两位数的条数刚好排得下，
+ * 再宽就开始从卡片区里抢列数（卡片一列 210px，抢掉 148 就少一列）。
+ */
+.price-layout {
+    display: grid;
+    grid-template-columns: 148px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+}
+.price-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding-right: 4px;
+    border-right: 1px solid var(--line);
+}
+/*
+ * 一级用「左侧一道竖线」标记选中，而不是整块底色：九项挨在一起，全是底色会糊成一片，
+ * 竖线只标一条，眼睛顺着线就能找到当前在哪。
+ */
+.price-nav-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 9px;
+    border: 0;
+    border-left: 2px solid transparent;
+    border-radius: 0 3px 3px 0;
+    background: none;
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.5;
+    text-align: left;
+    transition:
+        color 120ms ease,
+        background-color 120ms ease;
+}
+.price-nav-item:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--paper-2) 70%, transparent);
+    color: var(--ink);
+}
+.price-nav-item.on {
+    border-left-color: var(--gold);
+    background: color-mix(in srgb, var(--gold) 9%, transparent);
+    color: var(--ink);
+    font-weight: 600;
+}
+/* 一件都没记的分类压暗但仍可点：点进去是「这一类还没有记录」，而不是从菜单里消失。 */
+.price-nav-item.void {
+    opacity: 0.55;
+}
+.price-nav-item b {
+    flex: none;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+.price-main {
+    min-width: 0;
+}
 .price-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+.sub-chips {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+/* 二级做成小圆头 chip：比一级轻一档，读起来是「这一块里的细分」而不是另一个菜单。 */
+.sub-chip {
+    padding: 2px 11px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--paper);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 19px;
+    transition:
+        color 120ms ease,
+        border-color 120ms ease,
+        background-color 120ms ease;
+}
+.sub-chip:hover:not(:disabled) {
+    border-color: var(--line-2);
+    color: var(--ink);
+}
+.sub-chip.on {
+    border-color: color-mix(in srgb, var(--gold) 52%, var(--line-2));
+    background: color-mix(in srgb, var(--gold) 12%, var(--paper));
+    color: var(--ink);
+    font-weight: 600;
+}
+.filter-row {
     display: flex;
     align-items: end;
     gap: 10px;
     flex-wrap: wrap;
-    margin-bottom: 16px;
 }
 .filter-field {
     flex: none;
     gap: 4px;
     font-size: 12px;
-}
-.filter-category {
-    width: 132px;
 }
 .filter-sort {
     width: 148px;
@@ -322,6 +508,40 @@ async function remove() {
     grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
     gap: 10px;
     align-items: stretch;
+}
+.price-main .empty {
+    min-height: 260px;
+}
+@media (max-width: 900px) {
+    /* 窄屏没有第二列可用，一级改成横向滚动的一条，别把卡片挤成两列半。 */
+    .price-layout {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+    }
+    .price-nav {
+        flex-direction: row;
+        gap: 4px;
+        padding: 0 0 8px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    .price-nav::-webkit-scrollbar {
+        height: 0;
+    }
+    .price-nav-item {
+        flex: none;
+        gap: 5px;
+        padding: 4px 10px;
+        border-left: 0;
+        border-bottom: 2px solid transparent;
+        border-radius: 3px 3px 0 0;
+    }
+    .price-nav-item.on {
+        border-bottom-color: var(--gold);
+        background: none;
+    }
 }
 @media (max-width: 750px) {
     .price-grid {

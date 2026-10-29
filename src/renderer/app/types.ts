@@ -302,7 +302,10 @@ export interface PriceLog {
 export interface PriceItem {
     id: string;
     name: string;
+    /** 一级分类，取自 `rules().priceCategories`。 */
     category: string;
+    /** 二级分类，可为空字符串；一级固定、二级允许自己写。 */
+    sub: string;
     unit: string;
     note: string;
     logs: PriceLog[];
@@ -321,6 +324,7 @@ export interface PriceChange {
 export interface PriceItemInput {
     name: string;
     category: string;
+    sub?: string;
     note: string;
     price?: number | string | null;
     date?: string;
@@ -759,6 +763,8 @@ export interface Domain {
     recordEquipmentChange(id: string, data: GearLogInput): Promise<unknown>;
     // 物价卡片（独立功能，不参与角色筛选与账本统计）
     priceCategories: string[];
+    /** 两级分类目录：一级固定，二级可从 `subs` 里选，也可在弹窗里手填。 */
+    priceGroups: Array<{ name: string; subs: string[] }>;
     orderedPrices(items?: PriceItem[]): PriceItem[];
     priceLogsSorted(item: PriceItem): PriceLog[];
     priceCurrent(item: PriceItem): PriceLog | null;

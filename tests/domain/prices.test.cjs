@@ -50,8 +50,84 @@ test('读取路径：坏数据无损降级，未知字段与条目都保留', ()
     assert.ok(first.logs[1].id);
     assert.equal(state.prices[1].name, '未命名物品');
     assert.equal(state.prices[1].category, '其他');
+    assert.equal(state.prices[1].sub, '');
     assert.ok(state.prices[1].id);
     assert.deepEqual(state.prices[2].logs, []);
+});
+
+test('旧档升级：按名称与旧分类名推到二级，认不出的原名留在二级', () => {
+    const D = make();
+    const state = D.normalize({
+        prices: [
+            { id: 'a', name: '高级内丹：摧心浪', category: '内丹', logs: [] },
+            { id: 'b', name: '垃圾内丹', category: '召唤兽', logs: [] },
+            { id: 'c', name: '垃圾变异召唤兽', category: '召唤兽', logs: [] },
+            { id: 'd', name: '稀有：持国巡守', category: '召唤兽', logs: [] },
+            { id: 'e', name: '珍珠：80级', category: '材料', logs: [] },
+            { id: 'f', name: '月华露', category: '材料', logs: [] },
+            { id: 'g', name: '归墟：3X捉鬼', category: '其他', logs: [] },
+            { id: 'h', name: '三级种子', category: '其他', logs: [] },
+            { id: 'i', name: '碧藕', category: '其他', logs: [] },
+            { id: 'j', name: '特赦令牌', category: '五宝', logs: [] },
+            // 旧分类名认不出（用户自己写的），原名不丢：一级兜到「其他」，二级留着原名。
+            { id: 'k', name: '某件自定义的东西', category: '灵饰', logs: [] },
+            // 名称也认不出、分类名只到大类：落到一级，二级空着等用户选。
+            { id: 'l', name: '不知名物件', category: '兽决', logs: [] },
+        ],
+    });
+    const slot = (id) => {
+        const item = state.prices.find((one) => one.id === id);
+        return [item.category, item.sub];
+    };
+    assert.deepEqual(slot('a'), ['兽决内丹', '高级内丹'], '高级内丹不能被「内丹」规则先吃掉');
+    assert.deepEqual(slot('b'), ['兽决内丹', '低级内丹']);
+    assert.deepEqual(slot('c'), ['召唤兽', '变异召唤兽']);
+    assert.deepEqual(slot('d'), ['召唤兽', '稀有召唤兽']);
+    assert.deepEqual(slot('e'), ['打造材料', '珍珠']);
+    assert.deepEqual(slot('f'), ['消耗补给', '召唤兽消耗']);
+    assert.deepEqual(slot('g'), ['任务产出', '归墟']);
+    assert.deepEqual(slot('h'), ['任务产出', '种子树苗']);
+    assert.deepEqual(slot('i'), ['任务产出', '采集杂货']);
+    assert.deepEqual(slot('j'), ['任务产出', '特赦令牌']);
+    assert.deepEqual(slot('k'), ['其他', '灵饰']);
+    assert.deepEqual(slot('l'), ['兽决内丹', '']);
+});
+
+test('两级分类：一级收窄到目录里，二级可留空也可自己写，迁移只做一次', async () => {
+    const D = make();
+    D.state = D.normalize({});
+
+    // 一级不在目录里就兜到「其他」——一级放开自由填，筛选会散成一堆近义词。
+    const odd = await D.savePriceItem({ name: '奇怪东西', category: '随便写的', sub: '自建子类' });
+    assert.equal(odd.category, '其他');
+    assert.equal(odd.sub, '自建子类');
+
+    // 二级留空是合法的：只知道大类、还没细分的卡片。
+    const bare = await D.savePriceItem({ name: '归墟：7X副本', category: '任务产出' });
+    assert.equal(bare.sub, '');
+
+    // 目录里的二级照原样存。
+    const full = await D.savePriceItem({
+        name: '高级兽决：必杀',
+        category: '兽决内丹',
+        sub: '高级兽决',
+    });
+    assert.equal(full.sub, '高级兽决');
+
+    await assert.rejects(
+        () => D.savePriceItem({ name: '名字太长的子类', category: '其他', sub: '一'.repeat(13) }),
+        /子类/,
+    );
+
+    /*
+     * 迁移只认「没有 sub 字段」的旧档：用户把二级清空后重新读档，不能又被名称规则推回去，
+     * 否则「归墟：3X捉鬼」这种卡片永远回不到「任务产出 / 空」。
+     */
+    const kept = D.normalize({
+        prices: [{ id: 'x', name: '归墟：3X捉鬼', category: '任务产出', sub: '', logs: [] }],
+    });
+    assert.equal(kept.prices[0].category, '任务产出');
+    assert.equal(kept.prices[0].sub, '');
 });
 
 test('新建物品：可选初始价，名称与同名都会被拦下', async () => {
@@ -59,7 +135,8 @@ test('新建物品：可选初始价，名称与同名都会被拦下', async ()
     D.state = D.normalize({});
     const item = await D.savePriceItem({
         name: '高级兽决',
-        category: '兽决',
+        category: '兽决内丹',
+        sub: '高级兽决',
         note: '紫禁城',
         price: 120000,
         date: '2026-10-20',
@@ -82,7 +159,7 @@ test('新建物品：可选初始价，名称与同名都会被拦下', async ()
         prices: [{ id: 'old', name: '旧卡片', unit: '本', logs: [] }],
     }).prices[0];
     D.state.prices.push(legacy);
-    await D.savePriceItem({ name: '旧卡片改名', category: '兽决' }, 'old');
+    await D.savePriceItem({ name: '旧卡片改名', category: '兽决内丹' }, 'old');
     assert.equal(legacy.unit, '本');
     assert.equal(legacy.name, '旧卡片改名');
 

@@ -1,7 +1,7 @@
 // @ts-check
 import { U } from './util.js';
 import { schools } from '../game-data/schools.js';
-import { priceCategories } from '../game-data/price-catalog.js';
+import { priceCategories, priceGroups } from '../game-data/price-catalog.js';
 import {
     characterTraining,
     petTraining,
@@ -149,6 +149,8 @@ export function createData(localStorage) {
         schools: [...schools],
         /* 物价分类只作下拉选项，用户仍可手填自定义分类。 */
         priceCategories: [...priceCategories],
+        /* 两级目录：一级固定，二级可从名单里选，也可自己写。 */
+        priceGroups: priceGroups.map((group) => ({ name: group.name, subs: [...group.subs] })),
         characterTraining: characterTraining.map((field) => ({ ...field })),
         petTraining: petTraining.map((field) => ({ ...field })),
         auxiliarySkillNames: [...auxiliarySkillNames],

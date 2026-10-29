@@ -1,5 +1,7 @@
 // @ts-check
 
+import { legacyPriceSlot, priceCategories } from '../game-data/price-catalog.js';
+
 /**
  * 物价卡片：记录游戏内各物品的行情价。
  *
@@ -19,13 +21,17 @@
  * @typedef {object} PriceItem
  * @property {string} id
  * @property {string} name
- * @property {string} category
+ * @property {string} category 一级分类（`priceCategories` 之一）
+ * @property {string} sub 二级分类，可为空：一级固定、二级允许自己写
  * @property {string} unit 计价单位：个 / 本 / 组
  * @property {string} note
  * @property {PriceLog[]} logs 价格历史，读取时按日期倒序
  * @property {number} createdAt
  * @property {number} updatedAt
  */
+
+/** 二级分类名长度上限，与编辑框的 maxlength 一致。 */
+const SUB_LIMIT = 12;
 
 /** 名称长度上限，与编辑框的 maxlength 保持一致。 */
 const NAME_LIMIT = 40;
@@ -156,6 +162,10 @@ export default function install(D, U, _gateway, _localStorage) {
 
             /**
              * 单条物品的读取路径规范化：坏数据无损降级，保留未知字段，不抛错。
+             *
+             * 旧的扁平分类只有一层 `category`，升级两级后靠 `sub` 是否存在判断新旧档：
+             * 没有 `sub`（或一级名字已经不在目录里）就按名称与旧分类名推一次，
+             * 推过之后字段就存在了，用户再改成什么样都不会被推回去。
              * @this {Domain}
              * @param {any} raw
              * @returns {any}
@@ -173,10 +183,17 @@ export default function install(D, U, _gateway, _localStorage) {
                             createdAt: Number(log.createdAt) || 0,
                         }),
                     );
+                const name = text(item.name) || '未命名物品';
+                const category = text(item.category);
+                const slot =
+                    typeof item.sub === 'string' && priceCategories.includes(category)
+                        ? { category, sub: text(item.sub) }
+                        : legacyPriceSlot(name, category);
                 return Object.assign({}, item, {
                     id: text(item.id) || U.uid(),
-                    name: text(item.name) || '未命名物品',
-                    category: text(item.category) || '其他',
+                    name,
+                    category: slot.category,
+                    sub: slot.sub,
                     unit: text(item.unit) || '个',
                     note: text(item.note),
                     logs,
@@ -312,11 +329,12 @@ export default function install(D, U, _gateway, _localStorage) {
             /**
              * 物品表单校验（只在交互式保存路径调用，可以抛错）。
              *
-             * 不再收「计价单位」：界面上已经去掉这个字段，由新建时统一填「个」，
-             * 编辑时保留原值——旧数据里写过「本」「颗」的卡片不会被悄悄改掉。
+             * 一级必须落在目录里，落不进去就兜到「其他」——一级的自由度会让同一个概念
+             * 写成好几种叫法，筛选就散了。二级反过来可以自己写：新玩法产出的东西不该
+             * 等改版才能记。第二级留空是合法的（只知道大类、还没细分的卡片）。
              * @this {Domain}
              * @param {any} input
-             * @returns {{ name: string, category: string, note: string }}
+             * @returns {{ name: string, category: string, sub: string, note: string }}
              */
             priceItemInput(input) {
                 const raw = input && typeof input === 'object' ? input : {};
@@ -324,9 +342,14 @@ export default function install(D, U, _gateway, _localStorage) {
                 if (!name) throw new Error('请填写物品名称');
                 if (name.length > NAME_LIMIT)
                     throw new Error('物品名称不能超过 ' + NAME_LIMIT + ' 个字');
+                const sub = text(raw.sub);
+                if (sub.length > SUB_LIMIT)
+                    throw new Error('子类名称不能超过 ' + SUB_LIMIT + ' 个字');
+                const category = text(raw.category);
                 return {
                     name,
-                    category: text(raw.category) || '其他',
+                    category: priceCategories.includes(category) ? category : '其他',
+                    sub,
                     note: text(raw.note),
                 };
             },

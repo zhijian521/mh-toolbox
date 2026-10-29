@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import type { PriceItem } from '../../app/types';
 import { U } from '../../domain/util.js';
 import { plain } from '../../services/desktop';
@@ -12,12 +12,14 @@ import NumberStepper from '../../components/NumberStepper.vue';
 /**
  * 新建 / 编辑物价卡片。
  *
- * 弹窗只维护「物品是什么」：名称、分类、备注。价格走 `PriceLogEditor`（记价），
+ * 弹窗只维护「物品是什么」：名称、类型、子类、备注。价格走 `PriceLogEditor`（记价），
  * 这样一张卡的价格只有一条写入路径，不会出现「编辑弹窗改价」与「记一条价」两套口径。
  * 新建时顺手记一条初始价，省掉建完再点一次「记价」。
  *
- * 分类用项目的 `BaseSelect`（和角色页、目标页同一个下拉），它只能选不能填，
- * 所以最后一项「新建类型」切出一个输入框——既保持样式统一，也不堵住自定义分类。
+ * 分类是两级：一级从固定目录里选（`rules().priceGroups`），二级在该组的子类里选，
+ * 也可以「＋ 新建子类」自己写——新玩法产出的东西不该等改版才能记。一级不给自由填：
+ * 同一个概念被写成「材料 / 打造材料 / 材料类」三种，左侧筛选就散了。
+ * 二级留空是合法的：只记得大类、还没细分的卡片可以只选一级。
  */
 const props = defineProps<{
     /** 传入表示编辑，不传表示新建。 */
@@ -30,8 +32,9 @@ const CUSTOM = '__custom__';
 
 const draft = reactive({
     name: props.item?.name ?? '',
-    // 默认留空：不替用户猜分类，保存时领域会兜底成「其他」。
+    // 默认留空：不替用户猜类型，保存时领域会兜底成「其他」。
     category: props.item?.category ?? '',
+    sub: props.item?.sub ?? '',
     note: props.item?.note ?? '',
     price: '' as number | string,
     date: U.today(),
@@ -41,13 +44,26 @@ const customName = ref('');
 const customInput = ref<HTMLInputElement>();
 const error = ref('');
 const editing = computed(() => !!props.item);
-const categoryOptions = computed(() =>
-    [...new Set([...rules.priceCategories, draft.category].filter(Boolean))]
-        .map((name) => ({ value: name, label: name }))
-        .concat([{ value: CUSTOM, label: '＋ 新建类型' }]),
+const categoryOptions = rules.priceGroups.map((group) => ({
+    value: group.name,
+    label: group.name,
+}));
+const groupSubs = computed(
+    () => rules.priceGroups.find((group) => group.name === draft.category)?.subs ?? [],
 );
-const categoryPick = computed({
-    get: () => (custom.value ? CUSTOM : draft.category),
+/**
+ * 子类下拉：目录里现成的 + 这张卡已有的（可能是自己写的），末尾一项切出输入框。
+ * 只选了「其他」这类没有子类的分组时，整行隐藏——没有名单可选，写一个就行。
+ */
+const subOptions = computed(() => {
+    const list = [...groupSubs.value];
+    if (draft.sub && !list.includes(draft.sub)) list.unshift(draft.sub);
+    return [{ value: '', label: '不填' }]
+        .concat(list.map((name) => ({ value: name, label: name })))
+        .concat([{ value: CUSTOM, label: '＋ 新建子类' }]);
+});
+const subPick = computed({
+    get: () => (custom.value ? CUSTOM : draft.sub),
     set: (value: string) => {
         if (value === CUSTOM) {
             custom.value = true;
@@ -56,14 +72,26 @@ const categoryPick = computed({
         }
         custom.value = false;
         customName.value = '';
-        draft.category = value;
+        draft.sub = value;
     },
 });
+/**
+ * 换了类型，原来那个子类就不属于新分组了——留着会变成「任务产出 / 珍珠」这种错配，
+ * 而且左侧按一级筛、右侧按二级筛时它会彻底消失。清掉让用户重选。
+ */
+watch(
+    () => draft.category,
+    () => {
+        if (custom.value) return;
+        if (draft.sub && !groupSubs.value.includes(draft.sub)) draft.sub = '';
+    },
+);
 
 const snapshot = () =>
     JSON.stringify([
         draft.name,
         draft.category,
+        draft.sub,
         draft.note,
         draft.price,
         draft.date,
@@ -76,9 +104,9 @@ const dirty = computed(() => snapshot() !== initial);
 async function save() {
     if (app.busy) return;
     error.value = '';
-    const category = custom.value ? customName.value.trim() : draft.category.trim();
-    if (custom.value && !category) {
-        error.value = '请填写新类型的名称';
+    const sub = custom.value ? customName.value.trim() : draft.sub.trim();
+    if (custom.value && !sub) {
+        error.value = '请填写新子类的名称';
         customInput.value?.focus();
         return;
     }
@@ -90,7 +118,7 @@ async function save() {
     try {
         const input = {
             ...plain(draft),
-            category,
+            sub,
             price: priceWan === null ? null : U.wanToCash(priceWan),
         };
         const saved = await app.execute((domain) => domain.savePriceItem(input, props.item?.id));
@@ -112,37 +140,50 @@ async function save() {
         <form id="price-item-form" @submit.prevent="save">
             <fieldset :disabled="app.busy">
                 <div class="form-grid stack">
-                    <div class="form-grid name-row">
+                    <label>
+                        物品名称
+                        <input
+                            v-model="draft.name"
+                            name="name"
+                            maxlength="40"
+                            autocomplete="off"
+                            placeholder="例如：高级兽决"
+                            autofocus
+                        />
+                    </label>
+                    <!--
+                        名称独占一行：两级分类是同一件事的两层，并排放在下面一行才读得懂
+                        「一级管分区、二级管品类」；三个框挤一行反而让名字被压窄。
+                    -->
+                    <div class="form-grid type-row">
                         <label>
-                            物品名称
-                            <input
-                                v-model="draft.name"
-                                name="name"
-                                maxlength="40"
-                                autocomplete="off"
-                                placeholder="例如：高级兽决"
-                                autofocus
+                            类型
+                            <BaseSelect
+                                v-model="draft.category"
+                                label="物品类型"
+                                placeholder="选择类型"
+                                :options="categoryOptions"
                             />
                         </label>
-                        <label>
-                            分类
+                        <label v-if="groupSubs.length || draft.sub">
+                            子类
                             <BaseSelect
-                                v-model="categoryPick"
-                                label="物品分类"
-                                placeholder="选择分类"
-                                :options="categoryOptions"
+                                v-model="subPick"
+                                label="物品子类"
+                                placeholder="选择子类"
+                                :options="subOptions"
                             />
                         </label>
                     </div>
                     <label v-if="custom">
-                        新类型名称
+                        新子类名称
                         <input
                             ref="customInput"
                             v-model="customName"
-                            name="customCategory"
+                            name="customSub"
                             maxlength="12"
                             autocomplete="off"
-                            placeholder="例如：灵饰"
+                            placeholder="例如：九黎城副本"
                         />
                     </label>
                     <div v-if="!editing" class="price-block">
@@ -191,9 +232,9 @@ fieldset {
     padding: 0;
     margin: 0;
 }
-/* 名称与分类同一行：名称多留一点宽度，分类是固定短词。 */
-.name-row {
-    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+/* 类型与子类同一行：等分即可，两者都是短词。 */
+.type-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 /* 数值块居中：上面是「物品是什么」，这里是「多少钱」，两者用对齐方式分开。 */
 .price-block {
