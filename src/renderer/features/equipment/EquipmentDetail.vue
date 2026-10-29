@@ -4,7 +4,9 @@ import type { EquipmentItem, EquipmentProfile } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import { U } from '../../domain/util.js';
 import BaseModal from '../../components/BaseModal.vue';
+import CharacterAvatar from '../../components/CharacterAvatar.vue';
 import EquipmentProperties from './EquipmentProperties.vue';
+import { equipmentLevelText, equipmentTone, partSealOf } from './display';
 
 /** 时间线里一条变动；字段由 `gearLogsOf` 直接给出。 */
 interface GearLog {
@@ -36,51 +38,87 @@ const equipped = computed(
 const references = computed(() => rules.equipmentReferences(props.eq.id));
 const status = computed(() => rules.equipmentStatus(props.eq, references.value));
 const logs = computed(() => rules.gearLogsOf(props.eq.id) as unknown as GearLog[]);
+/*
+ * 卡片与板面上的格子是同一套视觉：同一个色调、同一枚部位印、同样一行等级。
+ * 颜色判断抽在 `display.ts`，两处共用，不能各算一套。
+ */
+const tone = computed(() => equipmentTone(rules, props.eq));
+const seal = computed(() => partSealOf(props.eq.slot));
+const levelText = computed(() => equipmentLevelText(rules, props.eq));
+const refsText = computed(() => references.value.map((item) => item.name).join(' / ') || '未配置');
 </script>
 
 <template>
     <BaseModal :title="eq.slot + ' · ' + eq.name" wide :busy="app.busy" @close="emit('close')">
         <div class="detail-grid">
-            <section class="detail-main">
-                <EquipmentProperties :eq="eq" aligned />
-                <!-- 备注不是属性，不进属性表：它是「我自己记的一句话」，跟着详情走。 -->
-                <p v-if="eq.note" class="detail-note">{{ eq.note }}</p>
-                <p class="detail-meta">
-                    {{ rules.charName(eq.characterId) }} ·
-                    {{ rules.equipmentStatuses[status] }}
-                </p>
-                <p class="detail-meta">
-                    引用方案：{{ references.map((item) => item.name).join(' / ') || '未配置' }}
-                </p>
-                <details v-if="eq.ocrText" class="detail-ocr">
-                    <summary>识别原文</summary>
-                    <pre>{{ eq.ocrText }}</pre>
-                </details>
-            </section>
-            <section class="detail-side">
-                <h3>装备时间线</h3>
-                <div v-if="logs.length" class="timeline">
-                    <div v-for="log in logs" :key="log.id" class="tl-item">
-                        <div class="tl-head">
-                            <span
-                                class="badge"
-                                :class="{
-                                    income: rules.gearAction(log.action).dir > 0,
-                                    expense: rules.gearAction(log.action).dir < 0,
-                                }"
-                            >
-                                {{ rules.gearAction(log.action).t }}
-                            </span>
-                            <span class="tl-amount">
-                                {{ log.amount ? U.fmtAmount(log.amount, log.currency) : '—' }}
-                            </span>
-                        </div>
-                        <div class="tl-date">{{ log.date }}</div>
-                        <div v-if="log.note" class="tl-note">{{ log.note }}</div>
+            <!--
+                左边是「装备本身」：跟板面格子同一套头像 + 部位 + 等级 + 名称，
+                下面接完整属性。右边只放跟时间和归属有关的东西，两边职责不混。
+            -->
+            <section class="detail-card" :style="{ '--q': tone }">
+                <div class="card-head">
+                    <CharacterAvatar
+                        class="card-avatar"
+                        :name="eq.name"
+                        :seal="seal"
+                        :tone="tone"
+                    />
+                    <div class="card-id">
+                        <span>{{ eq.slot }}</span>
+                        <span v-if="levelText" class="card-level">{{ levelText }}</span>
                     </div>
+                    <h3 class="card-name">{{ eq.name }}</h3>
                 </div>
-                <p v-else class="detail-meta">暂无变动记录</p>
+                <EquipmentProperties :eq="eq" aligned />
             </section>
+            <div class="detail-side">
+                <section class="panel">
+                    <h3>变更记录</h3>
+                    <div v-if="logs.length" class="timeline">
+                        <div v-for="log in logs" :key="log.id" class="tl-item">
+                            <div class="tl-head">
+                                <span
+                                    class="badge"
+                                    :class="{
+                                        income: rules.gearAction(log.action).dir > 0,
+                                        expense: rules.gearAction(log.action).dir < 0,
+                                    }"
+                                >
+                                    {{ rules.gearAction(log.action).t }}
+                                </span>
+                                <span class="tl-amount">
+                                    {{ log.amount ? U.fmtAmount(log.amount, log.currency) : '—' }}
+                                </span>
+                            </div>
+                            <div class="tl-date">{{ log.date }}</div>
+                            <div v-if="log.note" class="tl-note">{{ log.note }}</div>
+                        </div>
+                    </div>
+                    <p v-else class="panel-empty">
+                        这件装备还没记过变动。底部的「记变动」可以记购入、售出、打造或镶嵌。
+                    </p>
+                </section>
+                <section class="panel">
+                    <h3>其他信息</h3>
+                    <dl class="meta">
+                        <dt>归属</dt>
+                        <dd>
+                            {{ rules.charName(eq.characterId) }} ·
+                            {{ rules.equipmentStatuses[status] }}
+                        </dd>
+                        <dt>引用方案</dt>
+                        <dd>{{ refsText }}</dd>
+                        <template v-if="eq.note">
+                            <dt>备注</dt>
+                            <dd class="meta-note">{{ eq.note }}</dd>
+                        </template>
+                    </dl>
+                    <details v-if="eq.ocrText" class="detail-ocr">
+                        <summary>识别原文</summary>
+                        <pre>{{ eq.ocrText }}</pre>
+                    </details>
+                </section>
+            </div>
         </div>
         <template #footer="{ close }">
             <button class="btn danger" type="button" :disabled="app.busy" @click="emit('remove')">
@@ -119,57 +157,104 @@ const logs = computed(() => rules.gearLogsOf(props.eq.id) as unknown as GearLog[
 <style scoped>
 .detail-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-    gap: 20px;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 18px;
     align-items: start;
 }
-.detail-main,
-.detail-side {
-    min-width: 0;
-}
-.detail-note {
-    margin: 8px 0 0;
-    padding-left: 9px;
-    border-left: 2px solid var(--line);
-    font-size: 12px;
-    line-height: 1.6;
-    color: var(--ink);
-}
-.detail-meta {
-    margin: 6px 0 0;
-    color: var(--muted);
-    font-size: 12px;
-}
-.detail-ocr {
-    margin-top: 10px;
-    font-size: 12px;
-}
-.detail-ocr summary {
-    color: var(--muted);
-    cursor: pointer;
-}
-.detail-ocr pre {
-    margin: 6px 0 0;
-    padding: 8px 10px;
-    max-height: 180px;
-    overflow: auto;
+/* 卡片底色是插槽色的极淡版本，与板面上的格子同一种「练到什么程度」的暗示。 */
+.detail-card {
+    --q: var(--muted);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px 16px 18px;
     border: 1px solid var(--line);
-    border-radius: 3px;
-    background: var(--paper-2);
-    font-size: 11.5px;
-    white-space: pre-wrap;
+    border-radius: 6px;
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--q) 8%, var(--paper)) 0%,
+        var(--paper) 58%
+    );
+}
+.card-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 12px;
+    row-gap: 3px;
+    align-items: center;
+}
+.card-avatar {
+    grid-row: span 2;
+}
+/* 部位在左、等级顶到右端，与板面格子右上角那一行的读法一致。 */
+.card-id {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 11px;
+}
+.card-level {
+    margin-left: auto;
+    flex: none;
+    font-variant-numeric: tabular-nums;
+}
+.card-name {
+    grid-column: 2;
+    margin: 0;
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
     overflow-wrap: anywhere;
 }
-.detail-side h3 {
+.detail-side {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+.panel {
+    min-width: 0;
+}
+.panel h3 {
     margin: 0 0 8px;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 600;
+}
+.panel-empty {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+/* 归属、引用方案、备注排成一张两列小表，比三行各自为政的灰字好扫。 */
+.meta {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px 12px;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.6;
+}
+.meta dt {
+    color: var(--muted);
+    white-space: nowrap;
+}
+.meta dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+/* 备注里常有「制造者」「耐久」各自一行，原文的换行要留住。 */
+.meta-note {
+    white-space: pre-line;
 }
 .timeline {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 46vh;
+    max-height: 38vh;
     overflow: auto;
 }
 .tl-item {
@@ -210,6 +295,26 @@ const logs = computed(() => rules.gearLogsOf(props.eq.id) as unknown as GearLog[
 .badge.expense {
     color: var(--red);
     border-color: color-mix(in srgb, var(--red) 40%, transparent);
+}
+.detail-ocr {
+    margin-top: 10px;
+    font-size: 12px;
+}
+.detail-ocr summary {
+    color: var(--muted);
+    cursor: pointer;
+}
+.detail-ocr pre {
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    max-height: 180px;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--paper-2);
+    font-size: 11.5px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 .footer-gap {
     margin-left: auto;

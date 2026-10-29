@@ -329,14 +329,16 @@ const durabilityMax = computed(() => (isJade.value ? 300 : 999999));
             </label>
             <div class="checks">
                 <span class="checks-label">特效（可多选）</span>
-                <label v-for="effect in rule.effects" :key="effect" class="check">
-                    <input
-                        type="checkbox"
-                        :checked="detail.effects.includes(effect)"
-                        @change="toggleEffect(effect)"
-                    />
-                    {{ effect }}
-                </label>
+                <div class="chips">
+                    <label v-for="effect in rule.effects" :key="effect" class="chip">
+                        <input
+                            type="checkbox"
+                            :checked="detail.effects.includes(effect)"
+                            @change="toggleEffect(effect)"
+                        />
+                        <span>{{ effect }}</span>
+                    </label>
+                </div>
             </div>
         </section>
 
@@ -624,16 +626,64 @@ const durabilityMax = computed(() => (isJade.value ? 300 : 999999));
 .row > .btn {
     justify-self: end;
 }
+/*
+ * 特效是一排可点的小胶囊，不是一排复选框。
+ *
+ * 原来是一串原生 checkbox 加文字，两行以上就糊成一片灰方块，也分不清哪个是选中的。
+ * 胶囊把「有没有选中」交给底色自己说，选中填金、未选中留纸色。
+ */
 .checks {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 14px;
     margin-top: 10px;
 }
 .checks-label {
+    display: block;
+    margin-bottom: 6px;
     color: var(--muted);
     font-size: 12px;
+}
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.chip {
+    position: relative;
+    padding: 3px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--paper);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 17px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        border-color 120ms ease,
+        background-color 120ms ease,
+        color 120ms ease;
+}
+.chip:hover {
+    border-color: var(--line-2);
+    color: var(--ink);
+}
+.chip:has(input:checked) {
+    border-color: color-mix(in srgb, var(--gold) 58%, var(--line));
+    background: color-mix(in srgb, var(--gold) 14%, var(--paper));
+    color: var(--ink);
+    font-weight: 600;
+}
+.chip:has(input:focus-visible) {
+    outline: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+    outline-offset: 1px;
+}
+/* 复选框只留语义与焦点，视觉上由胶囊本身承担。 */
+.chip input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
 }
 .check {
     display: inline-flex;

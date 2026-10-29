@@ -129,76 +129,91 @@ async function save() {
         :dirty="dirty"
         @close="emit('close')"
     >
-        <form id="equipment-form" class="form-grid eq-form" @submit.prevent="save">
-            <label>
-                角色
-                <BaseSelect
-                    v-model="characterId"
-                    label="装备所属角色"
-                    :options="characterOptions"
-                    @update:model-value="dirty = true"
-                />
-            </label>
-            <label>
-                部位
-                <BaseSelect
-                    v-model="slot"
-                    label="装备部位"
-                    :options="slotOptions"
-                    @update:model-value="dirty = true"
-                />
-            </label>
-            <label class="full">
-                装备名称
-                <input
-                    v-model="name"
-                    type="text"
-                    name="name"
-                    placeholder="按游戏里的名称填写"
-                    required
-                    @input="dirty = true"
-                />
-            </label>
-            <label v-if="!rules.isJade(slot)">
-                装备等级
-                <BaseNumber
-                    v-model="level"
-                    name="level"
-                    :min="0"
-                    :max="999"
-                    placeholder="可不填"
-                    @update:model-value="dirty = true"
-                />
-            </label>
-            <label>
-                持有状态
-                <BaseSelect
-                    v-model="status"
-                    label="持有状态"
-                    :options="statusOptions"
-                    @update:model-value="dirty = true"
-                />
-            </label>
-            <label v-if="canEquipNow" class="check full">
-                <input v-model="equipNow" type="checkbox" name="equipNow" @change="dirty = true" />
-                保存后放进正在查看的方案（替换该部位，原档案保留）
-            </label>
-            <label class="full">
-                备注
-                <textarea
-                    v-model="note"
-                    name="note"
-                    rows="2"
-                    placeholder="可不填"
-                    @input="dirty = true"
-                ></textarea>
-            </label>
-            <div class="full attrs">
-                <div class="attrs-head">
-                    <h3>属性</h3>
-                    <span class="hint">{{ attributesHint }}</span>
+        <!--
+            两栏：左边只放「这件装备是谁的、叫什么」，右边属性区自己滚。
+            原来一列到底，属性一多就要整窗滚动，名字和属性永远不能同时看见。
+        -->
+        <form id="equipment-form" class="eq-form" @submit.prevent="save">
+            <div class="form-columns">
+                <div class="col-info">
+                    <label>
+                        角色
+                        <BaseSelect
+                            v-model="characterId"
+                            label="装备所属角色"
+                            :options="characterOptions"
+                            @update:model-value="dirty = true"
+                        />
+                    </label>
+                    <label>
+                        部位
+                        <BaseSelect
+                            v-model="slot"
+                            label="装备部位"
+                            :options="slotOptions"
+                            @update:model-value="dirty = true"
+                        />
+                    </label>
+                    <label class="full">
+                        装备名称
+                        <input
+                            v-model="name"
+                            type="text"
+                            name="name"
+                            placeholder="按游戏里的名称填写"
+                            required
+                            @input="dirty = true"
+                        />
+                    </label>
+                    <label v-if="!rules.isJade(slot)">
+                        装备等级
+                        <BaseNumber
+                            v-model="level"
+                            name="level"
+                            :min="0"
+                            :max="999"
+                            placeholder="可不填"
+                            @update:model-value="dirty = true"
+                        />
+                    </label>
+                    <label>
+                        持有状态
+                        <BaseSelect
+                            v-model="status"
+                            label="持有状态"
+                            :options="statusOptions"
+                            @update:model-value="dirty = true"
+                        />
+                    </label>
+                    <label v-if="canEquipNow" class="check full">
+                        <input
+                            v-model="equipNow"
+                            type="checkbox"
+                            name="equipNow"
+                            @change="dirty = true"
+                        />
+                        保存后放进正在查看的方案（替换该部位，原档案保留）
+                    </label>
+                    <label class="full">
+                        备注
+                        <textarea
+                            v-model="note"
+                            name="note"
+                            rows="3"
+                            placeholder="可不填"
+                            @input="dirty = true"
+                        ></textarea>
+                    </label>
                 </div>
-                <EquipmentFields v-model="detail" :part="slot" />
+                <div class="col-attrs">
+                    <div class="attrs-head">
+                        <h3>属性</h3>
+                        <span class="hint">{{ attributesHint }}</span>
+                    </div>
+                    <div class="attrs-body">
+                        <EquipmentFields v-model="detail" :part="slot" />
+                    </div>
+                </div>
             </div>
         </form>
         <p v-if="error" class="error form-error" role="alert">{{ error }}</p>
@@ -215,7 +230,21 @@ async function save() {
 .eq-form {
     margin-top: 14px;
 }
-.eq-form label {
+.form-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+}
+.col-info {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+.col-info > .full {
+    grid-column: 1 / -1;
+}
+.col-info label {
     display: block;
     font-size: 12.5px;
 }
@@ -224,16 +253,31 @@ async function save() {
     align-items: center;
     gap: 7px;
 }
-.attrs {
-    margin-top: 2px;
-    padding-top: 14px;
-    border-top: 1px solid var(--line);
+.check input {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--gold);
+}
+/*
+ * 属性区是一条竖线隔开的独立卷轴：字段多的时候只滚里面的字段，左边的档案、
+ * 上面的「属性」标题和底部按钮始终看得见。给整块加外框会和里面每组的横分隔线
+ * 叠成两层线，只留一条竖线。
+ */
+.col-attrs {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-height: 58vh;
+    padding-left: 16px;
+    border-left: 1px solid var(--line);
 }
 .attrs-head {
     display: flex;
     align-items: baseline;
+    flex: none;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
 }
 .attrs-head h3 {
     margin: 0;
@@ -244,10 +288,24 @@ async function save() {
     min-width: 0;
     font-size: 11.5px;
 }
-.check input {
-    width: 15px;
-    height: 15px;
-    margin: 0;
-    accent-color: var(--gold);
+.attrs-body {
+    min-height: 0;
+    overflow: auto;
+    padding-right: 10px;
+}
+@media (max-width: 900px) {
+    .form-columns {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .col-attrs {
+        max-height: none;
+        padding-top: 4px;
+        padding-left: 0;
+        border-left: 0;
+    }
+    .attrs-body {
+        overflow: visible;
+        padding-right: 0;
+    }
 }
 </style>

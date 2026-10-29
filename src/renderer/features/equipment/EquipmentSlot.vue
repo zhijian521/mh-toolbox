@@ -4,6 +4,7 @@ import type { EquipmentItem } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import CharacterAvatar from '../../components/CharacterAvatar.vue';
 import EquipmentProperties from './EquipmentProperties.vue';
+import { equipmentLevelText, equipmentTone, partSealOf } from './display';
 
 const props = withDefaults(
     defineProps<{
@@ -21,60 +22,17 @@ const app = useApplication();
 const rules = app.rules();
 
 /**
- * 插槽色调：跟着「这件装备练到什么程度」走，而不是随便上色。
- *
- * 有特技特效是金（最难出），打过宝石或锻炼是青，其余用中性色；玉魄整体走绿，
- * 与灵饰、常规装备分开。空位一律退回线色——一格亮着却没有装备，会让人以为
- * 那一格已经穿了东西。
+ * 插槽色调：空位与未解锁一律退回线色——一格亮着却没有装备，会让人以为那格已经穿了东西。
+ * 有装备时交给 `equipmentTone`，与详情卡同一份判断。
  */
 const tone = computed(() => {
     if (!props.eq) return 'var(--line-2)';
     if (props.locked) return 'var(--line-2)';
-    if (rules.isJade(props.part)) return 'var(--green)';
-    const detail = rules.equipmentDetails(props.eq);
-    if (detail.technique || detail.effects.length) return 'var(--gold)';
-    // `bonus` 是打了宝石才有的属性行，不能只看 `gems` 列表——手填的档案常常只有前者。
-    if (detail.gems.length || detail.bonus.length || detail.forge !== null) return 'var(--blue)';
-    return 'var(--muted)';
+    return equipmentTone(rules, props.eq);
 });
-/**
- * 右上角的等级。
- *
- * 玉魄没有装备等级，写的是灵尘总等级——游戏里玉魄的强弱就体现在这里，
- * 留空反而看不出好坏。其余部位按档案里的等级显示，未填就不占位。
- */
-const levelText = computed(() => {
-    if (!props.eq) return '';
-    const value = rules.isJade(props.part)
-        ? rules.equipmentDetails(props.eq).jade.dust
-        : props.eq.level;
-    return value === '' || value == null ? '' : value + ' 级';
-});
-/**
- * 印在头像右下角的那一个字：取玩家的口头叫法，不是机械截字。
- *
- * 「武器」取第二个字会得到「器」、「衣服」得「服」、「鞋子」得「子」——都不成字眼；
- * 真要跟部位对得上，只能用一张表。装备名千变万化，部位才是稳定的那一维，
- * 所以印的是部位而不是装备。
- */
-const PART_SEALS: Record<string, string> = {
-    头盔: '盔',
-    项链: '链',
-    武器: '武',
-    衣服: '衣',
-    腰带: '腰',
-    鞋子: '鞋',
-    戒指: '戒',
-    耳饰: '耳',
-    手镯: '镯',
-    佩饰: '佩',
-    '玉魄·阳': '阳',
-    '玉魄·阴': '阴',
-};
-const partSeal = computed(() => {
-    const chars = Array.from(props.part);
-    return PART_SEALS[props.part] || chars[chars.length - 1] || props.part;
-});
+const levelText = computed(() => (props.eq ? equipmentLevelText(rules, props.eq) : ''));
+/** 印在头像右下角的部位字：「武器」截字会得到「器」，只能用表。 */
+const partSeal = computed(() => partSealOf(props.part));
 /** 空位没有名字可展示，就把部位字写在正面，省得一格空白看不出是什么。 */
 const avatarName = computed(() => (props.eq ? props.eq.name : partSeal.value));
 const nameText = computed(() => {

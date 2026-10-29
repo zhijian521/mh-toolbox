@@ -168,7 +168,7 @@ module.exports = async function equipment(env) {
     await field('.modal .row input[type="number"]', '32');
     // 特效与宝石：勾选框直接点 input，标签结构变了也不会让用例失效。
     await read(() => {
-        const check = [...document.querySelectorAll('.modal .checks .check')].find(
+        const check = [...document.querySelectorAll('.modal .chips .chip')].find(
             (element) => element.textContent.trim() === '永不磨损',
         );
         check.querySelector('input').click();
