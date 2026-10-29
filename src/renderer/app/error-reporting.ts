@@ -9,6 +9,8 @@
  * 把失败页面换成替代界面并终止冒泡，一旦终止，`app.config.errorHandler` 就收不到
  * 同一个错误，所以上报必须在边界里主动做一次。
  */
+import { desktopOrNull } from '../services/desktop';
+
 export function reportRendererError(message: string, detail: unknown) {
     try {
         const error = detail instanceof Error ? detail : new Error(String(detail));
@@ -20,7 +22,8 @@ export function reportRendererError(message: string, detail: unknown) {
             '\n位置：' +
             window.location.hash;
         // 复用 saveData 通道会污染数据；改为写一条诊断请求交给主进程记录。
-        window.mhV2?.logError?.(text);
+        // 浏览器预览没有网关，`desktopOrNull` 返回 null，这里静默跳过。
+        void desktopOrNull()?.logError(text);
     } catch {
         /* 诊断失败静默放弃。 */
     }

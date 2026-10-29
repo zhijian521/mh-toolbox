@@ -76,21 +76,32 @@ test('领域状态契约与实例状态字段一一对应', () => {
     assert.deepEqual(stale, [], 'DomainState 里这些必填字段 state 上并不存在：' + stale.join('、'));
 });
 
-test('开启类型检查的安装模块都显式标注了 D 的类型', () => {
+test('每个安装模块都用同一套混入写法：Mixin 声明 + Object.assign(D, ...)', () => {
     const files = readdirSync(domainDirectory).filter((name) => name.endsWith('.js'));
-    const missing = [];
+    const noTypedef = [];
+    const noAssign = [];
     for (const file of files) {
         const text = readFileSync(join(domainDirectory, file), 'utf8');
         if (!text.startsWith('// @ts-check')) continue;
-        // 只检查通过 install(D, ...) 混入领域的模块；util.js 是纯工具模块，不接收 D。
+        // 只检查通过 install(D, ...) 混入领域的模块；util.js / data.js 不接收 D。
         if (!/export default function install\(/.test(text)) continue;
-        // 开启检查后 D 必须有显式类型标注，否则整个混入体都会退化成隐式 any。
-        // 类型可以是全局 Domain，也可以是本模块自定的子集（如 ExportMixin）。
-        if (!/@param \{\w*(?:Domain|Mixin)\} D\b/.test(text)) missing.push(file);
+        // 约定（AGENTS.md 五）：固定写法是
+        //   /** @typedef {Partial<Domain> & ThisType<Domain>} XxxMixin */
+        //   install 标 @param {Domain} D，方法体统一 Object.assign(D, /** @type {XxxMixin} */ ({...}))
+        // 以前允许「自定子集 + 直接 D.xxx = function」，导致三处模块各写一套、类型约束松一档。
+        if (!/@typedef \{Partial<Domain> & ThisType<Domain>\} \w+Mixin/.test(text))
+            noTypedef.push(file);
+        if (!/Object\.assign\(\s*D,/.test(text)) noAssign.push(file);
+        if (!/@param \{Domain\} D\b/.test(text)) noTypedef.push(file);
     }
     assert.deepEqual(
-        missing,
+        noTypedef,
         [],
-        '以下模块开启了 @ts-check 但没有标注 install 的 D 参数类型：' + missing.join('、'),
+        '这些模块缺少 Mixin 声明或 install 的 D 标注：' + noTypedef.join('、'),
+    );
+    assert.deepEqual(
+        noAssign,
+        [],
+        '这些模块没有用 Object.assign(D, ...) 平铺：' + noAssign.join('、'),
     );
 });

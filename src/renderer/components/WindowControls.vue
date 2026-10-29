@@ -2,14 +2,15 @@
 import { onMounted, onUnmounted, ref } from 'vue';
 import AppIcon from './AppIcon.vue';
 import { useApplication } from '../stores/application';
+import { desktopOrNull } from '../services/desktop';
 
 const application = useApplication();
 const maximized = ref(false);
-const available = !!window.mhV2;
+const available = !!desktopOrNull();
 let unsubscribe: (() => void) | undefined;
 
 onMounted(async () => {
-    const gateway = window.mhV2;
+    const gateway = desktopOrNull();
     if (!gateway) return;
     unsubscribe = gateway.onWindowStateChanged((state) => {
         maximized.value = state.maximized;
@@ -24,7 +25,7 @@ onUnmounted(() => unsubscribe?.());
 
 async function windowAction(action: 'minimize' | 'maximize' | 'close') {
     try {
-        await window.mhV2?.window(action);
+        await desktopOrNull()?.window(action);
     } catch {
         application.notify('窗口操作失败，请重试。', true);
     }

@@ -81,6 +81,8 @@ function wan(value) {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
+/** @typedef {Partial<Domain> & ThisType<Domain>} ItemPricesMixin */
+
 /**
  * @param {Domain} D
  * @param {any} U
@@ -88,97 +90,106 @@ function wan(value) {
  * @param {unknown} _localStorage
  */
 export default function install(D, U, _gateway, _localStorage) {
-    /**
-     * 导出单价表：没设过价的也占一行（单价留空），
-     * 这样用户在 Excel 里看到的是完整清单，而不是只有改过的那几个。
-     * @this {Domain}
-     * @returns {string} 带 BOM 的 CRLF 文本
-     */
-    D.itemPriceCsv = function () {
-        const rows = [['物品ID', '物品名称', '单价（万）']];
-        fixedItemMeta.forEach((item) => {
-            const price = this.itemPrice(String(item.id));
-            rows.push([String(item.id), item.name, price > 0 ? String(price / 10000) : '']);
-        });
-        return U.csvText(rows);
-    };
+    Object.assign(
+        D,
+        /** @type {ItemPricesMixin} */ ({
+            /**
+             * 导出单价表：没设过价的也占一行（单价留空），
+             * 这样用户在 Excel 里看到的是完整清单，而不是只有改过的那几个。
+             * @this {Domain}
+             * @returns {string} 带 BOM 的 CRLF 文本
+             */
+            itemPriceCsv() {
+                const rows = [['物品ID', '物品名称', '单价（万）']];
+                fixedItemMeta.forEach((item) => {
+                    const price = this.itemPrice(String(item.id));
+                    rows.push([String(item.id), item.name, price > 0 ? String(price / 10000) : '']);
+                });
+                return U.csvText(rows);
+            },
 
-    /**
-     * 导入单价表。
-     *
-     * 规则刻意保守：**空单元格表示「不改」**，而不是清零——用户从导出文件里删掉几个数
-     * 再导回来，不该把那几个物品的价悄悄抹掉。要清零请显式填 `0`。
-     *
-     * 表头整行忽略（按「第一列不是纯数字」判断），所以用户删不删表头都能导。
-     * @this {Domain}
-     * @param {string} text
-     * @returns {Promise<ItemPriceImport>}
-     */
-    D.importItemPriceCsv = function (text) {
-        const rows = parseCsvRows(text);
-        const known = new Map(fixedItemMeta.map((item) => [String(item.id), item]));
-        /** @type {Array<{ id: string, price: number }>} */
-        const writes = [];
-        /** @type {string[]} */
-        const cleared = [];
-        /** @type {string[]} */
-        const problems = [];
-        let skipped = 0;
-        const seen = new Set();
+            /**
+             * 导入单价表。
+             *
+             * 规则刻意保守：**空单元格表示「不改」**，而不是清零——用户从导出文件里删掉几个数
+             * 再导回来，不该把那几个物品的价悄悄抹掉。要清零请显式填 `0`。
+             *
+             * 表头整行忽略（按「第一列不是纯数字」判断），所以用户删不删表头都能导。
+             * @this {Domain}
+             * @param {string} text
+             * @returns {Promise<ItemPriceImport>}
+             */
+            importItemPriceCsv(text) {
+                const rows = parseCsvRows(text);
+                const known = new Map(fixedItemMeta.map((item) => [String(item.id), item]));
+                /** @type {Array<{ id: string, price: number }>} */
+                const writes = [];
+                /** @type {string[]} */
+                const cleared = [];
+                /** @type {string[]} */
+                const problems = [];
+                let skipped = 0;
+                const seen = new Set();
 
-        rows.forEach((row, line) => {
-            const id = String(row[0] == null ? '' : row[0]).trim();
-            // 空行、表头、以及只有一列的碎行都跳过，不当作错误计数。
-            if (!id || !/^\d+$/.test(id)) return;
-            const item = known.get(id);
-            if (!item) {
-                skipped++;
-                if (problems.length < 5)
-                    problems.push('第 ' + (line + 1) + ' 行：目录里没有 ID ' + id);
-                return;
-            }
-            if (seen.has(id)) {
-                skipped++;
-                if (problems.length < 5)
-                    problems.push('第 ' + (line + 1) + ' 行：ID ' + id + ' 重复，只认第一行');
-                return;
-            }
-            seen.add(id);
-            const raw = String(row[2] == null ? '' : row[2]).trim();
-            if (raw === '') return; // 留空 = 保持不变
-            const value = wan(raw);
-            if (value > PRICE_LIMIT) {
-                skipped++;
-                if (problems.length < 5)
-                    problems.push('第 ' + (line + 1) + ' 行：单价过大，已跳过 ' + item.name);
-                return;
-            }
-            if (value === 0) {
-                cleared.push(id);
-                return;
-            }
-            writes.push({ id, price: U.wanToCash(value) });
-        });
+                rows.forEach((row, line) => {
+                    const id = String(row[0] == null ? '' : row[0]).trim();
+                    // 空行、表头、以及只有一列的碎行都跳过，不当作错误计数。
+                    if (!id || !/^\d+$/.test(id)) return;
+                    const item = known.get(id);
+                    if (!item) {
+                        skipped++;
+                        if (problems.length < 5)
+                            problems.push('第 ' + (line + 1) + ' 行：目录里没有 ID ' + id);
+                        return;
+                    }
+                    if (seen.has(id)) {
+                        skipped++;
+                        if (problems.length < 5)
+                            problems.push(
+                                '第 ' + (line + 1) + ' 行：ID ' + id + ' 重复，只认第一行',
+                            );
+                        return;
+                    }
+                    seen.add(id);
+                    const raw = String(row[2] == null ? '' : row[2]).trim();
+                    if (raw === '') return; // 留空 = 保持不变
+                    const value = wan(raw);
+                    if (value > PRICE_LIMIT) {
+                        skipped++;
+                        if (problems.length < 5)
+                            problems.push(
+                                '第 ' + (line + 1) + ' 行：单价过大，已跳过 ' + item.name,
+                            );
+                        return;
+                    }
+                    if (value === 0) {
+                        cleared.push(id);
+                        return;
+                    }
+                    writes.push({ id, price: U.wanToCash(value) });
+                });
 
-        if (!writes.length && !cleared.length) {
-            return Promise.resolve({
-                updated: 0,
-                cleared: 0,
-                skipped,
-                problems: problems.length ? problems : ['文件里没有可用的单价格'],
-            });
-        }
+                if (!writes.length && !cleared.length) {
+                    return Promise.resolve({
+                        updated: 0,
+                        cleared: 0,
+                        skipped,
+                        problems: problems.length ? problems : ['文件里没有可用的单价格'],
+                    });
+                }
 
-        return this.commit(() => {
-            if (!this.state.itemPrices) this.state.itemPrices = {};
-            const table = this.state.itemPrices;
-            writes.forEach(({ id, price }) => {
-                table[id] = price;
-            });
-            cleared.forEach((id) => {
-                delete table[id];
-            });
-            return { updated: writes.length, cleared: cleared.length, skipped, problems };
-        });
-    };
+                return this.commit(() => {
+                    if (!this.state.itemPrices) this.state.itemPrices = {};
+                    const table = this.state.itemPrices;
+                    writes.forEach(({ id, price }) => {
+                        table[id] = price;
+                    });
+                    cleared.forEach((id) => {
+                        delete table[id];
+                    });
+                    return { updated: writes.length, cleared: cleared.length, skipped, problems };
+                });
+            },
+        }),
+    );
 }
