@@ -72,8 +72,9 @@ export interface PropertyRow {
     label: string;
     value: string;
     /**
-     * 一行里并排的若干段词条。界面按段渲染：段与段之间可以断行，段内的属性名与数值
-     * 也允许断行（窄卡片里「物理暴击等级 +18」放不下），但两半各自不再拆开。
+     * 一行里并排的若干段词条（单段也走这条路）。界面按段渲染：段与段之间可以断行，
+     * 段内的属性名与数值也允许断行（窄卡片里「物理暴击等级 +18」放不下），但两半各自
+     * 不再拆开。
      */
     segments?: PropertySegment[];
     kind: PropertyKind;
@@ -100,8 +101,8 @@ function statSegment(label: string, row: EquipmentRow): PropertySegment {
  * 分成三层，越往下越像「配置」而不是「属性」：
  *
  * 1. **类别签**（带底色的标签）：基础 / 双加（灵饰叫附加、玉魄叫加成）/ 宝石 / 锻炼。
- *    同类词条并排成一行——游戏里它们本来就是同一条属性行里的几段，拆成三行只是把
- *    格子撑高；合成一行才能一眼读出「这件装备总共有多少力敏」。
+ *    装备的双加两条并排（游戏里就是并排读的）；灵饰的附加、玉魄的加成**一条一行**
+ *    ——它们的词条名长，两条并排放不下，折出来的第二行只剩半段，比一行一条更难扫。
  * 2. **字段签**（灰字标签）：特技、特效、钟灵石、熔炼、符石、原有属性。
  * 3. **玉魄的养成档**：灵尘等级、奇袭、开光孔固定压在最后——它们说的是这件玉魄练到
  *    什么程度，和上面的词条不是一回事。
@@ -128,7 +129,8 @@ export function propertyRows(rules: Domain, eq: EquipmentItem): PropertyRow[] {
             rows.push({
                 label: name,
                 value: segments.map((item) => `${item.name} ${item.num}`).join(' · '),
-                segments: segments.length > 1 ? segments : undefined,
+                // 单段也按段渲染：段内的属性名与数值各自不断行，断点只留在两者之间。
+                segments,
                 kind,
                 tag,
             });
@@ -138,19 +140,45 @@ export function propertyRows(rules: Domain, eq: EquipmentItem): PropertyRow[] {
     };
     /** 一组词条并排成一行，中间用间隔号分开。 */
     const line = (list: EquipmentRow[]) => list.map((row) => statSegment(label(row.key), row));
-
-    if (detail.base.length) push('基础', line(detail.base), 'base', true);
-    if (detail.extra.length)
-        push(
-            rule.kind === 'accessory' ? '附加' : rule.kind === 'jade' ? '加成' : '双加',
-            line(detail.extra),
-            'extra',
-            true,
+    /**
+     * 同类词条成组：`max` 是一行最多并几段，超出的各自成行。
+     *
+     * 装备的双加两条并排（游戏里本来就是并排读的），灵饰的附加与玉魄的加成一条
+     * 一行——它们的词条名长（「气血回复效果 +10 [+12]」），两条并排必然折成两行，
+     * 第二行只剩半段，不如一开始就一行一条。
+     *
+     * 第二条起标签留空（不是省掉那个 span——它撑着网格第一列，省了值就落到最左边）。
+     * 空标签配 `tag: false`，不会画出一枚空的类别签。
+     */
+    const group = (
+        name: string,
+        list: EquipmentRow[],
+        kind: PropertyKind,
+        max: number,
+        tag = true,
+    ) => {
+        const segments = line(list);
+        if (segments.length <= max) {
+            push(name, segments, kind, tag);
+            return;
+        }
+        segments.forEach((segment, index) =>
+            push(index ? '' : name, [segment], kind, index === 0 && tag),
         );
+    };
+
+    group('基础', detail.base, 'base', 2);
+    group(
+        rule.kind === 'accessory' ? '附加' : rule.kind === 'jade' ? '加成' : '双加',
+        detail.extra,
+        'extra',
+        // 灵饰与玉魄一条一行；装备的双加两条并排。
+        rule.kind === 'gear' ? 2 : 1,
+    );
     // 宝石属性里与主要属性同 key 的不再重复列一遍，否则「伤害」会出现两次。
     const bonus = detail.bonus.filter((row) => !detail.base.some((base) => base.key === row.key));
-    if (bonus.length) push('宝石', line(bonus), 'gem', true);
-    if (detail.melt.length) push('熔炼', line(detail.melt), 'base');
+    group('宝石', bonus, 'gem', 2);
+    group('熔炼', detail.melt, 'base', 2, false);
 
     push('特技', detail.technique, 'special');
     detail.effects.forEach((effect) => push('特效', effect, 'special'));

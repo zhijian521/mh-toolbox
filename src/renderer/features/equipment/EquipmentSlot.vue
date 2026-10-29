@@ -133,11 +133,12 @@ const hint = computed(() => {
     display: flex;
     /* 头像钉在左上角，与部位名同一行起步：上下居中的话，格子一高头像就飘到半空。 */
     align-items: flex-start;
-    gap: 11px;
+    /* 头像与文字之间 10px：再宽，1280 窗口下一条「气血回复效果 +10 [+12]」就放不下。 */
+    gap: 10px;
     width: 100%;
     height: 100%;
     min-height: 104px;
-    padding: 9px 11px;
+    padding: 9px 10px;
     border: 1px solid var(--line);
     border-radius: 5px;
     /* 卡片底色是插槽色的极淡版本：扫一眼就能分出金 / 青 / 绿几类，又不压过名字。 */

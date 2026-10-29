@@ -190,7 +190,7 @@ function isPending(slot: string) {
     /*
      * 整块给个上限：格子靠 1fr 分宽，窗口一宽就被拉成一排 600px 的空壳卡片，
      * 属性一行只有几个字，读起来反而更散。1440 窗口下这里本来就是 1200，
-     * 所以 1240 只在大屏上生效——格子停在 336 / 268，右边留白，不再继续撑。
+     * 所以 1240 只在大屏上生效——格子停在 289 / 315，右边留白，不再继续撑。
      */
     max-width: 1240px;
     gap: 12px;
@@ -207,7 +207,12 @@ function isPending(slot: string) {
 }
 .eq-board-columns {
     display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    /*
+     * 左右等分：左六格的属性是「基础 + 双加 + 锻炼」两三行短词条，右四格灵饰与
+     * 两格玉魄一条属性一行。两边要的最小宽度差不多（各约 250px），给谁多一点另
+     * 一边就会折行——「气血回复效果 +10 [+12]」和「伤害 +480 · 命中 +320」一样长。
+     */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 16px;
     align-items: start;
 }
@@ -328,7 +333,7 @@ function isPending(slot: string) {
 /*
  * 常规装备与灵饰都是两列。
  *
- * 试过三列：属性一条不折叠之后，197px 宽的格子把「防御 +45 · 魔法 +80」挤成两行，
+ * 试过三列：197px 宽的格子把「伤害 +480 · 命中 +320」挤成两行，
  * 卡片反而从 200 长到 320，比两列还高。宽度够才是省高度的前提。
  */
 .eq-gear-grid {
@@ -342,7 +347,11 @@ function isPending(slot: string) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
 }
-@media (max-width: 1080px) {
+/*
+ * 两列要 1300 才够宽：1280 窗口下每格只剩 252px，「气血回复效果 +10 [+12]」正好
+ * 差几个像素就会折断。再窄就上下堆叠，让每格拿回整行宽度。
+ */
+@media (max-width: 1250px) {
     .eq-board-columns {
         grid-template-columns: minmax(0, 1fr);
     }

@@ -56,7 +56,7 @@ const rows = computed(() => propertyRows(rules, props.eq));
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
     align-items: baseline;
-    column-gap: 6px;
+    column-gap: 5px;
     row-gap: 2px;
     min-width: 0;
 }
@@ -85,7 +85,7 @@ const rows = computed(() => propertyRows(rules, props.eq));
 .eq-prop-label {
     /* 网格列按最宽标签定宽，标签本身仍旧贴左收缩——否则类别签会被拉成一条横贯的色块。 */
     justify-self: start;
-    padding: 0 4px;
+    padding: 0 3px;
     color: var(--muted);
     font-size: 11px;
     letter-spacing: 0.3px;
@@ -95,6 +95,7 @@ const rows = computed(() => propertyRows(rules, props.eq));
  * 淡染在暗色下会把底色提亮到和字同一个亮度，字直接糊在底上。
  */
 .eq-prop-label.tag {
+    padding: 0 4px;
     border-radius: 3px;
     background: var(--well);
     font-size: 10px;
