@@ -250,8 +250,4 @@ async function save() {
     margin: 0;
     accent-color: var(--gold);
 }
-.form-error {
-    margin-top: 12px;
-    font-size: 13px;
-}
 </style>

@@ -328,6 +328,16 @@ details[open] summary {
 .error {
     color: var(--red);
 }
+/*
+ * 表单内联报错：用法是 `class="error form-error"`，颜色来自 `.error`，间距与字号在这里统一。
+ * 18 个弹窗原本各写一遍同样的两条，违背 `docs/UI_GUIDE.md` 的规矩（出现在两个以上组件就该提到基座）。
+ * 两处局部变体仍留在各自 scoped 块里覆盖：角色编辑器把报错做成带边框的盒子（margin 20px + 底纹），
+ * 目标进度里更紧（10px）。scoped 选择器带作用域属性，比这里优先级高，不会被压掉。
+ */
+.form-error {
+    margin-top: 12px;
+    font-size: 13px;
+}
 .positive {
     color: var(--green);
 }

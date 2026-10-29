@@ -145,8 +145,4 @@ async function save() {
 .member-label small.muted {
     color: color-mix(in srgb, var(--muted) 78%, var(--paper));
 }
-.form-error {
-    margin-top: 12px;
-    font-size: 13px;
-}
 </style>

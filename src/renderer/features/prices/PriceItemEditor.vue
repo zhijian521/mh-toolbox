@@ -222,8 +222,4 @@ fieldset {
     font-size: 12px;
     letter-spacing: 0.5px;
 }
-.form-error {
-    margin-top: 12px;
-    font-size: 13px;
-}
 </style>

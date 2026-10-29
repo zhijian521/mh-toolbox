@@ -376,6 +376,8 @@ const trainingGroups = [
     background: var(--paper-2);
     border: 1px solid color-mix(in srgb, var(--red) 33%, transparent);
     border-radius: 3px;
+    /* 基座那条 .form-error 把字号压到 13px，这里是带底纹的盒子，沿用全局 13.5px 才和正文齐。 */
+    font-size: 13.5px;
 }
 @media (max-width: 750px) {
     .training-grid {

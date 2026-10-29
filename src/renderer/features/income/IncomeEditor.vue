@@ -175,10 +175,6 @@ async function save() {
 </template>
 
 <style scoped>
-.form-error {
-    margin-top: 12px;
-    font-size: 13px;
-}
 /* 删除靠左、其余按钮靠右，避免和提示文字挤成一段。 */
 .foot-delete {
     margin-right: auto;

@@ -234,8 +234,4 @@ async function save() {
     margin-top: -2px;
     font-size: 12px;
 }
-.form-error {
-    margin-top: 12px;
-    font-size: 13px;
-}
 </style>

@@ -308,8 +308,4 @@ async function submit() {
     margin-top: 6px;
     font-size: 11.5px;
 }
-.form-error {
-    margin-top: 12px;
-    font-size: 13px;
-}
 </style>

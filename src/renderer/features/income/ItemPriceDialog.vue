@@ -99,8 +99,4 @@ async function save() {
     color: var(--gold);
     font-size: 13px;
 }
-.form-error {
-    margin-top: 12px;
-    font-size: 13px;
-}
 </style>
