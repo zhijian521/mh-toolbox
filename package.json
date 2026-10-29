@@ -40,6 +40,7 @@
         "test": "node --test \"tests/domain/*.test.cjs\" \"tests/domain/*.test.mjs\" \"tests/*.test.mjs\"",
         "test:electron": "node scripts/test-electron.mjs",
         "inspect": "npm run build && node scripts/electron.mjs tests/inspect.electron.cjs",
+        "shots": "npm run build && node scripts/electron.mjs scripts/capture-shots.cjs",
         "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
         "verify": "npm run check && npm run build && npm run test:electron",
         "dist:dir": "npm run build && electron-builder --dir --config electron-builder.config.cjs",
