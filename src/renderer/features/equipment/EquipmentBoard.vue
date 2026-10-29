@@ -78,58 +78,56 @@ function isPending(slot: string) {
             旧档案中「{{ pendingSlots.join('、') }}」的第一套穿戴有多件候选，请在对应格子选一件，
             其余档案都还在仓库里。
         </p>
+        <!--
+            方案切换横跨两栏、放在两个标题之上。
+            一是方案本来就属于整个角色，不只属于装备那栏；二是两栏的标题块从此等高，
+            第一排格子天然从同一条线开始，不用再拿 margin 去补。
+            号码是固定的（一 / 二 / 三），名字可以改，所以号码用等宽数字单独占一枚小方章。
+        -->
+        <div class="eq-board-top">
+            <p class="eq-board-hint">点击格子换装</p>
+            <div class="eq-plan-tabs" role="group" :aria-label="profile.name + '的装备方案'">
+                <button
+                    v-for="(item, index) in profile.equipmentSets"
+                    :key="index"
+                    type="button"
+                    class="eq-plan"
+                    :class="{ on: index === viewed }"
+                    :aria-pressed="index === viewed"
+                    :title="`方案 ${index + 1}：${item.name}`"
+                    @click="setViewed(index)"
+                >
+                    <b>{{ index + 1 }}</b>
+                    <span class="eq-plan-name">{{ item.name }}</span>
+                </button>
+            </div>
+            <div class="eq-plan-actions">
+                <button
+                    class="text-button eq-plan-act"
+                    type="button"
+                    :disabled="app.busy"
+                    title="给三套方案改名"
+                    @click="emit('plan', 'rename')"
+                >
+                    改名
+                </button>
+                <span class="eq-plan-sep" aria-hidden="true">·</span>
+                <button
+                    class="text-button eq-plan-act"
+                    type="button"
+                    :disabled="app.busy"
+                    :title="'把「' + set.name + '」的搭配复制到另一套'"
+                    @click="emit('plan', 'copy')"
+                >
+                    复制方案
+                </button>
+            </div>
+        </div>
         <div class="eq-board-columns">
             <div class="eq-board-main">
                 <div class="eq-board-head">
                     <div class="eq-board-title">
                         <h2>装备</h2>
-                        <p>点击格子换装</p>
-                    </div>
-                </div>
-                <!--
-                    方案切换：三个号码签 + 名字。号码是固定的（一 / 二 / 三），名字可以改，
-                    所以号码用等宽数字单独占一枚小方章，扫一眼就能对上「方案 2」。
-                -->
-                <div class="eq-plan-row">
-                    <div
-                        class="eq-plan-tabs"
-                        role="group"
-                        :aria-label="profile.name + '的装备方案'"
-                    >
-                        <button
-                            v-for="(item, index) in profile.equipmentSets"
-                            :key="index"
-                            type="button"
-                            class="eq-plan"
-                            :class="{ on: index === viewed }"
-                            :aria-pressed="index === viewed"
-                            :title="`方案 ${index + 1}：${item.name}`"
-                            @click="setViewed(index)"
-                        >
-                            <b>{{ index + 1 }}</b>
-                            <span class="eq-plan-name">{{ item.name }}</span>
-                        </button>
-                    </div>
-                    <div class="eq-plan-actions">
-                        <button
-                            class="text-button eq-plan-act"
-                            type="button"
-                            :disabled="app.busy"
-                            title="给三套方案改名"
-                            @click="emit('plan', 'rename')"
-                        >
-                            改名
-                        </button>
-                        <span class="eq-plan-sep" aria-hidden="true">·</span>
-                        <button
-                            class="text-button eq-plan-act"
-                            type="button"
-                            :disabled="app.busy"
-                            :title="'把「' + set.name + '」的搭配复制到另一套'"
-                            @click="emit('plan', 'copy')"
-                        >
-                            复制方案
-                        </button>
                     </div>
                 </div>
                 <div class="eq-gear-grid">
@@ -223,18 +221,20 @@ function isPending(slot: string) {
     gap: 8px;
     min-width: 0;
 }
-.eq-board-side {
-    gap: 10px;
-}
 /*
- * 两栏共用一条顶线，但左栏标题下面还有副标题和方案行（合计 81px），右栏只有
- * 一行标题（36px）——第一排格子就被左栏这两行推低了 45px。把右侧标题块补到
- * 同样的高度、再让出一行方案行的位置，两栏的第一排格子才从同一条水平线开始。
- * 31 = 左栏（标题 40 + 间距 8 + 方案行 25 + 间距 8）− 右栏（标题 40 + 间距 10）。
+ * 方案行横跨两栏。它上面没有别的块，下面的两个标题块等高（都只有一行 h2），
+ * 第一排格子就天然落在同一条水平线上——不用再靠 margin 去补两栏的高度差。
  */
-.eq-board-side > .eq-board-head:first-child {
-    min-height: 40px;
-    margin-bottom: 31px;
+.eq-board-top {
+    display: flex;
+    align-items: center;
+    gap: 8px 12px;
+    flex-wrap: wrap;
+}
+.eq-board-hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11.5px;
 }
 .eq-board-head {
     display: flex;
@@ -255,12 +255,6 @@ function isPending(slot: string) {
     margin: 2px 0 0;
     color: var(--muted);
     font-size: 11.5px;
-}
-.eq-plan-row {
-    display: flex;
-    align-items: center;
-    gap: 8px 12px;
-    flex-wrap: wrap;
 }
 .eq-plan-tabs {
     display: flex;
@@ -364,11 +358,6 @@ function isPending(slot: string) {
 @media (max-width: 1250px) {
     .eq-board-columns {
         grid-template-columns: minmax(0, 1fr);
-    }
-    /* 上下堆叠后两栏不再并排，不需要为对齐留空。 */
-    .eq-board-side > .eq-board-head:first-child {
-        min-height: 0;
-        margin-bottom: 0;
     }
 }
 @media (max-width: 900px) {
