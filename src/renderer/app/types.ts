@@ -198,6 +198,34 @@ export interface EarningsStats {
     cardCost: number;
     hourly: number | null;
 }
+/** 收益页速记目录的一项：`quick-items.js` 把图标文件名换成 URL 之后的样子。 */
+export interface QuickCatalogItem {
+    id: number;
+    name: string;
+    img: string;
+    icon: string;
+}
+/**
+ * 收益页「这笔记给谁」的一颗按钮。
+ *
+ * 前两枚是归属规则（跟计时 / 全部），后面逐个角色；`sep` 用来在两类之间留一格空档，
+ * `live` 表示这个号正在计时（名字前那颗绿点）。
+ */
+export interface QuickTargetOption {
+    value: string;
+    label: string;
+    title: string;
+    live: boolean;
+    sep: boolean;
+}
+/** 收益页顶部的一张统计卡。`tone` 为空时用正文色。 */
+export interface IncomeStatCard {
+    key: string;
+    label: string;
+    value: string;
+    note: string;
+    tone: string;
+}
 /** 目标跟随的养成项目；`key` 只在技能与修炼分类下非空。 */
 export interface GoalTracking {
     category: string;

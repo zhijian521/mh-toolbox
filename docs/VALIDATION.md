@@ -1493,3 +1493,39 @@ CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都�
 **B · 三条护栏 + 混入写法。** 领域里最后三个没按固定写法来的模块（`export`、`item-prices`、`schools`）改成 `Mixin 声明 + Object.assign(D, ...)`，`domain-contract.test.mjs` 相应收紧：现在会逐个检查「有 Mixin typedef、install 标 `@param {Domain} D`、方法体用 `Object.assign(D,`」。新增 `tests/ipc-contract.test.mjs`：preload 成员 ↔ `DesktopGateway` ↔ 主进程 handler 三方逐条比对（22 个 invoke + 2 个推送事件），多注册、少暴露、只暴露不调用都会红；断言里带了「解析到的数量不能太小」的前置，避免正则失配后变成永远绿的摆设。`renderer-boundary.test.mjs` 补两条：侧栏 `sections` 与路由表一一对应（少登记一处以前只能靠肉眼）、渲染层不得 `import electron` / `node:` / 直接摸 `window.mhV2`（网关只有 `services/desktop.ts` 一个入口，`WindowControls` 与错误上报改走新增的 `desktopOrNull()`）。`preload.cjs` 首行加 `// @ts-check`，整个 `api` 对象按 `DesktopGateway` 做上下文推断，两侧签名不一致会在 `vue-tsc` 里报错；`tsconfig` 的 `include` 补上 `src/main/**/*.cjs` 与 `src/preload/*.cjs`（主进程尚未写 JSDoc，只做语法与解析检查）。手工取景脚本补上 `npm run inspect` 入口。
 
 **没做的。** 三个超大单文件（`IncomePage.vue` 1447 行、`OverviewPage.vue` 991、`EquipmentScreenshotDialog.vue` 908）与 1867 行的 `tests/app.electron.cjs` 属于结构性重构，和清理混在一起风险不对等，留作单独一批；`RescuePanel` / `OnlineDialog` 里各写一份的 `pad` 语义与 `fmtDate` 不完全等价，没有强行合并。
+
+## 拆收益页：1450 行拆成页面 + 四块面板 + 一个组合式函数
+
+日期：2026-10-29。起因：审查清单里列为「结构性重构，留单独一批」的第一个大文件——`IncomePage.vue` 1450 行，速记、计时、统计、记录四套东西挤在一个 `setup` 里，改一处得先读完六百行才能确认没碰别的。行为与样式都不变，只拆结构。
+
+范围：新增 `features/income/{use-live-sessions.ts,IncomeLiveBar.vue,IncomeStatGrid.vue,IncomeQuickPanel.vue,IncomeLootPanel.vue}`，`IncomePage.vue` 重写，`app/types.ts` 补三个类型，`docs/PAGE_GUIDE.md` 补一条拆分口径。
+
+| 检查            | 结果                      |
+| --------------- | ------------------------- |
+| 格式化          | `prettier --check .` 通过 |
+| ESLint          | 0 错误 0 警告             |
+| 类型检查        | `vue-tsc --noEmit` 0 错误 |
+| 领域与隔离测试  | 131 项通过 0 失败         |
+| Vite 生产构建   | 通过                      |
+| Electron 端到端 | PASS                      |
+
+**切法是「一块界面一个文件 + 一套共享状态一个组合式函数」，不是把 `setup` 一刀两半。**
+
+| 文件                   | 行数 | 职责                                                         |
+| ---------------------- | ---- | ------------------------------------------------------------ |
+| `IncomePage.vue`       | 552  | 筛选、角色、区间、四块面板的接线、弹窗与焦点回落、同步哪几天 |
+| `IncomeQuickPanel.vue` | 479  | 速记卡：物品网格、「记给谁」按钮排、单价表 CSV（样式占七成） |
+| `IncomeLootPanel.vue`  | 224  | 右侧收益记录卡与两个合计                                     |
+| `use-live-sessions.ts` | 202  | 秒表与统计两个节拍、在线列表、起停结算、跨夜拆日期           |
+| `IncomeLiveBar.vue`    | 129  | 页头那条「谁在线」＋四颗计时按钮                             |
+| `IncomeStatGrid.vue`   | 94   | 四张统计卡＋「账号已同步」那一行                             |
+
+**为什么计时单独抽成组合式函数，而不是做成组件。** 秒表每秒走一次（`now`）、统计每十秒算一次（`statTick`），开始与结束的瞬间两者都要立刻对一次；这两份节拍同时被「顶部列表」和「统计卡」读，做成组件就得把时钟提到页面再层层往下传。抽成 `use-live-sessions` 之后，时钟、`watch(actives)`、结算提示、跨夜拆日期住在同一个文件里，页面只解构它返回的九个成员。
+
+**为什么「同步哪几天」留在页面。** 速记、删记录、改日期、补在线时长四条路径最后都落到同一句 `syncAccount(dates)`，把它塞进任何一个子组件都不对——子组件并不知道别的入口改了哪几天。同理 `remember()` / `restore()`（焦点回落）留在页面，因为回落目标 `'.item-grid .item-card'` 在子组件里。
+
+**样式随块走。** `<style scoped>` 不穿透子组件内部，所以 `.card`、`.card-title` 这类基座在两个面板里各留一份（`src/renderer` 里本来就是每页各写一份，没有全局 `.card`）。唯一合并的是统计卡：原来写 `class="card stat"` 两层叠加，现在 `.stat` 自己写全 `border` / `background` / `border-radius`，计算结果逐项相同（实测 `padding 13px 15px`、`border 1px`、`radius 6px`、底 `--paper`）。
+
+**多根节点是刻意的。** `IncomeLiveBar` 没有外层容器：那几颗按钮与 `ul` 要直接落在 `PageHeader` 的 `.actions` 里跟着它换行，多套一层 flex 会改变间距与换行位置。实测 `.page-header-actions` 的子节点仍是「BUTTON / BUTTON」（计时中时是 UL + 四颗按钮）。
+
+**验证：** 合成种子（两个角色、五条速记、一条账号「游戏收益」）在 1440 与 1920 两档量几何：`.quick-main` 栅格 `888px 288px` / `1378px 288px`，两块面板 padding 都是 `16px 18px`，右栏锁死 288；统计卡四张、高度 89；收益记录五行、页脚文案与两颗单价表图标都在；「记给谁」四颗按钮、第一颗高亮。端到端整套流程（速记、单价、计时、补记、导出）照旧 PASS，选择器一个没改——拆分没动 DOM。临时脚本与种子用完已删。

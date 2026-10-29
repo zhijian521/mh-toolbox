@@ -2,14 +2,15 @@
 
 八个页面（总览、收益、账号、目标、装备、角色、物价、设置）都已接完，本指南是**新增页面或改造现有页面**时的固定动作清单：角色页与装备页是两个完整范本，动手前先读它们的文件，不要另起一套写法。
 
-| 职责                     | 范本文件                                   |
-| ------------------------ | ------------------------------------------ |
-| 页面骨架、列表、删除确认 | `features/characters/CharactersPage.vue`   |
-| 单条记录展示与操作入口   | `features/characters/CharacterCard.vue`    |
-| 完整草稿表单             | `features/characters/CharacterEditor.vue`  |
-| 单项快捷编辑             | `features/characters/QuickEditor.vue`      |
-| 记录列表（筛选、分页）   | `features/characters/CharacterHistory.vue` |
-| 子表单与拖动排序         | `features/characters/SkillEditor.vue`      |
+| 职责                       | 范本文件                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| 页面骨架、列表、删除确认   | `features/characters/CharactersPage.vue`                                     |
+| 单条记录展示与操作入口     | `features/characters/CharacterCard.vue`                                      |
+| 完整草稿表单               | `features/characters/CharacterEditor.vue`                                    |
+| 单项快捷编辑               | `features/characters/QuickEditor.vue`                                        |
+| 记录列表（筛选、分页）     | `features/characters/CharacterHistory.vue`                                   |
+| 子表单与拖动排序           | `features/characters/SkillEditor.vue`                                        |
+| 页面 + 子组件 + 组合式函数 | `features/income/`（`IncomePage.vue` ＋ 四块面板 ＋ `use-live-sessions.ts`） |
 
 ## 1. 领域层先就位
 
@@ -31,6 +32,7 @@
 - 主体容器用 `.page-content`；无数据时用 `.empty` 加 `AppIcon`，不要只留一片空白。
 - 列表 `v-for` 的 `:key` 用实体 `id`，不要用下标。
 - 不要再给页面套一层 `try/catch` 或 `errorCaptured`：工作区外层的 `ErrorBoundary` 已经把渲染异常换成替代界面（见 `UI_GUIDE.md`），页面内叠加兜底反而吞掉统一的恢复入口。
+- **页面超过 600 行就按块拆**，不要靠注释分区硬撑：一块界面一个子组件（props 只传状态，读取领域走自己的 `useApplication()`），一套共享时钟或派生状态抽成 `use-xxx.ts`。范本是收益页（原来 1450 行，拆完 552 行）。拆的时候样式跟着块走——`<style scoped>` 不会穿透子组件内部，`.card` 这类基座各自留一份。
 
 ## 4. 状态读写
 
