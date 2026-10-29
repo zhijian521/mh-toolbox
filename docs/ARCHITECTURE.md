@@ -16,8 +16,12 @@ src/renderer/assets/        独立字体、许可和样式；只保留设计基�
 tests/domain/               从基线复制的领域回归用例
 tests/fixtures/             集成流程要读的二进制素材（如装备截图），只留最小必要样本
 tests/isolation.test.mjs    profile、磁盘失败、导出边界与源码隔离
-tests/app.electron.cjs      Electron 真实窗口与 IPC 集成流程
-scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单文件脚本
+tests/renderer-boundary.test.mjs  错误边界接线、页面两处注册一致、渲染层不得直接碰 electron / node
+tests/game-data.test.mjs    门派与修炼资料的单来源与结构校验
+tests/ipc-contract.test.mjs preload 成员 ↔ DesktopGateway ↔ 主进程 handler 三方比对
+tests/app.electron.cjs      Electron 真实窗口与 IPC 集成流程（`npm run test:electron` 逐个跑 *.electron.cjs）
+tests/inspect.electron.cjs  手工取景用的临时 profile 会话，不进自动门禁（`npm run inspect`）
+scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，跳过 inspect.* 这类交互脚本
 ```
 
 ## 游戏资料集中维护原则
@@ -42,7 +46,7 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 
 所有写入经领域的串行 commit 队列。事务内读取最新状态，修改后落盘，失败恢复整个内存快照。角色资料、养成历史、排序及关联删除保持现有规则。IPC 传递普通对象，避免 Vue 代理无法结构化克隆。
 
-文件保存使用临时文件加 rename；导入、清空、schema 变化前复制旧文件。磁盘已有版本高于保存数据时拒绝降级覆盖。数据版本为 9（8 → 9 只做一处收敛：角色的 `activeEquipmentSet` 并入 `viewedEquipmentSet`，切到哪套方案就是在穿哪套；8 时计时中的会话已由单个 `activeSession` 改为 `activeSessions` 数组，每个在线角色一段、各自起停），独立于应用 `0.2.0-alpha.1` 的版本号。
+文件保存使用临时文件加 rename；导入、清空、schema 变化前复制旧文件。磁盘已有版本高于保存数据时拒绝降级覆盖。数据版本为 9（8 → 9 只做一处收敛：角色的 `activeEquipmentSet` 并入 `viewedEquipmentSet`，切到哪套方案就是在穿哪套；8 时计时中的会话已由单个 `activeSession` 改为 `activeSessions` 数组，每个在线角色一段、各自起停），独立于应用 `0.2.0` 的版本号。
 
 ## 错误处理分层
 
@@ -89,13 +93,15 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 
 ## 类型检查
 
-`tsconfig.json` 的 `checkJs` 仍为 `false`，领域层的 `.js` 逐个纳管：要纳管的文件在首行写 `// @ts-check`，用 JSDoc 标注参数与返回值即可，`vue-tsc --noEmit` 会按注释逐文件校验。目前 16 个模块**已全部纳管**：`characters`、`create-domain`、`data`、`equipment`、`equipment-fields`、`equipment-import`、`export`、`goals`、`growth`、`ledger`、`migration`、`online`、`schools`、`statistics`、`storage`、`util`。
+`tsconfig.json` 的 `checkJs` 仍为 `false`，领域层的 `.js` 逐个纳管：要纳管的文件在首行写 `// @ts-check`，用 JSDoc 标注参数与返回值即可，`vue-tsc --noEmit` 会按注释逐文件校验。目前 18 个模块**已全部纳管**：`characters`、`create-domain`、`data`、`equipment`、`equipment-fields`、`equipment-import`、`export`、`goals`、`growth`、`item-prices`、`ledger`、`migration`、`online`、`prices`、`schools`、`statistics`、`storage`、`util`。
+
+主进程与 preload 也进了 `tsconfig` 的 `include`（`src/main/**/*.cjs`、`src/preload/*.cjs`）：主进程的 `.cjs` 还没写 JSDoc，只做语法与解析层面的检查；`preload.cjs` 首行加了 `// @ts-check`，整个 `api` 对象按 `DesktopGateway` 做上下文推断，多写或漏写一个方法都会报错。
 
 渲染层另有一份窄化的类型定义 `src/renderer/app/types.ts`：`Domain` 接口只声明界面实际调用的方法，`AppData` 的集合用 `RecordEntry` 而不是 `any[]`，因此页面里拼错成员名会直接报错。完整领域成员仍以契约文件为准，两者分工见下节。
 
 ### 领域契约 `domain-contract.d.ts`
 
-13 个模块用 `Object.assign(D, {...})` 把约 140 个成员平铺到同一个对象上，模块之间靠 `this.*` 互调，因此单独给某个模块开 `@ts-check` 会立刻报一片 `Property 'xxx' does not exist on type` 与参数隐式 `any`。解决办法是先有一份契约：`src/renderer/domain/domain-contract.d.ts` 用真正的 `interface Domain`、`interface DomainState` 声明全部成员，各模块的 JSDoc 直接写 `@type {Domain}`、`@param {Domain} D`。
+15 个安装模块全部用 `Object.assign(D, {...})` 把约 140 个成员平铺到同一个对象上（`domain-contract.test.mjs` 会逐个检查这一写法），模块之间靠 `this.*` 互调，因此单独给某个模块开 `@ts-check` 会立刻报一片 `Property 'xxx' does not exist on type` 与参数隐式 `any`。解决办法是先有一份契约：`src/renderer/domain/domain-contract.d.ts` 用真正的 `interface Domain`、`interface DomainState` 声明全部成员，各模块的 JSDoc 直接写 `@type {Domain}`、`@param {Domain} D`。
 
 - 这个文件必须是**不含 `import`/`export` 的全局声明文件**，否则不是全局作用域。反过来，在 `.d.ts` 里写 JSDoc `@typedef` 当作类型声明是不生效的（`TS2304: Cannot find name 'Domain'`），必须是 `interface`。
 - 每个纳管模块的固定写法：`/** @typedef {Partial<Domain> & ThisType<Domain>} XxxMixin */`，`install` 标 `@param {Domain} D`，`Object.assign(D, /** @type {XxxMixin} */ ({ ... }),)`。

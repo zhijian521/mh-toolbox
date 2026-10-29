@@ -16,6 +16,7 @@ npm run check          # prettier + eslint + vue-tsc + 领域/隔离测试
 npm run build          # 生产前端构建，输出 dist/renderer
 npm start              # 需先 build
 npm run test:electron  # 需先 build；真实窗口与 IPC，用系统临时数据
+npm run inspect        # 手工取景用：build 后开一个带合成数据的临时 profile（不进自动门禁）
 npm run dist:dir       # 独立 Windows 应用目录
 npm run dist           # 安装版与便携版，输出到 release/
 ```

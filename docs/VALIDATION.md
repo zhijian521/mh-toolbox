@@ -1470,3 +1470,26 @@ CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都�
 **主进程一处。** ⑧ `exportRaw`（急救通道的「另存原始副本」）补上 `assertExportPath`：与 `exportData` / `saveTextFile` 一样，不能把副本写回正在使用的 `data.json`。
 
 **没有改的。** 审查里的 B / C / D 类（类型检查只覆盖渲染层、三处混入写法、文档数字失真、重复工具函数等）本轮不动，留作单独一批。
+
+## 审查后收尾：C / D / B 三类（清理、文档、护栏）
+
+日期：2026-10-29。承接《审查后修 A 类九处》，把清单里剩下的三类一次做完。
+
+范围：`domain/{util,data,characters,ledger,online,export,item-prices,schools}.js`、`app/types.ts`、`stores/application.ts`、`components/{BaseDate,WindowControls,drag-sort,use-date-range}.*`、`features/**` 多处调用点、`services/desktop.ts`、`preload/preload.cjs`、`assets/styles.css`、`tsconfig.json`、`package.json`、`tests/**`、`docs/{ARCHITECTURE,THEME,ROADMAP,PAGE_GUIDE}.md`、`game-data/README.md`、`README.md`、`.gitattributes`。
+
+| 检查            | 结果                      |
+| --------------- | ------------------------- |
+| 格式化          | `prettier --check .` 通过 |
+| ESLint          | 0 错误 0 警告             |
+| 类型检查        | `vue-tsc --noEmit` 0 错误 |
+| 领域与隔离测试  | 131 项通过 0 失败         |
+| Vite 生产构建   | 通过                      |
+| Electron 端到端 | PASS                      |
+
+**C · 重复实现收成一份。** `U` 新增 `round2` / `byDateDesc` / `wanToCash` / `cashToWan` / `csvCell` / `csvText`：日期倒序（8 处）、两位小数（5 处）、万与游戏币互转（8 处）、CSV 转义与 BOM 拼装（2 处）现在各只有一份。单价表那条 CSV 顺带补上了「`= + - @` 开头加单引号」的防公式注入——原来只有记录导出有，同一个应用里两份转义迟早分叉。死导出（`fmtInt`、`fmtPercent`、`quickCatalog`、`SortMove`）连同只有测试在用的断言一起删掉；`app/types.ts` 里界面从不调用的五个方法声明（`persist`、`itemRemaining`、`quickShares`、`settleRunning`、`equipmentDetailsSnapshot`）也删了；目标卡的装备徽章改吃新增的 `--bronze` 令牌，这是 `src/renderer` 里最后一个裸十六进制。
+
+**D · 文档数字对齐代码。** 架构文档从「16 个模块」改成实际的 18 个（补 `prices`、`item-prices`），「13 个模块用 `Object.assign`」改成 15 个安装模块全部如此，版本号 `0.2.0-alpha.1` 改为 `0.2.0`，测试目录清单补上 `renderer-boundary` / `game-data` / `ipc-contract` / `inspect` 四个文件并写清 `test:electron` 会跳过 `inspect.*`。主题文档把令牌数从 23 改成 26（新增 `--bronze`），并把「动手前的存量表」明确标成 2026-10-27 的快照——那张表里的 `--hover` 与 `localStorage` 从未落地，之前没有标注，读起来像是现状。路线图里「基线快照已完成」改成「已归档」以对齐 `SYNC.md`；资料目录说明补了 `quick-catalog.js` 与 `price-catalog.js`；页面指南的口吻从「待接界面」改成「新增或改造时怎么动」；`.gitattributes` 删掉两条指向已不存在目录的规则。
+
+**B · 三条护栏 + 混入写法。** 领域里最后三个没按固定写法来的模块（`export`、`item-prices`、`schools`）改成 `Mixin 声明 + Object.assign(D, ...)`，`domain-contract.test.mjs` 相应收紧：现在会逐个检查「有 Mixin typedef、install 标 `@param {Domain} D`、方法体用 `Object.assign(D,`」。新增 `tests/ipc-contract.test.mjs`：preload 成员 ↔ `DesktopGateway` ↔ 主进程 handler 三方逐条比对（22 个 invoke + 2 个推送事件），多注册、少暴露、只暴露不调用都会红；断言里带了「解析到的数量不能太小」的前置，避免正则失配后变成永远绿的摆设。`renderer-boundary.test.mjs` 补两条：侧栏 `sections` 与路由表一一对应（少登记一处以前只能靠肉眼）、渲染层不得 `import electron` / `node:` / 直接摸 `window.mhV2`（网关只有 `services/desktop.ts` 一个入口，`WindowControls` 与错误上报改走新增的 `desktopOrNull()`）。`preload.cjs` 首行加 `// @ts-check`，整个 `api` 对象按 `DesktopGateway` 做上下文推断，两侧签名不一致会在 `vue-tsc` 里报错；`tsconfig` 的 `include` 补上 `src/main/**/*.cjs` 与 `src/preload/*.cjs`（主进程尚未写 JSDoc，只做语法与解析检查）。手工取景脚本补上 `npm run inspect` 入口。
+
+**没做的。** 三个超大单文件（`IncomePage.vue` 1447 行、`OverviewPage.vue` 991、`EquipmentScreenshotDialog.vue` 908）与 1867 行的 `tests/app.electron.cjs` 属于结构性重构，和清理混在一起风险不对等，留作单独一批；`RescuePanel` / `OnlineDialog` 里各写一份的 `pad` 语义与 `fmtDate` 不完全等价，没有强行合并。
