@@ -245,8 +245,12 @@ async function save() {
 .col-info > .full {
     grid-column: 1 / -1;
 }
-.col-info label {
+/* 勾选项自带横排布局，不能和字段标签一样 block 化。 */
+.col-info label:not(.check) {
     display: block;
+    font-size: 12.5px;
+}
+.col-info .check {
     font-size: 12.5px;
 }
 /*

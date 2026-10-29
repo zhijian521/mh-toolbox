@@ -179,7 +179,14 @@ fieldset {
 small {
     font-size: 12px;
 }
-label {
+/*
+ * 表单标签「标题在上、控件在下」。
+ *
+ * 排除 `.check`：那是 BaseCheck 的根元素，它自己就是横排的一行，
+ * 谁放它进表单都不该被这条竖排规则接管——`.form-x label` 这类后代选择器
+ * 特异性比组件根样式高，一旦命中就把组件内部的 flex 布局整个顶掉。
+ */
+label:not(.check) {
     display: flex;
     flex-direction: column;
     gap: 7px;

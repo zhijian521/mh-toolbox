@@ -49,6 +49,31 @@ module.exports = async function equipment(env) {
     // 新增一件武器：只填档案，属性留空也是合法档案（属性编辑器另有一步验证）。
     await click('＋ 新增装备');
     await until(() => !!document.querySelector('#equipment-form'), '新增装备弹窗');
+    /*
+     * 勾选项必须是「方框 + 文字」横排，且方框与文字首行同心。
+     *
+     * 父级的 `.xxx-form label` 这类后代选择器特异性高于组件根样式，
+     * 一旦命中 BaseCheck 的根 `<label>` 就会把它 block 化成竖排，方框跑到文字上面、
+     * 或与文字基线错开四五像素——肉眼像「没对齐」，但既不会报错也不会影响保存。
+     */
+    const checkBox = await read(() => {
+        const label = document.querySelector('#equipment-form .check');
+        const box = label && label.querySelector('.box');
+        const text = label && label.querySelector('.text');
+        if (!box || !text) return null;
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        const line = range.getClientRects()[0];
+        const rect = box.getBoundingClientRect();
+        return {
+            diff: Math.round((rect.top + rect.height / 2 - (line.top + line.height / 2)) * 10) / 10,
+            gap: Math.round(line.left - rect.right),
+        };
+    });
+    assert.ok(checkBox, '新增装备里有「保存后放进正在查看的方案」勾选项');
+    // `flex-direction` 查不出来：被 block 化的 flex 容器照样回报 row，只能靠几何。
+    assert.ok(checkBox.gap > 0, '方框在文字左侧，没被顶到另一行');
+    assert.ok(Math.abs(checkBox.diff) < 2, '勾选框与文字首行垂直居中对齐');
     await field('[name="name"]', '测试武器');
     await field('[name="level"]', '120');
     await click('登记装备');

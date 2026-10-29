@@ -47,7 +47,11 @@ function onChange(event: Event) {
             :disabled="disabled"
             @change="onChange"
         />
-        <span class="box" :style="{ width: size + 'px', height: size + 'px' }" aria-hidden="true">
+        <span
+            class="box"
+            :style="{ width: size + 'px', height: size + 'px', '--check-box': size + 'px' }"
+            aria-hidden="true"
+        >
             <AppIcon v-if="modelValue" name="check" :size="glyph" :stroke="3" />
         </span>
         <span class="text">
@@ -64,6 +68,7 @@ function onChange(event: Event) {
  * 一加粗整行宽度就跳，勾选时眼睛会跟着抖一下。
  */
 .check {
+    --check-leading: 1.6;
     position: relative;
     display: inline-flex;
     flex-direction: row;
@@ -86,8 +91,12 @@ function onChange(event: Event) {
     flex: none;
     align-items: center;
     justify-content: center;
-    /* 文字首行 19px、方框 18px，抬 1px 才和首行的光学中线对上。 */
-    margin-top: 1px;
+    /*
+     * 方框中心对齐文字首行的行盒中心：(行高 − 方框) ÷ 2。
+     * 不能写死 1px——`line-height: normal` 在中文里几乎把半行距全分在上方，
+     * 文字看着比行盒低四五像素，方框就浮在字上面（这一行最早没对齐正是这个原因）。
+     */
+    margin-top: calc((var(--check-leading) * 1em - var(--check-box, 18px)) / 2);
     border: 1px solid var(--line-2);
     border-radius: 5px;
     background-color: var(--well);
@@ -123,7 +132,13 @@ function onChange(event: Event) {
     cursor: not-allowed;
 }
 .text {
+    display: block;
     min-width: 0;
+    /*
+     * 行高必须写死倍数：`normal` 由字体自带的 ascent/descent 决定，
+     * 中文的第一行盒会比看到的字高出 6px，方框怎么调都对不上。
+     */
+    line-height: var(--check-leading);
     overflow-wrap: anywhere;
 }
 /* 原生控件只留语义与焦点，视觉全部由 .box 承担。 */

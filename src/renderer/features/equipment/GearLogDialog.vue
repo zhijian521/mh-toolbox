@@ -163,8 +163,12 @@ async function save() {
 .gear-form {
     margin-top: 14px;
 }
-.gear-form label {
+/* 勾选项自带横排布局，不能和字段标签一样 block 化。 */
+.gear-form label:not(.check) {
     display: block;
+    font-size: 12.5px;
+}
+.gear-form .check {
     font-size: 12.5px;
 }
 .gear-warn {
