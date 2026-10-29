@@ -52,7 +52,8 @@ export default tseslint.config(
     // Electron 场景测试：主进程里跑，但断言体通过 executeJavaScript 在渲染进程求值，
     // 因此同时需要浏览器与 Node 全局。
     {
-        files: ['tests/**/*.electron.cjs'],
+        // `tests/e2e/` 是上一条那些脚本拆出来的流程段，同样是「Node 里跑、断言在页面求值」。
+        files: ['tests/**/*.electron.cjs', 'tests/e2e/**/*.cjs'],
         languageOptions: {
             globals: { ...globals.node, ...globals.browser },
         },
