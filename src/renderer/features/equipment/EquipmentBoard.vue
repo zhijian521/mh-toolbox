@@ -85,7 +85,6 @@ function isPending(slot: string) {
             号码是固定的（一 / 二 / 三），名字可以改，所以号码用等宽数字单独占一枚小方章。
         -->
         <div class="eq-board-top">
-            <p class="eq-board-hint">点击格子换装</p>
             <div class="eq-plan-tabs" role="group" :aria-label="profile.name + '的装备方案'">
                 <button
                     v-for="(item, index) in profile.equipmentSets"
@@ -191,7 +190,8 @@ function isPending(slot: string) {
      * 所以 1240 只在大屏上生效——格子停在 289 / 315，右边留白，不再继续撑。
      */
     max-width: 1240px;
-    gap: 12px;
+    /* 14px：方案行上下各留一格，比栏内的 8px 松、比两栏之间的 16px 紧。 */
+    gap: 14px;
 }
 .eq-notice {
     margin: 0;
@@ -224,17 +224,15 @@ function isPending(slot: string) {
 /*
  * 方案行横跨两栏。它上面没有别的块，下面的两个标题块等高（都只有一行 h2），
  * 第一排格子就天然落在同一条水平线上——不用再靠 margin 去补两栏的高度差。
+ *
+ * 「改名 · 复制方案」紧跟在三枚方案签后面，不再贴右边缘：它们改的是同一套方案，
+ * 分居两头会让人以为「复制方案」属于右边那栏。
  */
 .eq-board-top {
     display: flex;
     align-items: center;
-    gap: 8px 12px;
+    gap: 6px 10px;
     flex-wrap: wrap;
-}
-.eq-board-hint {
-    margin: 0;
-    color: var(--muted);
-    font-size: 11.5px;
 }
 .eq-board-head {
     display: flex;
@@ -258,7 +256,8 @@ function isPending(slot: string) {
 }
 .eq-plan-tabs {
     display: flex;
-    flex: 1 1 auto;
+    /* 不拉伸：后面的「改名 · 复制方案」要贴着最后一枚签，而不是被推到右边缘。 */
+    flex: 0 1 auto;
     min-width: 0;
     gap: 6px;
     flex-wrap: wrap;
@@ -269,7 +268,6 @@ function isPending(slot: string) {
     align-items: center;
     flex: none;
     gap: 8px;
-    margin-left: auto;
 }
 /*
  * 号码签：等宽数字单独占一枚小方章，名字跟在后面。

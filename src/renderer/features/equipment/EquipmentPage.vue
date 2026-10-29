@@ -421,7 +421,8 @@ function switchCharacter(id: string) {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 12px;
+    /* 与方案行到下方标题的 14px 对齐，方案签才像悬在两块中间而不是贴着角色卡。 */
+    margin-bottom: 14px;
 }
 .eq-chars {
     display: flex;
