@@ -1,7 +1,8 @@
-const { ipcMain, dialog, shell, clipboard } = require('electron');
+const { ipcMain, dialog, shell, clipboard, net } = require('electron');
 const fs = require('node:fs/promises');
 const { assertExportPath } = require('./export-path.cjs');
 const { createEquipmentOcr } = require('./equipment-ocr.cjs');
+const { createUpdateChecker } = require('./update.cjs');
 
 /**
  * IPC 白名单。渲染进程只能调到这里注册过的通道，且调用者必须是主窗口主 frame。
@@ -53,6 +54,15 @@ function registerIpc({ app, store, logger, theme, getWindow }) {
         platform: process.platform,
         profile: 'mh-tool-v2',
     }));
+    /*
+     * 检查更新：只读 GitHub 的 latest release，不下载、不安装。
+     *
+     * 走 `net.fetch` 而不是 Node 的 https —— 前者在 Chromium 的网络栈里，会跟随
+     * 系统代理设置；国内直连 api.github.com 经常握手失败，用户挂着的代理能救回来。
+     * 失败一律返回 `{ok:false,error}`，界面拿到的是一句能照做的提示。
+     */
+    const update = createUpdateChecker({ app, logger, net });
+    guarded('checkUpdate', () => update.check());
     handle('window', (action) => {
         const win = getWindow();
         if (!win) return;

@@ -6,7 +6,7 @@ import PageHeader from '../../components/PageHeader.vue';
 import { useApplication } from '../../stores/application';
 import { desktop, plain } from '../../services/desktop';
 import { loadTheme, setTheme, themePreference } from '../../services/theme';
-import type { AppData, ThemePreference } from '../../app/types';
+import type { AppData, ThemePreference, UpdateCheck } from '../../app/types';
 const app = useApplication();
 const importCandidate = ref<AppData | null>(null),
     confirmWipe = ref(false),
@@ -127,7 +127,8 @@ const helpItems = [
             '「数据」里能看到角色、收支、目标、装备各有多少条，以及数据文件存在哪。',
             '导出 JSON 备份给自己留底；导入会先校验再替换当前数据，替换前自动留一份本地副本。',
             '同一栏底部的「清空 V2 数据」不可撤销，执行前有二次确认并先留一份本地副本。',
-            '关于里有版本、数据版本、许可范围与源码地址。',
+            '关于里有版本、检查更新、许可范围与源码地址。',
+            '有新版本时点「打开下载页」去 GitHub 下载，装上新包即可——数据不在安装目录，升级不会丢。',
         ],
     },
 ];
@@ -146,7 +147,44 @@ const themeOptions: Array<{ value: ThemePreference; label: string }> = [
     { value: 'light', label: '浅色' },
     { value: 'dark', label: '深色' },
 ];
-onMounted(loadTheme);
+/** 更新检查的结果；null 表示还没查过（界面显示「看有没有新版本」而不是「已是最新」）。 */
+const updateInfo = ref<UpdateCheck | null>(null),
+    checkingUpdate = ref(false);
+onMounted(() => {
+    void loadTheme();
+    // 进设置页静默查一次：断网时什么都不说，别让人以为应用坏了。
+    void refreshUpdate(false);
+});
+/*
+ * 检查更新：只查 GitHub 上的最新正式版，不下载、不安装。
+ *
+ * `manual` 区分「用户点的」与「进页面自动跑的」——自动那次失败要把话咽下去，
+ * 手动那次才提示；否则一进设置页就先挨一条红字，比不检查更烦人。
+ * 结果是 `{ok:false,error}` 而不是异常，网络问题不会冒泡成未捕获错误。
+ */
+async function refreshUpdate(manual: boolean) {
+    if (checkingUpdate.value) return;
+    checkingUpdate.value = true;
+    try {
+        const result = await desktop().checkUpdate();
+        updateInfo.value = result;
+        if (manual && !result.ok) app.notify(result.error || '检查更新失败', true);
+    } catch (failure) {
+        if (manual) app.notify(failure instanceof Error ? failure.message : String(failure), true);
+    } finally {
+        checkingUpdate.value = false;
+    }
+}
+/** 下载页交给系统浏览器：窗口把 window.open 与导航都拦着（外链白名单里有 github.com）。 */
+async function openRelease() {
+    const url = updateInfo.value?.url;
+    if (!url) return;
+    try {
+        await desktop().openExternal(url);
+    } catch (failure) {
+        app.notify(failure instanceof Error ? failure.message : String(failure), true);
+    }
+}
 async function chooseTheme(next: ThemePreference) {
     if (busy.value || themePreference.value === next) return;
     try {
@@ -323,6 +361,41 @@ async function wipe() {
                         <dd>{{ app.info?.version }} · 数据版本 {{ app.data?.schemaVersion }}</dd>
                     </div>
                 </dl>
+                <!--
+                    检查更新：一行状态 + 一颗按钮。有新版时状态转金、按钮换成「打开下载页」，
+                    说明折叠起来——只看版本号的人不必被一整段更新日志挡住。
+                -->
+                <div class="update-row">
+                    <span class="update-state" :class="{ fresh: updateInfo?.hasUpdate }">
+                        <template v-if="checkingUpdate">正在检查…</template>
+                        <template v-else-if="updateInfo?.hasUpdate">
+                            有新版本 {{ updateInfo.latest }}（当前 {{ updateInfo.current }}）
+                        </template>
+                        <template v-else-if="updateInfo?.ok">已是最新</template>
+                        <template v-else-if="updateInfo">{{ updateInfo.error }}</template>
+                        <template v-else>看有没有新版本</template>
+                    </span>
+                    <button
+                        v-if="updateInfo?.hasUpdate"
+                        class="btn compact primary"
+                        :disabled="busy"
+                        @click="openRelease"
+                    >
+                        打开下载页
+                    </button>
+                    <button
+                        v-else
+                        class="btn compact"
+                        :disabled="busy || checkingUpdate"
+                        @click="refreshUpdate(true)"
+                    >
+                        检查更新
+                    </button>
+                </div>
+                <details v-if="updateInfo?.hasUpdate && updateInfo.notes" class="update-notes">
+                    <summary>这版改了什么</summary>
+                    <p>{{ updateInfo.notes }}</p>
+                </details>
                 <p>源码公开，可自行运行、修改与再发布。</p>
                 <!--
                     强调不用行内 <strong>：prettier 会把它拆到单独一行，Vue 的空白压缩
@@ -610,6 +683,47 @@ async function wipe() {
 }
 .info-list dt {
     color: var(--muted);
+}
+/*
+ * 检查更新：状态在左、按钮在右，与上面「版本」那一行同一条左对齐线。
+ * 负的上边距把两行拉近——它俩说的是同一件事（现在是什么版本、有没有新的）。
+ */
+.update-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin: -4px 0 12px;
+}
+.update-state {
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--muted);
+}
+/* 有新版才转金：平时这句灰字不该抢「版本」那一行的注意力。 */
+.update-state.fresh {
+    color: var(--gold);
+}
+/* 更新说明限高滚动：它可能是一整篇更新日志，不能把「关于」撑成两屏。 */
+.update-notes {
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--muted);
+}
+.update-notes summary {
+    cursor: pointer;
+    color: var(--ink-2);
+}
+.update-notes p {
+    max-height: 160px;
+    overflow: auto;
+    margin: 8px 0 0;
+    padding-left: 10px;
+    border-left: 1px dashed var(--line-2);
+    line-height: 1.65;
+    white-space: pre-wrap;
 }
 .data-path {
     overflow-wrap: anywhere;

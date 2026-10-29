@@ -452,6 +452,27 @@ export interface WindowState {
     maximized: boolean;
 }
 
+/**
+ * 检查更新的结果。
+ *
+ * 失败时也带 `current`：界面要在同一行里说「当前 0.2.0，但查不到新版本」，
+ * 不能因为一次网络失败就把版本号一起藏起来。
+ */
+export interface UpdateCheck {
+    ok: boolean;
+    current: string;
+    /** 最新正式版的版本号（不含 `v` 前缀）。 */
+    latest?: string;
+    /** 最新版比当前新时为 true；相等或更旧都是 false。 */
+    hasUpdate?: boolean;
+    /** Release 页面地址，交给系统浏览器打开。 */
+    url?: string;
+    /** Release 说明正文，已在主进程截断。 */
+    notes?: string;
+    publishedAt?: string;
+    error?: string;
+}
+
 /** 外观三档：跟随系统、固定浅色、固定深色。 */
 export type ThemePreference = 'auto' | 'light' | 'dark';
 
@@ -467,6 +488,8 @@ export interface DesktopGateway {
     loadData(): Promise<Result>;
     saveData(data: AppData, options?: { backupReason?: string }): Promise<Result>;
     info(): Promise<AppInfo>;
+    /** 查 GitHub 上的最新正式版，只返回版本信息，不下载也不安装。 */
+    checkUpdate(): Promise<UpdateCheck>;
     importData(): Promise<Result>;
     exportData(data: AppData): Promise<Result>;
     /**

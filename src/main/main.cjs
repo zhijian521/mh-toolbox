@@ -17,6 +17,20 @@ process.on('unhandledRejection', (reason) => {
     logger.error('主进程未处理的 Promise 拒绝', reason);
 });
 
+/*
+ * 版本号显式取自包根的 package.json，不依赖 `app.getVersion()` 的默认行为。
+ *
+ * 打包后两者本来就一致，但未打包运行时（端到端与截图脚本都是
+ * `electron.exe <脚本>` 这么起）`app.getAppPath()` 指向 Electron 自己，
+ * `getVersion()` 会返回 Electron 的版本（38.8.6）：设置页把它当应用版本显示，
+ * 「检查更新」还会拿它跟 GitHub 上的 0.2.0 比，得出「有新版本」的错误结论。
+ */
+try {
+    app.setVersion(require('../../package.json').version);
+} catch {
+    // 读不到就保持默认值，不影响启动。
+}
+
 app.disableHardwareAcceleration();
 if (process.platform === 'win32') app.setAppUserModelId('com.zhijian.mhtool.v2');
 let window;

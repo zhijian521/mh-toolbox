@@ -39,6 +39,14 @@ node_modules/electron/dist/electron.exe --no-sandbox --disable-gpu tests/app.ele
 - **目标 / 物价 / 设置**：目标进度与记录；卡片式行情与价格流水；JSON 备份导入导出、清空与路径。
 - 保存串行执行并失败回滚、未保存关闭确认、弹窗焦点限制、页面级错误边界、启动失败急救面板。
 
+## 更新
+
+- 设置页「关于」里有「检查更新」：进页面自动查一次，也可以手点。只比对版本号，不下载、不安装。
+- 有新版本时点「打开下载页」去 GitHub 下载，装上新包即可：**安装版直接双击新包覆盖安装，便携版用新 exe 替换旧的**。
+- 数据不在安装目录，在 `%APPDATA%/mh-tool-v2/`，两种装法升级都不会丢；两种装法共用同一份数据，可以混用。
+- 装回旧版本会被拒绝：数据版本高于应用时启动直接进急救面板并提示升级，不会静默写坏。
+- 检查更新只读 GitHub 的 Release 订阅源（`releases.atom`，不占 API 的匿名配额）；连不上时只在设置页留一句灰字，不弹窗、不阻塞启动。
+
 ## 数据与隔离
 
 - 应用名 `mh-tool-v2`，appId `com.zhijian.mhtool.v2`。数据在 `%APPDATA%/mh-tool-v2/data.json`，Chromium 状态在 `session/`，日志在 `logs/`。

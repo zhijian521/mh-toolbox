@@ -1349,3 +1349,19 @@ CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都�
 **改法与取舍。** 八条按侧栏顺序重排，步骤仍「一条一个动作、按点击顺序」；概述全部压到 26 字内（装备改成「三套搭配、命魂之玉与全部档案」，因为它是这页最容易被漏掉的一步）。收益条从 9 条压到 9 条但换了内容：归属、多开分摊、点卡开关这三件「看不见的规则」各占一条，删掉的是重复的「怎么点物品」。要点从 2 条加到 3 条，补「多开时点卡与收益都按在线号数分摊，先把『记给』选对」——这是本次修复的口径，界面上只有一个词，不解释就只能靠猜。文件顶部注释补一句约束：账务口径改动必须回写这里，别指望用户翻文档。
 
 **验证。** 临时 profile 起应用（`appData` 指向临时目录，避免撞单实例锁），脚本把 8 条 `details` 全设为 `open` 后读回每条 `li` 的 `scrollWidth` 与 `clientWidth`：8 条共 5+9+6+6+9+6+5+5 = 51 条步骤，横向溢出 0 条、概述截断 0 条；再滚到底抓整窗截图核对深色主题下的换行与序号对齐（`capturePage` 仍整窗截，不传 rect）。门禁：`npm run check` 133 项全过、lint 0-0、`vue-tsc` 0 错误。
+
+## 加「检查更新」：只读版本号，不下载不安装
+
+日期：2026-10-29。起因：用户问「后面怎么更新比较好」，以及「直接把包发给朋友，升级后还会用之前的数据吗」。第二个问题先查了代码（`src/main/profile.cjs:3,7-13`：数据固定在 `%APPDATA%\mh-tool-v2`，与安装目录无关），随后补上应用内的检查更新。
+
+**通道选择：`releases.atom` 而不是 API。** 匿名调 `api.github.com` 每小时 60 次、按出口 IP 算，实测挂机场代理时那个 IP 的配额早被别人打满，直接 `403 rate limit exceeded`。`releases.atom` 是 GitHub 给每个仓库生成的订阅源，不占配额，一次就能拿到版本号、发布页地址与说明（HTML，本地转纯文本）。API 留作 feed 不通时的兜底。
+
+**三个实测踩出来的坑：**
+
+1. **`app.getVersion()` 在未打包运行时返回 Electron 的版本**（38.8.6），因为 `app.getAppPath()` 指向 Electron 自己，读不到本项目的 `package.json`。表现是设置页显示错误版本，且「检查更新」拿 38.8.6 跟 0.2.0 比，得出「有新版本」的反向结论。修法：`main.cjs` 启动时 `app.setVersion(require('../../package.json').version)`，打包前后一致。
+2. **`net.fetch` 在 `redirect: 'manual'` 下直接抛 `Redirect was cancelled`**，拿不到 302 的响应头；换成跟随重定向后 `response.url` 又是空字符串。两条路都取不到 `/releases/latest` 最终跳到哪个 tag，所以放弃「读跳转」这个思路。
+3. **feed 里不只有版本 tag**：仓库里除了 `v0.2.0` 还有一个叫 `web-legacy` 的历史 release，且条目按时间倒序，不是按「像不像版本号」排。所以必须遍历所有 `<entry>`，用「整串都是数字段」把它和预发布（`0.3.0-beta.1`）一起挡掉，行为才与 GitHub 的 `/releases/latest` 对齐。
+
+**改动：** 新增 `src/main/update.cjs`（`compareVersions` 纯函数 + `createUpdateChecker`，`net` 由调用方注入以便测试）；`ipc.cjs` 注册 `checkUpdate` 并传 `net`；`preload.cjs` 与 `app/types.ts` 同步（`UpdateCheck` 接口）；设置页「关于」加一行状态 + 一颗按钮，有新版时转金并换成「打开下载页」，说明折叠在 `details` 里限高滚动；进页面静默查一次（失败咽下去），手点才提示失败。README 补「更新」一节，`ARCHITECTURE` 补一条网络边界说明，使用帮助的设置条补两条。
+
+**验证。** 新增 `tests/update.test.mjs` 6 项：版本比较按数字段（`0.10.0 > 0.9.0`、预发布小于同号正式版）、feed 混着 `web-legacy` 时挑出真正的最新版、已是最新时不花 API 配额（断言 fetch 只被调一次且是 feed）、预发布不推给正式版用户、feed 挂了才退 API（且 API 限流时根本不调用）、两条通道都失败只报一句「连不上 GitHub」。真实链路用临时 profile 跑通：`current 0.2.0 / latest 0.2.0 / hasUpdate false`，说明正文从 feed 的 HTML 里正确转成纯文本。再用 `app.setVersion('0.1.0')` 造出有新版的状态，截图核对：金色「有新版本 0.2.0（当前 0.1.0）」、主色「打开下载页」、说明展开后 200px 高内滚动且卡片 `scrollWidth - clientWidth = 0`。门禁：`npm run check` 139 项全过、lint 0-0、`vue-tsc` 0 错误。

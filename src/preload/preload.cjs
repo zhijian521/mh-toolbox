@@ -13,6 +13,8 @@ const api = {
     loadData: () => ipcRenderer.invoke('mhv2:loadData'),
     saveData: (data, options) => ipcRenderer.invoke('mhv2:saveData', data, options),
     info: () => ipcRenderer.invoke('mhv2:info'),
+    // 检查更新：只查 GitHub 最新 release 的版本号，不下载、不安装。
+    checkUpdate: () => ipcRenderer.invoke('mhv2:checkUpdate'),
     importData: () => ipcRenderer.invoke('mhv2:importData'),
     exportData: (data) => ipcRenderer.invoke('mhv2:exportData', data),
     // 通用文本导出/导入：CSV 记录与单价表共用，路径与体积校验都在主进程。
