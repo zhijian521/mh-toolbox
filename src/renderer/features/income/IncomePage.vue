@@ -177,26 +177,91 @@ const quick = computed(() => {
     return rules.state.quickSettings || { cardPrice: 15000 };
 });
 /**
- * 速记记给谁：正在计时的号优先，没开计时才退回当前筛选（再退回第一个角色）。
+ * 这笔记给谁。
  *
- * 之前恒定取「角色列表第一个」，于是上了第二个号做师门、收益仍记在第一个号头上，
- * 第二个号只剩一条点卡支出。归属现在由领域 `onlineRoster` 给，页面不再自己猜；
- * 多开时这几个号各记一份均分金额（物品整条归主角色）。
+ * 以前是一套隐式规则（计时中 → 当前筛选 → 第一个角色），界面只写一行「记给 归岚（未计时）」：
+ * 用户既看不出这个归属是怎么来的，也没法改。开两个号做师门、收益仍记在第一个号头上的
+ * 错位，就是这么来的。
+ *
+ * 现在归属是一排常驻按钮，一次点击就换，不藏在弹层里：
+ *
+ * - `auto`（默认）：跟着计时走，记给正在计时的号；没在计时就记给全部。
+ * - `all`：全部角色，金币均分、物品只记一条（数量拆不开，归第一位）。
+ * - 角色 id：这笔记给它一个人。
+ *
+ * 角色多到一行放不下时换行，仍然不用展开任何东西。
  */
+const target = ref<'auto' | 'all' | string>('auto');
+const targetRow = ref<HTMLElement>();
+/** 正在计时的号：既是 auto 的依据，也是角色按钮上的「计时中」标记。 */
+const onlineIds = computed(() => {
+    void app.data;
+    return rules.onlineRoster();
+});
+/** 落到具体角色 id 上。选了又被删掉的号退回全部，不报「请先创建角色」这种莫名其妙的错。 */
 const quickRoster = computed(() => {
     void app.data;
-    const online = rules.onlineRoster();
-    if (online.length) return online;
-    if (character.value !== 'all') return [character.value];
-    return app.characters.length ? [app.characters[0].id] : [];
+    const allIds = app.characters.map((item) => item.id);
+    if (target.value === 'all') return allIds;
+    if (target.value !== 'auto') return allIds.includes(target.value) ? [target.value] : allIds;
+    return onlineIds.value.length ? onlineIds.value : allIds;
 });
-/** 「这笔记给谁」要在界面上看得见，否则归属又变回看不见的隐式行为。 */
 const quickRosterText = computed(() => {
     const names = quickRoster.value.map((id) => rules.charName(id)).filter(Boolean);
     if (!names.length) return '未选择角色';
-    const text = names.join('、');
-    return rules.onlineRoster().length ? text : text + '（未计时）';
+    if (names.length === 1) return names[0];
+    const everyone = names.length === app.characters.length;
+    return everyone || target.value === 'all' ? '全部 ' + names.length + ' 个' : names.join('、');
 });
+/**
+ * 「跟计时」按钮本身说不清会落到谁头上，所以旁边补一句实际结果。
+ * 指定了角色或点了「全部」就不必再说——按钮已经亮着。
+ */
+const targetNote = computed(() =>
+    target.value === 'auto' ? '实际记给 ' + quickRosterText.value : '',
+);
+/** 一排按钮：跟计时、全部，然后是逐个角色（在计时的加一颗绿点）。 */
+const targetOptions = computed(() => [
+    {
+        value: 'auto',
+        label: '跟计时',
+        title: onlineIds.value.length
+            ? '跟随计时：记给正在计时的 ' + onlineIds.value.length + ' 个角色'
+            : '跟随计时：现在没在计时，记给全部角色',
+        live: false,
+        sep: false,
+    },
+    {
+        value: 'all',
+        label: '全部',
+        title: '金币在全部角色间均分；物品只记一条，归第一位',
+        live: false,
+        sep: false,
+    },
+    ...app.characters.map((item, index) => ({
+        value: item.id,
+        label: item.name,
+        title:
+            [item.level ? item.level + ' 级' : '', item.school].filter(Boolean).join(' · ') +
+            (onlineIds.value.includes(item.id) ? ' · 计时中' : ''),
+        live: onlineIds.value.includes(item.id),
+        // 前两颗是「归属规则」，后面才是具体角色，用一个间距把两类分开。
+        sep: index === 0,
+    })),
+]);
+/** 单选的按钮组：左右方向键换一格并立刻选中，和原生单选一致。 */
+function onTargetKeys(event: KeyboardEvent) {
+    if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(event.key)) return;
+    const pills = [...(targetRow.value?.querySelectorAll<HTMLElement>('.target-pill') || [])];
+    if (!pills.length) return;
+    event.preventDefault();
+    const index = pills.indexOf(document.activeElement as HTMLElement);
+    const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1;
+    const next = pills[(index + step + pills.length) % pills.length];
+    next.focus();
+    const value = next.dataset.target;
+    if (value) target.value = value;
+}
 /** 收益记录行的副标题：归属角色 + 计价方式，多开时一眼分出是哪个号的那份。 */
 function lootMeta(tx: Transaction) {
     const detail =
@@ -411,11 +476,11 @@ async function recordLoot(item: CatalogItem, price: number) {
         return;
     }
     try {
-        await app.execute((domain) =>
+        const saved = await app.execute((domain) =>
             domain.saveQuickLoot({
                 ledger: 'earnings',
                 recordType: money ? 'money' : 'item',
-                /* 记给谁由领域按在线角色拆：单开一份原金额，多开均分，物品整条归主角色。 */
+                /* 记给谁由领域按目标角色拆：金币均分，物品整条归第一位。 */
                 characterIds: targets,
                 date: U.today(),
                 kind: 'income',
@@ -433,17 +498,19 @@ async function recordLoot(item: CatalogItem, price: number) {
                     : { itemName: item.name, quantity: 1, unitPrice: wan, status: 'held' }),
             }),
         );
-        app.notify(
-            '已记录 ' +
-                item.name +
-                ' · ' +
-                U.fmtMoney(wan) +
-                (!money && targets.length > 1
-                    ? ' · ' + quickRosterText.value + ' 均分'
-                    : targets.length > 1
-                      ? ' · ' + targets.length + ' 个角色各 ' + U.fmtMoney(wan / targets.length)
-                      : ''),
-        );
+        /*
+         * 提示按「实际写了几条」说，不按「选了几个号」说。
+         * 以前物品选了多号也报「A、B 均分」，实际只写了一条归第一位——提示和数据对不上，
+         * 是最难察觉的那种错。金币那条金额取自写入结果，比自己算除法准（尾差在第一条）。
+         */
+        const first = saved[0];
+        const extra =
+            saved.length > 1
+                ? ' · ' + saved.length + ' 个号各 ' + U.fmtMoney(Number(first && first.amount) || 0)
+                : first && targets.length > 1
+                  ? ' · 物品只记一条，归 ' + rules.charName(String(first.characterId || ''))
+                  : '';
+        app.notify('已记录 ' + item.name + ' · ' + U.fmtMoney(wan) + extra);
         await syncAccount([U.today()]);
     } catch (failure) {
         app.notify(failure instanceof Error ? failure.message : String(failure), true);
@@ -664,11 +731,32 @@ async function onlineSaved(dates: string[]) {
                 <section class="card">
                     <header class="card-title">
                         物品速记
-                        <small class="loot-target">
-                            记给
-                            <b>{{ quickRosterText }}</b>
-                        </small>
+                        <small v-if="targetNote" class="target-note">{{ targetNote }}</small>
                     </header>
+                    <div
+                        ref="targetRow"
+                        class="target-row"
+                        role="radiogroup"
+                        aria-label="这笔记给谁"
+                        @keydown="onTargetKeys"
+                    >
+                        <span class="target-label">记给</span>
+                        <button
+                            v-for="option in targetOptions"
+                            :key="option.value"
+                            type="button"
+                            class="target-pill"
+                            :class="{ on: target === option.value, sep: option.sep }"
+                            role="radio"
+                            :aria-checked="target === option.value"
+                            :data-target="option.value"
+                            :title="option.title"
+                            @click="target = option.value"
+                        >
+                            <span v-if="option.live" class="target-dot"></span>
+                            {{ option.label }}
+                        </button>
+                    </div>
                     <p class="section-label">
                         固定价格 · 点一下记一条，右键改价
                         <span class="price-csv">
@@ -1019,10 +1107,80 @@ async function onlineSaved(dates: string[]) {
     font-size: 11.5px;
     font-weight: 400;
 }
-/* 「记给谁」是这张卡最容易出错的一处，别让它比操作提示还弱。 */
-.loot-target b {
+/*
+ * 「记给谁」是这张卡最容易出错的一处——以前是一行静止的小字，看得见却改不了，
+ * 归到谁头上完全由代码里的隐式规则决定。
+ *
+ * 现在是一排常驻按钮：点一下换一个目标，不用先展开任何东西再用眼睛找一遍。
+ * 前两颗是归属规则（跟计时 / 全部），后面是逐个角色；两者之间空一格分开。
+ */
+.target-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    margin-top: 9px;
+    padding-bottom: 2px;
+}
+.target-label {
+    margin-right: 2px;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.4px;
+}
+.target-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px;
+    min-height: 22px;
+    border: 1px solid var(--line-2);
+    border-radius: 999px;
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 11.5px;
+    line-height: 17px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        border-color 120ms ease,
+        background-color 120ms ease,
+        color 120ms ease;
+}
+/* 规则与角色之间留一格空档，不画分隔线——一排按钮里多一根竖线反而更碎。 */
+.target-pill.sep {
+    margin-left: 7px;
+}
+.target-pill:hover {
+    border-color: var(--gold);
+    color: var(--ink);
+}
+.target-pill:focus-visible {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 22%, transparent);
+}
+/* 选中：金底描边 + 深字，一眼能看出这笔记给谁。 */
+.target-pill.on {
+    border-color: color-mix(in srgb, var(--gold) 62%, var(--line-2));
+    background: color-mix(in srgb, var(--gold) 16%, var(--paper));
     color: var(--ink);
     font-weight: 600;
+}
+/* 正在计时的号：名字前一颗绿点，比在 title 里写「计时中」看得见。 */
+.target-dot {
+    width: 5px;
+    height: 5px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--green) 18%, transparent);
+}
+/* 跟计时时结果不定，旁边补一句实际会落到谁头上。 */
+.target-note {
+    color: var(--muted);
+    font-size: 11.5px;
 }
 .section-label {
     display: flex;
@@ -1053,7 +1211,11 @@ async function onlineSaved(dates: string[]) {
     width: 26px;
     height: 24px;
     padding: 0;
-    border: 1px solid var(--line);
+    /*
+     * 边框用 --line-2 而不是 --line：暗色下 --line 与卡片底几乎同色，16px 的箭头会
+     * 看起来像两个裸箭头浮在卡面上；物品卡能靠图片自己成形，这两颗只有线条。
+     */
+    border: 1px solid var(--line-2);
     border-radius: 5px;
     background: var(--paper-2);
     color: var(--muted);
