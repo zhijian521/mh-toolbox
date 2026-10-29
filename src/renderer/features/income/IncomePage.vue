@@ -189,7 +189,8 @@ const quick = computed(() => {
  * - `all`：全部角色，金币均分、物品只记一条（数量拆不开，归第一位）。
  * - 角色 id：这笔记给它一个人。
  *
- * 角色多到一行放不下时换行，仍然不用展开任何东西。
+ * 角色多到一行放不下时换行，仍然不用展开任何东西。整排挂在「物品速记」标题行右端，
+ * 不再单独占一行；挤不下就整体掉到第二行，照样靠右。
  */
 const target = ref<'auto' | 'all' | string>('auto');
 const targetRow = ref<HTMLElement>();
@@ -206,20 +207,6 @@ const quickRoster = computed(() => {
     if (target.value !== 'auto') return allIds.includes(target.value) ? [target.value] : allIds;
     return onlineIds.value.length ? onlineIds.value : allIds;
 });
-const quickRosterText = computed(() => {
-    const names = quickRoster.value.map((id) => rules.charName(id)).filter(Boolean);
-    if (!names.length) return '未选择角色';
-    if (names.length === 1) return names[0];
-    const everyone = names.length === app.characters.length;
-    return everyone || target.value === 'all' ? '全部 ' + names.length + ' 个' : names.join('、');
-});
-/**
- * 「跟计时」按钮本身说不清会落到谁头上，所以旁边补一句实际结果。
- * 指定了角色或点了「全部」就不必再说——按钮已经亮着。
- */
-const targetNote = computed(() =>
-    target.value === 'auto' ? '实际记给 ' + quickRosterText.value : '',
-);
 /** 一排按钮：跟计时、全部，然后是逐个角色（在计时的加一颗绿点）。 */
 const targetOptions = computed(() => [
     {
@@ -730,33 +717,32 @@ async function onlineSaved(dates: string[]) {
             <div class="quick-main">
                 <section class="card">
                     <header class="card-title">
-                        物品速记
-                        <small v-if="targetNote" class="target-note">{{ targetNote }}</small>
-                    </header>
-                    <div
-                        ref="targetRow"
-                        class="target-row"
-                        role="radiogroup"
-                        aria-label="这笔记给谁"
-                        @keydown="onTargetKeys"
-                    >
-                        <span class="target-label">记给</span>
-                        <button
-                            v-for="option in targetOptions"
-                            :key="option.value"
-                            type="button"
-                            class="target-pill"
-                            :class="{ on: target === option.value, sep: option.sep }"
-                            role="radio"
-                            :aria-checked="target === option.value"
-                            :data-target="option.value"
-                            :title="option.title"
-                            @click="target = option.value"
+                        <span class="card-title-text">物品速记</span>
+                        <div
+                            ref="targetRow"
+                            class="target-row"
+                            role="radiogroup"
+                            aria-label="这笔记给谁"
+                            @keydown="onTargetKeys"
                         >
-                            <span v-if="option.live" class="target-dot"></span>
-                            {{ option.label }}
-                        </button>
-                    </div>
+                            <span class="target-label">记给</span>
+                            <button
+                                v-for="option in targetOptions"
+                                :key="option.value"
+                                type="button"
+                                class="target-pill"
+                                :class="{ on: target === option.value, sep: option.sep }"
+                                role="radio"
+                                :aria-checked="target === option.value"
+                                :data-target="option.value"
+                                :title="option.title"
+                                @click="target = option.value"
+                            >
+                                <span v-if="option.live" class="target-dot"></span>
+                                {{ option.label }}
+                            </button>
+                        </div>
+                    </header>
                     <p class="section-label">
                         固定价格 · 点一下记一条，右键改价
                         <span class="price-csv">
@@ -1094,13 +1080,22 @@ async function onlineSaved(dates: string[]) {
     gap: 14px;
     align-items: start;
 }
+/*
+ * 标题行：标题靠左，「记给谁」那排按钮靠右，两者共用一行，省下一整行的垂直空间。
+ * 允许换行——角色多的时候按钮排整体掉到下一行，`margin-left: auto` 让它在自己那行
+ * 依然贴着右边，不会飘到中间或左边。
+ */
 .card-title {
     display: flex;
-    align-items: baseline;
+    flex-wrap: wrap;
+    align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 6px 12px;
     font-size: 15px;
     font-weight: 600;
+}
+.card-title-text {
+    flex: none;
 }
 .card-title small {
     color: var(--muted);
@@ -1113,19 +1108,23 @@ async function onlineSaved(dates: string[]) {
  *
  * 现在是一排常驻按钮：点一下换一个目标，不用先展开任何东西再用眼睛找一遍。
  * 前两颗是归属规则（跟计时 / 全部），后面是逐个角色；两者之间空一格分开。
+ * 挂在标题行右端，行内放不下时自己内部折行，每行都靠右。
  */
 .target-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: flex-end;
     gap: 5px;
-    margin-top: 9px;
-    padding-bottom: 2px;
+    margin-left: auto;
+    min-width: 0;
 }
+/* 标题行位置低了一档，按钮排跟着抬高：`line-height` 撑出的空白由这里补回来。 */
 .target-label {
     margin-right: 2px;
     color: var(--muted);
     font-size: 11px;
+    font-weight: 400;
     letter-spacing: 0.4px;
 }
 .target-pill {
@@ -1176,11 +1175,6 @@ async function onlineSaved(dates: string[]) {
     border-radius: 50%;
     background: var(--green);
     box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--green) 18%, transparent);
-}
-/* 跟计时时结果不定，旁边补一句实际会落到谁头上。 */
-.target-note {
-    color: var(--muted);
-    font-size: 11.5px;
 }
 .section-label {
     display: flex;
