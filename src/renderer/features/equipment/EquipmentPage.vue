@@ -20,11 +20,12 @@ import SoulJadeDialog from './SoulJadeDialog.vue';
 /**
  * 装备页。
  *
- * 一个角色一套装备栏，角色用顶部的名字签切换：「搭配」是页面本体，看这套穿了什么；
+ * 一个角色一套装备栏，角色用顶部的卡片切换：「搭配」是页面本体，看这套穿了什么；
  * 仓库是盖在上面的弹窗，看这个人拥有什么。两边都只动当前角色的档案。
  *
  * 以前角色是下拉框、仓库是同层标签：角色一多就要先展开列表找名字，换完装还得切回
- * 「搭配」看一眼结果。现在名字签直接摆在最上面，一屏能看到的角色数就是切换成本。
+ * 「搭配」看一眼结果。现在角色卡片直接摆在最上面，一屏能看到的角色数就是切换成本。
+ * 卡片上还带一条 12 格的穿戴进度，谁还缺几格不用点进去看。
  *
  * 三套方案共用同一批档案：同一件装备可以同时挂在方案一和方案二里，所以栏里看到的是
  * 「方案 → 装备 ID」的引用，仓库里才是档案本身。删除与售出会清空所有引用，账本流水
@@ -80,6 +81,33 @@ const archiveCount = computed(() => {
     void app.data;
     return (app.data?.equipment || []).filter((item) => item.characterId === character.value)
         .length;
+});
+/** 一个角色身上一共能穿几件，角色卡上的进度条按这个数分格。 */
+const slotTotal = Object.values(rules.equipmentGroups).reduce(
+    (sum, group) => sum + group.slots.length,
+    0,
+);
+/**
+ * 角色卡的数据：名字、等级门派，外加「在用那套穿了几格」。
+ *
+ * 穿了几格取 `activeEquipmentSet` 而不是 `viewedEquipmentSet`——后者是「上次看到哪」，
+ * 每个人不一样，卡片上摆别人的浏览位置没有意义。切换角色时卡片要立刻反映新状态，
+ * 所以同样先 `void app.data` 再深拷贝。
+ */
+const characterCards = computed(() => {
+    void app.data;
+    return app.characters.map((item) => {
+        const owner = plain(rules.equipmentProfile(item.id)) as EquipmentProfile;
+        const slots = owner.equipmentSets[owner.activeEquipmentSet]?.slots || {};
+        return {
+            id: item.id,
+            name: item.name,
+            level: item.level,
+            school: item.school,
+            used: Object.values(slots).filter(Boolean).length,
+            total: slotTotal,
+        };
+    });
 });
 
 function message(failure: unknown) {
@@ -210,24 +238,37 @@ function switchCharacter(id: string) {
             <div class="eq-toolbar">
                 <div class="eq-chars" role="tablist" aria-label="装备角色">
                     <button
-                        v-for="item in app.characters"
+                        v-for="item in characterCards"
                         :key="item.id"
                         type="button"
                         class="eq-char"
                         :class="{ on: item.id === character }"
                         role="tab"
                         :aria-selected="item.id === character"
+                        :title="`${item.name} · 在用那套已穿 ${item.used} / ${item.total} 格`"
                         @click="switchCharacter(item.id)"
                     >
-                        <span class="eq-char-seal" aria-hidden="true">
-                            {{ item.name.slice(0, 1) }}
-                        </span>
-                        <span class="eq-char-text">
-                            <span class="eq-char-name">{{ item.name }}</span>
-                            <span class="eq-char-sub">
-                                {{ item.level ? item.level + ' 级' : '未填等级' }} ·
-                                {{ item.school }}
+                        <span class="eq-char-head">
+                            <span class="eq-char-seal" aria-hidden="true">
+                                {{ item.name.slice(0, 1) }}
                             </span>
+                            <span class="eq-char-text">
+                                <span class="eq-char-name">{{ item.name }}</span>
+                                <span class="eq-char-sub">
+                                    {{ item.level ? item.level + ' 级' : '未填等级' }} ·
+                                    {{ item.school }}
+                                </span>
+                            </span>
+                        </span>
+                        <span class="eq-char-foot">
+                            <span class="eq-char-meter" aria-hidden="true">
+                                <i
+                                    v-for="index in item.total"
+                                    :key="index"
+                                    :class="{ full: index <= item.used }"
+                                />
+                            </span>
+                            <span class="eq-char-count">{{ item.used }}/{{ item.total }}</span>
                         </span>
                     </button>
                 </div>
@@ -351,24 +392,26 @@ function switchCharacter(id: string) {
 
 <style scoped>
 /*
- * 角色名字签：一屏之内看得到几个号就能直接点几个号。
+ * 角色卡片：一屏之内看得到几个号就能直接点几个号。
  *
- * 每枚签左侧是一枚「名字章」（首个字），选中时章变实金、名字加粗，行下那道横线上
- * 再压一段金线；未选中的章只有描边、文字退回灰。这样一排里既有可点的形体，
- * 又只有「我在看谁」被强调——整枚签都上色的话，五个号会抢同一份注意力。
+ * 每张卡里是「名字章 + 昵称/等级门派 + 一条 12 格的穿戴进度」。进度条不是装饰：
+ * 换号的动机十次有八次是「去看那个还没配齐的小号」，一眼看出谁缺几格，比逐个点开快。
+ * 只有选中的那张变金边、名字加粗、进度条转金；未选中的卡保持纸色描边，
+ * 一排里只强调「我在看谁」。
  */
 .eq-toolbar {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 12px;
     margin-bottom: 14px;
-    border-bottom: 1px solid var(--line);
 }
 .eq-chars {
     display: flex;
     flex: 1 1 auto;
     min-width: 0;
-    gap: 2px;
+    gap: 8px;
+    /* 卡片自带边框与底色，横向滚动时不能把它们裁掉半条边。 */
+    padding: 1px;
     overflow-x: auto;
     scrollbar-width: none;
 }
@@ -377,17 +420,19 @@ function switchCharacter(id: string) {
 }
 .eq-char {
     display: flex;
-    align-items: center;
-    flex: none;
-    gap: 9px;
-    max-width: 12em;
-    padding: 4px 13px 5px 5px;
-    /* 下边框压住行线（-1px），选中态的金线才会嵌在那条线上而不是浮在上方。 */
-    margin-bottom: -1px;
-    border: 0;
-    border-bottom: 2px solid transparent;
-    border-radius: 3px 3px 0 0;
-    background: none;
+    flex-direction: column;
+    /*
+     * 卡片随这一行分配宽度，但卡在 208：再放宽，上半行只剩「名字章 + 名字」两条，
+     * 右边空出一大块，反而不像卡；176 以下进度条又挤成一串小点。号多时横向滚动。
+     */
+    flex: 1 1 0;
+    min-width: 176px;
+    max-width: 208px;
+    gap: 8px;
+    padding: 9px 11px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--paper);
     color: var(--muted);
     text-align: left;
     transition:
@@ -395,18 +440,27 @@ function switchCharacter(id: string) {
         border-color 120ms ease,
         background-color 120ms ease;
 }
-/* 名字章：取昵称首字，别处不用惦记头像。未选中是一枚空心小圆章。 */
+.eq-char-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+}
+/*
+ * 名字章：取昵称首字，别处不用惦记头像。
+ * 用圆角方章而不是圆形——圆形在卡片里像一枚头像占位，方章更像盖上去的号牌。
+ */
 .eq-char-seal {
     display: grid;
     place-items: center;
     flex: none;
-    width: 26px;
-    height: 26px;
+    width: 30px;
+    height: 30px;
     border: 1px solid var(--line-2);
-    border-radius: 50%;
+    border-radius: 5px;
     background: var(--paper-2);
     color: var(--muted);
-    font-size: 12.5px;
+    font-size: 13.5px;
     line-height: 1;
     transition:
         background-color 120ms ease,
@@ -416,8 +470,53 @@ function switchCharacter(id: string) {
 .eq-char-text {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
     min-width: 0;
+}
+.eq-char-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.eq-char-meter {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 3px;
+    min-width: 0;
+}
+/*
+ * 空槽压到 26% 才分得清：一格 5px 高，空与满都取 --line-2 时整排读起来是一条虚线，
+ * 「12/12」和「0/12」看着差不多。满槽用 --ink-2，选中那张再转金。
+ */
+.eq-char-meter i {
+    flex: 1 1 0;
+    height: 5px;
+    border-radius: 2.5px;
+    background: color-mix(in srgb, var(--line-2) 26%, transparent);
+}
+.eq-char-meter i.full {
+    background: var(--muted);
+}
+.eq-char-count {
+    flex: none;
+    color: var(--muted);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+.eq-char:hover:not(:disabled) {
+    border-color: var(--line-2);
+    background: var(--paper-2);
+    color: var(--ink);
+}
+.eq-char:hover:not(:disabled) .eq-char-seal {
+    border-color: color-mix(in srgb, var(--gold) 62%, var(--line-2));
+    color: var(--gold);
+}
+.eq-char.on {
+    border-color: var(--gold);
+    background: var(--paper-2);
+    color: var(--ink);
 }
 .eq-char.on .eq-char-seal {
     border-color: var(--gold);
@@ -425,17 +524,8 @@ function switchCharacter(id: string) {
     color: var(--on-accent);
     font-weight: 600;
 }
-.eq-char:hover:not(:disabled) .eq-char-seal {
-    border-color: color-mix(in srgb, var(--gold) 62%, var(--line-2));
-    color: var(--gold);
-}
-.eq-char:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--paper) 62%, transparent);
-    color: var(--ink);
-}
-.eq-char.on {
-    border-bottom-color: var(--gold);
-    color: var(--ink);
+.eq-char.on .eq-char-meter i.full {
+    background: var(--gold);
 }
 .eq-char-name {
     font-size: 13px;
@@ -448,8 +538,8 @@ function switchCharacter(id: string) {
 }
 .eq-char-sub {
     color: var(--muted);
-    font-size: 10.5px;
-    line-height: 1.4;
+    font-size: 11px;
+    line-height: 1.35;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -459,7 +549,6 @@ function switchCharacter(id: string) {
     align-items: center;
     flex: none;
     gap: 8px;
-    padding-bottom: 5px;
 }
 .eq-toolbar-hint {
     color: var(--muted);
