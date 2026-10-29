@@ -20,6 +20,44 @@ module.exports = async function backup(env) {
 
     await read(() => document.querySelector('a[href="#/settings"]').click());
     await until(() => !!document.querySelector('.settings-page'), '设置页面');
+    /*
+     * 使用帮助顶部的「打开教程」：左目录点哪一节，正文要真的滚到那一节。
+     * 目录与正文是两份数据拼出来的（`manualSections` 一处生成），
+     * 写漏一节不会报错，只会让目录里多一颗点了没反应的按钮。
+     */
+    await click('打开教程');
+    await until(() => !!document.querySelector('.guide-body'), '使用教程弹窗');
+    const guide = await read(() => {
+        const tabs = [...document.querySelectorAll('.guide-tab')];
+        const body = document.querySelector('.guide-body');
+        return {
+            tabs: tabs.length,
+            sections: document.querySelectorAll('.guide-section').length,
+            scrollable: body.scrollHeight > body.clientHeight + 4,
+            first: tabs[0] && tabs[0].textContent.trim(),
+            last: tabs[tabs.length - 1] && tabs[tabs.length - 1].textContent.trim(),
+        };
+    });
+    assert.ok(guide.tabs >= 10, '教程至少十节');
+    assert.equal(guide.tabs, guide.sections, '目录与正文章节数一致');
+    assert.equal(guide.first, '快速开始', '首节是快速开始');
+    assert.equal(guide.last, '常见问题', '末节是常见问题');
+    assert.ok(guide.scrollable, '正文能滚');
+    await read(() => document.querySelectorAll('.guide-tab')[5].click());
+    // 平滑滚动要等落位，直接断言 offset 会读到半途的值。
+    await until(() => {
+        const body = document.querySelector('.guide-body');
+        const active = document.querySelector('.guide-tab.on');
+        if (!active) return false;
+        const section = [...document.querySelectorAll('.guide-section')].find(
+            (el) => el.querySelector('h3').textContent.trim() === active.textContent.trim(),
+        );
+        if (!section) return false;
+        const offset = section.getBoundingClientRect().top - body.getBoundingClientRect().top;
+        return offset >= -2 && offset < 40;
+    }, '目录跳章把正文滚到该节开头');
+    await click('知道了');
+    await until(() => !document.querySelector('.guide-body'), '教程已关闭');
     fs.writeFileSync(
         importFile,
         JSON.stringify({

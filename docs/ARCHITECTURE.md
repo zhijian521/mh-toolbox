@@ -66,6 +66,7 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，跳过 inspect.*
 - 窗口把 `window.open` 全部拒绝、`will-navigate` 一律拦截，所以界面里的外链点不动。外链只能走 `mhV2.openExternal`，主进程只放行 `https` 且域名为 `github.com` / `polyformproject.org` 的地址，其余记日志后拒绝。
 - 检查更新（`mhV2.checkUpdate`）只读不写：拉 GitHub 的 Release 订阅源比版本号，不下载、不安装、不落盘。首选 `releases.atom` 而不是 API，因为匿名调 API 按出口 IP 每小时只有 60 次（挂代理时常常早被别人打满），feed 不占配额且一次就能拿到版本与说明；API 只做 feed 不通时的兜底。网络失败一律收敛成 `{ ok: false, error }`，界面留一句灰字，不弹窗也不阻塞启动。
 - V2 主工程位于仓库根目录，脚本仅监听自身源码。所有输出均位于根目录的 `dist/` 和 `release/`。
+- 主 chunk 已贴着 500 kB 的构建告警线（约 492 kB，含字体以外的全部界面代码）。**成篇的长文案一律走异步组件**：使用教程（`features/settings/HelpGuideDialog.vue` + `help-manual.ts`）就是这么拆的——同步 import 会把近万字正文压进首屏，一超限 `vite build` 就开始刷 chunk 警告。再往上加内容前先看 `index-*.js` 的行，别让告警变成常态。
 - 打包使用本工程已安装的 Electron 分发目录，避免打包时重复下载另一份运行时。
 - `.github/workflows/ci.yml` 只有 V2 一个 job，在根目录依次执行 `npm ci`、`npm run check`、`npm run build`、`npm run test:electron`。原先针对归档 V1 的 legacy job 已随 `migration/baseline/` 一并移除。
 

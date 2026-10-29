@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 import AppIcon from '../../components/AppIcon.vue';
 import BaseModal from '../../components/BaseModal.vue';
 import PageHeader from '../../components/PageHeader.vue';
@@ -8,8 +8,14 @@ import { desktop, plain } from '../../services/desktop';
 import { loadTheme, setTheme, themePreference } from '../../services/theme';
 import type { AppData, ThemePreference, UpdateCheck } from '../../app/types';
 const app = useApplication();
+/*
+ * 教程正文近万字的文案，只在点开时才需要。同步 import 会把它压进主包，
+ * 让首屏多背一份「少数人才打开一次」的内容（主包本来就在 500 kB 边上）。
+ */
+const HelpGuideDialog = defineAsyncComponent(() => import('./HelpGuideDialog.vue'));
 const importCandidate = ref<AppData | null>(null),
     confirmWipe = ref(false),
+    guideOpen = ref(false),
     localBusy = ref(false),
     error = ref('');
 const busy = computed(() => app.busy || localBusy.value);
@@ -127,6 +133,7 @@ const helpItems = [
             '「数据」里能看到角色、收支、目标、装备各有多少条，以及数据文件存在哪。',
             '导出 JSON 备份给自己留底；导入会先校验再替换当前数据，替换前自动留一份本地副本。',
             '同一栏底部的「清空 V2 数据」不可撤销，执行前有二次确认并先留一份本地副本。',
+            '「使用帮助」卡片顶部的「打开教程」是完整手册：按页面写清每一步怎么点，也讲了归属、分摊和常见问题。',
             '关于里有版本、检查更新、许可范围与源码地址。',
             '有新版本时点「打开下载页」去 GitHub 下载，装上新包即可——数据不在安装目录，升级不会丢。',
         ],
@@ -338,6 +345,19 @@ async function wipe() {
         <div class="settings-column">
             <section class="paper-section">
                 <h2>使用帮助</h2>
+                <!--
+                    卡片里的八条是「速查」：扫一眼能对上界面。想知道每一步怎么点、
+                    归属与分摊到底怎么算，得有一份能读的正文，入口放最上面。
+                -->
+                <div class="help-entry">
+                    <div class="help-entry-text">
+                        <b>详细使用教程</b>
+                        <span>按真实点击顺序写的完整步骤，含账务口径与常见问题</span>
+                    </div>
+                    <button class="btn compact" type="button" @click="guideOpen = true">
+                        打开教程
+                    </button>
+                </div>
                 <div class="help-list">
                     <details v-for="item in helpItems" :key="item.page" class="help-item">
                         <summary>
@@ -464,6 +484,7 @@ async function wipe() {
             </button>
         </template>
     </BaseModal>
+    <HelpGuideDialog v-if="guideOpen" @close="guideOpen = false" />
 </template>
 
 <style scoped>
@@ -562,6 +583,38 @@ async function wipe() {
  * 不另存一份开关状态，也就不会出现「点开了但无障碍属性没跟上」这类问题。
  * 页名固定宽度，概述与步骤左对齐在同一列，竖着扫下来就对得上侧栏顺序。
  */
+/*
+ * 教程入口：一条带底的横条，放在八条速查之上。
+ * 用底色而不是描边按钮，是为了让它看起来像「这份帮助的封面」而不是又一个操作项——
+ * 下面每一条 details 才是操作项。
+ */
+.help-entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 14px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--paper-2);
+}
+.help-entry-text {
+    min-width: 0;
+}
+.help-entry-text b {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+}
+.help-entry-text span {
+    display: block;
+    margin-top: 2px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--muted);
+}
 .help-list {
     display: flex;
     flex-direction: column;
