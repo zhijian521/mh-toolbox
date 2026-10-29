@@ -371,11 +371,16 @@ export default function install(D, _U, _gateway, _localStorage) {
                     else unknown.push(line);
                 }
                 const gemText = String(eq.gems || '');
-                const forge = gemText.match(/(?:锻炼|精炼|镶嵌)等级\s*[:：]?\s*(\d+)/);
+                /*
+                 * `[镶锻][嵌堪]` 是给 OCR 兜底的：「镶嵌」常被读成「锻嵌」「镶堪」，
+                 * 只写死「镶嵌宝石」时这一段留在文本里，最后变成「原有属性 宝石：锻嵌宝石」。
+                 * 「锻练等级」同理会漏掉段数。
+                 */
+                const forge = gemText.match(/(?:锻[炼练]|精炼|[镶锻][嵌堪])等级\s*[:：]?\s*(\d+)/);
                 if (forge) detail.forge = Number(forge[1]);
                 let remaining = gemText
-                    .replace(/(?:锻炼|精炼|镶嵌)等级\s*[:：]?\s*\d+/g, '')
-                    .replace(/镶嵌宝石\s*[:：]?/g, '');
+                    .replace(/(?:锻[炼练]|精炼|[镶锻][嵌堪])等级\s*[:：]?\s*\d+/g, '')
+                    .replace(/[镶锻][嵌堪]宝石\s*[:：]?/g, '');
                 for (const type of [
                     '太阳石',
                     '红玛瑙',

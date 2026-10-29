@@ -140,17 +140,18 @@ export default function install(D, _U, _gateway, _localStorage) {
                         continue;
                     }
                     if (
-                        /^(?:镶嵌宝石|宝石)/.test(line) ||
+                        // `[镶锻][嵌堪]` 兜住 OCR 把「镶嵌」读成「锻嵌」「镶堪」的情况。
+                        /^(?:[镶锻][嵌堪]宝石|宝石)/.test(line) ||
                         /(?:太阳石|红玛瑙|黑宝石|月亮石|舍利子|光芒石|神秘石|翡翠石|星辉石)/.test(
                             line,
                         )
                     ) {
                         draft.gems +=
                             (draft.gems ? '\n' : '') +
-                            line.replace(/^(?:镶嵌宝石|宝石)\s*:?\s*/, '');
+                            line.replace(/^(?:[镶锻][嵌堪]宝石|宝石)\s*:?\s*/, '');
                         continue;
                     }
-                    if (/^(?:锻炼|镶嵌|精炼)等级/.test(line)) {
+                    if (/^(?:锻[炼练]|[镶锻][嵌堪]|精炼)等级/.test(line)) {
                         draft.gems += (draft.gems ? '\n' : '') + line;
                         continue;
                     }

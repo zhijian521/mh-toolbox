@@ -356,6 +356,28 @@ test('结构化属性保存后写进快照文本：宝石、特效、负数熔�
     assert.equal(restored.equipmentDetails(saved).gems[0].level, 10);
 });
 
+test('「锻嵌宝石」这类错字按「镶嵌宝石」吃回去，不落进原有属性', () => {
+    const D = domain();
+    // 用户的真实档案：OCR 把「镶嵌宝石」读成了「锻嵌宝石」。
+    const belt = {
+        characterId: 'c1',
+        slot: '腰带',
+        name: '兽王腰带',
+        status: 'stored',
+        attributes: '防御+40气血+252\n速度+24',
+        gems: '锻炼等级5 锻嵌宝石光芒石 黑宝石',
+        special: '特效:愤怒',
+    };
+    const detail = D.equipmentDetails(belt);
+    assert.equal(detail.forge, 5, '锻炼段数照常读出');
+    assert.deepEqual(
+        detail.gems.map((gem) => gem.type).sort(),
+        ['光芒石', '黑宝石'].sort(),
+        '前缀被吃掉，两种宝石都认出来了',
+    );
+    assert.equal(detail.legacy, '', '没有「宝石：锻嵌宝石」这样的残留');
+});
+
 test('玉魄走结构化属性保存：基础与两条附加写回文本字段，灵尘与开光保留', () => {
     const D = domain();
     const eq = D.saveEquipment({
