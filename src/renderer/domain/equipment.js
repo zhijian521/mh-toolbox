@@ -50,7 +50,6 @@ export default function install(D, U, _gateway, _localStorage) {
                     character.equipmentSets = this.equipmentSetNames.map(
                         (/** @type {string} */ name) => ({ name, slots: {} }),
                     );
-                    character.activeEquipmentSet = 0;
                     character.viewedEquipmentSet = 0;
                     character.pendingEquipmentSlots = [];
                     character.soulJade = {
@@ -125,12 +124,16 @@ export default function install(D, U, _gateway, _localStorage) {
                             return { name: String(set.name || name).slice(0, 20), slots };
                         },
                     );
-                    character.activeEquipmentSet = [0, 1, 2].includes(character.activeEquipmentSet)
-                        ? character.activeEquipmentSet
-                        : 0;
+                    /*
+                     * 「在看哪套」就是「在穿哪套」：一个号身上只有一套衣服，另外两套是摆在
+                     * 衣柜里的搭配草案。以前把它们拆成 active / viewed 两个字段，界面上就要
+                     * 多出「使用中」「使用此套」两个开关，而玩家从来没为此纠结过——切到哪套
+                     * 看，那套就是身上这套。旧档里的 active 直接丢弃，按 viewed 归一。
+                     */
                     character.viewedEquipmentSet = [0, 1, 2].includes(character.viewedEquipmentSet)
                         ? character.viewedEquipmentSet
-                        : character.activeEquipmentSet;
+                        : 0;
+                    delete character.activeEquipmentSet;
                     character.pendingEquipmentSlots = Array.isArray(character.pendingEquipmentSlots)
                         ? character.pendingEquipmentSlots.filter((/** @type {string} */ slot) =>
                               wearable.includes(slot),
@@ -202,7 +205,7 @@ export default function install(D, U, _gateway, _localStorage) {
                                 characterId,
                                 index: number,
                                 name: set.name,
-                                active: profile.activeEquipmentSet === number,
+                                active: profile.viewedEquipmentSet === number,
                             });
                         });
                     },

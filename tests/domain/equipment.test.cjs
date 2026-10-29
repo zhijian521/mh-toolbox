@@ -94,7 +94,7 @@ test('同角色同部位只能配置一件；换装卸下不改其他方案、�
     assert.throws(() => D.copyEquipmentSet('c1', 0, 3));
 });
 
-test('三套共用档案，编辑属性即时共用；当前使用与正在查看独立，状态从方案推导', () => {
+test('三套共用档案，编辑属性即时共用；看到哪套就是穿哪套，状态从方案推导', () => {
     const D = domain();
     D.assignEquipment('c1', 0, '武器', 'a');
     D.copyEquipmentSet('c1', 0, 1);
@@ -105,17 +105,20 @@ test('三套共用档案，编辑属性即时共用；当前使用与正在查�
     assert.equal(D.state.equipment.filter((item) => item.id === eq.id).length, 1);
     const character = D.charById('c1');
     character.viewedEquipmentSet = 2;
-    assert.equal(character.activeEquipmentSet, 0);
     D.assignEquipment('c1', 2, '武器', 'b');
-    assert.equal(D.equipmentStatus(D.state.equipment.find((item) => item.id === 'b')), 'standby');
-    character.activeEquipmentSet = 2;
-    assert.equal(D.equipmentStatus(eq), 'standby');
+    // 切到第三套 = 换上第三套：那里的 b 是在装，被顶掉 a 退成备用。
     assert.equal(D.equipmentStatus(D.state.equipment.find((item) => item.id === 'b')), 'active');
+    assert.equal(D.equipmentStatus(eq), 'standby');
+    character.viewedEquipmentSet = 0;
+    assert.equal(D.equipmentStatus(eq), 'active');
+    assert.equal(D.equipmentStatus(D.state.equipment.find((item) => item.id === 'b')), 'standby');
+    character.viewedEquipmentSet = 2;
     character.equipmentSets[2].name = '难度任务';
     const restored = domain(JSON.parse(JSON.stringify(D.state)));
     assert.equal(restored.charById('c1').equipmentSets[2].name, '难度任务');
-    assert.equal(restored.charById('c1').activeEquipmentSet, 2);
     assert.equal(restored.charById('c1').viewedEquipmentSet, 2);
+    // 旧档里的 activeEquipmentSet 不迁移：归一化时直接丢弃，只保留一个「哪套在用」。
+    assert.equal(restored.charById('c1').activeEquipmentSet, undefined);
 });
 
 test('玉魄独立记录、同类型唯一，未解锁禁止穿戴，角色修炼三套共用且备份不串引用', () => {

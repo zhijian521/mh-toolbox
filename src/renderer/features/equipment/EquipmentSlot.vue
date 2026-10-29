@@ -131,8 +131,8 @@ const hint = computed(() => {
 <style scoped>
 .eq-slot {
     display: flex;
-    /* 插槽与文字块整体居中：空位两行字、满格五六行属性，高度不同也不会一边吊着。 */
-    align-items: center;
+    /* 头像钉在左上角，与部位名同一行起步：上下居中的话，格子一高头像就飘到半空。 */
+    align-items: flex-start;
     gap: 11px;
     width: 100%;
     height: 100%;
@@ -192,8 +192,8 @@ const hint = computed(() => {
 .eq-main {
     display: flex;
     flex-direction: column;
-    /* 同一排的格子会被拉到等高，内容垂直居中，多出来的空白才不会全堆在底部。 */
-    justify-content: center;
+    /* 文字从头排起，与左上角的头像共一条顶线；同一排等高格子底下留白即可。 */
+    justify-content: flex-start;
     flex: 1;
     gap: 2px;
     min-width: 0;

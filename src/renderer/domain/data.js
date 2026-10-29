@@ -20,9 +20,9 @@ export function createData(localStorage) {
     /* 数据层：状态、常量、持久化 */
     /** @type {Domain} */
     const data = /** @type {any} */ ({
-        schemaVersion: 8,
+        schemaVersion: 9,
         state: {
-            schemaVersion: 8,
+            schemaVersion: 9,
             characters: [],
             transactions: [],
             sessions: [],

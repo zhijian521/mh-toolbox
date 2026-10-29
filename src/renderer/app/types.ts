@@ -107,7 +107,7 @@ export interface EquipmentDraft {
 /** 角色加上装备方案：由 `equipmentProfile` 保证结构完整，缺字段时现场补齐。 */
 export interface EquipmentProfile extends Character {
     equipmentSets: Array<{ name: string; slots: Record<string, string> }>;
-    activeEquipmentSet: number;
+    /** 正在查看的方案，同时也是「身上穿的那套」——没有第二个在用字段。 */
     viewedEquipmentSet: number;
     pendingEquipmentSlots: string[];
     soulJade: { unlocked: boolean; attribute: string; level: number };

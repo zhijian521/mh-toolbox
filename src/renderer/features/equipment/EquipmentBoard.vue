@@ -19,7 +19,6 @@ const accessorySlots = rules.equipmentGroups.accessory.slots;
 const jadeSlots = rules.equipmentGroups.jade.slots;
 /** 正在查看的方案：换装只动这一套，切换它本身也要落盘，下次打开还是这套。 */
 const viewed = computed(() => props.profile.viewedEquipmentSet);
-const active = computed(() => props.profile.activeEquipmentSet);
 const set = computed(() => props.profile.equipmentSets[viewed.value]);
 const pendingSlots = computed(() => props.profile.pendingEquipmentSlots || []);
 const soul = computed(() => props.profile.soulJade);
@@ -30,7 +29,12 @@ const soulText = computed(() =>
 function message(failure: unknown) {
     return failure instanceof Error ? failure.message : String(failure);
 }
-/** 方案切换是「上次看到哪」这种偏好，但存在数据里，所以同样走落盘。 */
+/**
+ * 切方案 = 换穿哪套。
+ *
+ * 方案只是同一批档案的三种搭法，玩家身上永远只有一套；所以「切到哪套看」与
+ * 「哪套在用」是同一件事，不再额外提供「使用此套」这一道确认。
+ */
 async function setViewed(index: number) {
     if (app.busy || index === viewed.value) return;
     try {
@@ -39,20 +43,6 @@ async function setViewed(index: number) {
                 domain.equipmentProfile(props.profile.id).viewedEquipmentSet = index;
             }),
         );
-    } catch (failure) {
-        app.notify(message(failure), true);
-    }
-}
-/** 当前使用方案决定其它页面（仓库的「配置」、总览）认哪一套为在装。 */
-async function activate() {
-    if (app.busy) return;
-    try {
-        await app.execute((domain) =>
-            domain.commitEquipment(() => {
-                domain.equipmentProfile(props.profile.id).activeEquipmentSet = viewed.value;
-            }),
-        );
-        app.notify('已切换当前使用方案');
     } catch (failure) {
         app.notify(message(failure), true);
     }
@@ -108,25 +98,9 @@ function isPending(slot: string) {
                         >
                             <b>{{ index + 1 }}</b>
                             <span class="eq-plan-name">{{ item.name }}</span>
-                            <i
-                                v-if="index === active"
-                                class="eq-plan-used"
-                                title="当前使用方案"
-                                aria-label="当前使用方案"
-                            ></i>
                         </button>
                     </div>
                     <div class="eq-plan-actions">
-                        <span v-if="viewed === active" class="eq-in-use">使用中</span>
-                        <button
-                            v-else
-                            class="btn compact"
-                            type="button"
-                            :disabled="app.busy"
-                            @click="activate"
-                        >
-                            使用此套
-                        </button>
                         <button
                             class="text-button eq-plan-act"
                             type="button"
@@ -203,6 +177,12 @@ function isPending(slot: string) {
 .eq-board {
     display: flex;
     flex-direction: column;
+    /*
+     * 整块给个上限：格子靠 1fr 分宽，窗口一宽就被拉成一排 600px 的空壳卡片，
+     * 属性一行只有几个字，读起来反而更散。1440 窗口下这里本来就是 1200，
+     * 所以 1240 只在大屏上生效——格子停在 336 / 268，右边留白，不再继续撑。
+     */
+    max-width: 1240px;
     gap: 12px;
 }
 .eq-notice {
@@ -237,7 +217,7 @@ function isPending(slot: string) {
     gap: 10px;
     min-height: 26px;
 }
-/* 右侧按钮自己顶到最右，「使用中」就能紧挨标题，不至于孤零零挂在行尾。 */
+/* 右侧按钮自己顶到最右，与标题各占一头。 */
 .eq-board-head > .btn {
     margin-left: auto;
 }
@@ -249,14 +229,6 @@ function isPending(slot: string) {
 .eq-board-title p {
     margin: 2px 0 0;
     color: var(--muted);
-    font-size: 11.5px;
-}
-.eq-in-use {
-    flex: none;
-    padding: 2px 8px;
-    border: 1px solid var(--green);
-    border-radius: 3px;
-    color: var(--green);
     font-size: 11.5px;
 }
 .eq-plan-row {
@@ -330,14 +302,6 @@ function isPending(slot: string) {
 .eq-plan.on b {
     background: color-mix(in srgb, var(--gold) 24%, var(--paper));
     color: color-mix(in srgb, var(--gold) 72%, var(--ink));
-}
-/* 当前使用方案：名字后面一粒绿点，与「正在查看」的描边选中态区分开。 */
-.eq-plan-used {
-    flex: none;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--green);
 }
 .eq-plan-act {
     color: var(--muted);

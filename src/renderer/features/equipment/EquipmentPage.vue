@@ -89,17 +89,16 @@ const slotTotal = Object.values(rules.equipmentGroups).reduce(
     0,
 );
 /**
- * 角色卡的数据：名字、等级门派，外加「在用那套穿了几格」。
+ * 角色卡的数据：名字、等级门派，外加「当前这套穿了几格」。
  *
- * 穿了几格取 `activeEquipmentSet` 而不是 `viewedEquipmentSet`——后者是「上次看到哪」，
- * 每个人不一样，卡片上摆别人的浏览位置没有意义。切换角色时卡片要立刻反映新状态，
- * 所以同样先 `void app.data` 再深拷贝。
+ * 穿了几格取 `viewedEquipmentSet`——它同时就是在用那套（见 EquipmentBoard 的说明）。
+ * 切换角色时卡片要立刻反映新状态，所以同样先 `void app.data` 再深拷贝。
  */
 const characterCards = computed(() => {
     void app.data;
     return app.characters.map((item) => {
         const owner = plain(rules.equipmentProfile(item.id)) as EquipmentProfile;
-        const slots = owner.equipmentSets[owner.activeEquipmentSet]?.slots || {};
+        const slots = owner.equipmentSets[owner.viewedEquipmentSet]?.slots || {};
         return {
             id: item.id,
             name: item.name,
@@ -246,7 +245,7 @@ function switchCharacter(id: string) {
                         :class="{ on: item.id === character }"
                         role="tab"
                         :aria-selected="item.id === character"
-                        :title="`${item.name} · 在用那套已穿 ${item.used} / ${item.total} 格`"
+                        :title="`${item.name} · 当前方案已穿 ${item.used} / ${item.total} 格`"
                         @click="switchCharacter(item.id)"
                     >
                         <span class="eq-char-head">
