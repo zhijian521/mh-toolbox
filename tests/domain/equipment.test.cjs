@@ -121,6 +121,31 @@ test('三套共用档案，编辑属性即时共用；看到哪套就是穿哪�
     assert.equal(restored.charById('c1').activeEquipmentSet, undefined);
 });
 
+test('记变动必须带有效日期：空日期既不写流水也不写时间线', async () => {
+    const D = domain();
+    D.persist = async () => {};
+    D.assignEquipment('c1', 0, '武器', 'a');
+    const eq = D.state.equipment.find((item) => item.id === 'a');
+    for (const date of ['', '2026-13-01', '2026-02-30', undefined])
+        await assert.rejects(
+            D.recordEquipmentChange(eq.id, { date, action: 'craft', amount: 300, sync: true }),
+            /变动日期/,
+        );
+    assert.equal(D.state.transactions.length, 0);
+    assert.equal(D.state.gearLogs.length, 0);
+    // 合法日期照常写入，而且流水与时间线同一天。
+    await D.recordEquipmentChange(eq.id, {
+        date: '2026-10-29',
+        action: 'craft',
+        amount: 300,
+        currency: 'cash',
+        channel: '游戏内',
+        sync: true,
+    });
+    assert.equal(D.state.transactions[0].date, '2026-10-29');
+    assert.equal(D.state.gearLogs.length, 1);
+});
+
 test('玉魄独立记录、同类型唯一，未解锁禁止穿戴，角色修炼三套共用且备份不串引用', () => {
     const D = domain();
     const eq = D.saveEquipment(jade());

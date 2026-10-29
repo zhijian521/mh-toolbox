@@ -13,6 +13,8 @@ const props = withDefaults(
         max?: string;
         align?: 'left' | 'right';
         disabled?: boolean;
+        /** 必填：不给「清空」，值一旦没了就没法保存（调用方仍会再校验一次）。 */
+        required?: boolean;
     }>(),
     {
         label: '',
@@ -21,6 +23,7 @@ const props = withDefaults(
         max: '',
         align: 'left',
         disabled: false,
+        required: false,
     },
 );
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
@@ -71,6 +74,8 @@ function pick(value: string) {
     close(true);
 }
 function clear() {
+    // 必填项连「清空」都不给：写进一条空日期，比不让清更难收拾。
+    if (props.required) return;
     emit('update:modelValue', '');
     close(true);
 }
@@ -164,6 +169,7 @@ function onKeydown(event: KeyboardEvent) {
                         今天
                     </button>
                     <button
+                        v-if="!required"
                         type="button"
                         class="btn compact"
                         :disabled="!modelValue"

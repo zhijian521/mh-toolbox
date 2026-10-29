@@ -68,9 +68,22 @@ const busyCount = computed(
 const incomplete = computed(
     () => items.value.filter((item) => item.status === 'ready' && item.error).length,
 );
+/**
+ * 识别失败的张数（`draft` / `detail` 都是空）。
+ *
+ * 它必须单独算一份并挡在 `canSave` 上：失败项的 `status` 既不是 `ready` 也不是
+ * `queued`，以前两头都不占，按钮照样亮着，点下去 `pruneDetail(null)` 直接抛
+ * `TypeError`，整批都存不了，界面上还只显示一句英文堆栈。
+ */
+const failed = computed(() => items.value.filter((item) => item.status === 'error').length);
 const dirty = computed(() => items.value.length > 0);
 const canSave = computed(
-    () => items.value.length > 0 && !busyCount.value && !incomplete.value && !saving.value,
+    () =>
+        items.value.length > 0 &&
+        !busyCount.value &&
+        !incomplete.value &&
+        !failed.value &&
+        !saving.value,
 );
 const planOptions = computed(() => [
     { value: '', label: '只入库，不自动穿戴' },
@@ -93,6 +106,8 @@ const summary = computed(() => {
             busyCount.value +
             ' 张'
         );
+    if (failed.value)
+        return items.value.length + ' 件 · ' + failed.value + ' 件识别失败，先重试或移除';
     if (incomplete.value) return items.value.length + ' 件 · ' + incomplete.value + ' 件待补充';
     return items.value.length + ' 件可保存 · 请对照原图核对';
 });
@@ -419,6 +434,11 @@ function setNote(value: string) {
 async function submit() {
     if (!canSave.value) return;
     error.value = '';
+    // 兜底：只有「识别成功且核对过」的条目能进库，避免任何一条空草稿把整批带崩。
+    if (!items.value.every((item) => item.status === 'ready' && item.draft && item.detail)) {
+        error.value = '还有图片没有识别成功，先重试或移除后再保存';
+        return;
+    }
     saving.value = true;
     try {
         const drafts = items.value.map(

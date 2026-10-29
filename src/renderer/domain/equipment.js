@@ -474,6 +474,16 @@ export default function install(D, U, _gateway, _localStorage) {
                 return this.commitEquipment(() => {
                     const eq = this.equipmentById(id);
                     if (!eq) throw new Error('装备档案已删除');
+                    /*
+                     * 日期按 `writeTransaction` 同一条规则校验。
+                     *
+                     * 这条路径不经过 `writeTransaction`，早先只把 `data.date` 原样写进去：
+                     * 日期框点「清空」后保存，就留下一条 `date: ''` 的流水——默认「本月」
+                     * 筛不到它，时间线上日期是空白，用户只看到账本少了一笔。
+                     */
+                    const date = String(data.date || '');
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || U.fmtDate(U.parseDate(date)) !== date)
+                        throw new Error('请选择有效的变动日期');
                     const action = this.gearAction(data.action);
                     if (data.sync && action.dir !== 0) {
                         const tx = {
@@ -481,7 +491,7 @@ export default function install(D, U, _gateway, _localStorage) {
                             ledger: 'account',
                             recordType: 'money',
                             characterId: eq.characterId,
-                            date: data.date,
+                            date,
                             kind: action.dir > 0 ? 'income' : 'expense',
                             currency: data.currency,
                             category: ['craft', 'gem', 'dust', 'consecrate'].includes(data.action)
@@ -503,7 +513,7 @@ export default function install(D, U, _gateway, _localStorage) {
                             id: U.uid(),
                             equipmentId: id,
                             characterId: eq.characterId,
-                            date: data.date,
+                            date,
                             action: data.action,
                             amount: data.amount || 0,
                             currency: data.currency,
