@@ -18,8 +18,6 @@ export default tseslint.config(
             'node_modules/**',
             '.runtime/**',
             'test-results/**',
-            // V1 归档与不可变初始快照不参与 V2 的检查与修改。
-            'migration/**',
             // 本地工作数据：一次性探针脚本与截图，不属于源码。
             '.workbuddy/**',
         ],

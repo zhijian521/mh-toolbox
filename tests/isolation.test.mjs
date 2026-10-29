@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
@@ -74,18 +73,7 @@ test('保存异常不替换磁盘数据，较低 schema 不能覆盖已有较新
     assert.deepEqual(store.load().data, initial);
 });
 
-test('基线文件完整且哈希一致，运行源码不依赖当前版本目录或全局业务对象', () => {
-    const manifest = JSON.parse(
-        fs.readFileSync(path.join(root, 'migration/baseline.json'), 'utf8'),
-    );
-    for (const entry of manifest.files) {
-        const bytes = fs.readFileSync(path.join(root, 'migration/initial-baseline', entry.path));
-        assert.equal(
-            crypto.createHash('sha256').update(bytes).digest('hex'),
-            entry.sha256,
-            entry.path,
-        );
-    }
+test('运行源码不依赖当前版本目录或全局业务对象', () => {
     const walk = (directory) =>
         fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
             const file = path.join(directory, entry.name);

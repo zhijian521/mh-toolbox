@@ -7,7 +7,7 @@ import {
     auxiliarySkillNames,
 } from '../game-data/character-progress.js';
 
-// Migrated from the immutable v1 baseline; see migration/baseline.json.
+// Migrated from the immutable v1 baseline; see docs/SYNC.md.
 
 /**
  * 这里只构造状态与常量，其余一百多个方法由各模块 install 混入同一个对象，

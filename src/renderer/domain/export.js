@@ -1,5 +1,5 @@
 // @ts-check
-// Migrated from the immutable v1 baseline; see migration/baseline.json.
+// Migrated from the immutable v1 baseline; see docs/SYNC.md.
 
 /**
  * 记录导出：把筛选后的流水渲染成 CSV。

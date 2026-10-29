@@ -38,7 +38,7 @@
 
 ## 四、开工前的固定动作
 
-- V2 位于仓库根目录；先读本文件与 `docs/ARCHITECTURE.md`（约定密度最高）。不可变初始文本快照位于 `migration/initial-baseline/`，哈希清单是同目录上层的 `migration/baseline.json`；两者由 `tests/isolation.test.mjs` 校验，不要改动。
+- V2 位于仓库根目录；先读本文件与 `docs/ARCHITECTURE.md`（约定密度最高）。V1 归档（完整工程与初始文本快照）已从工作区移除，需要查阅时从 git 历史取，起点头绪见 `docs/SYNC.md`。
 - 写页面或迁移模块前读 `docs/PAGE_GUIDE.md`：以角色页为范本的固定动作清单与反模式。
 - 读代码用 `read`/`grep`/`glob` 工具；**不要用 shell 的 cat/grep/find**。
 - 改动前列表计划（`todo_write`），按文件独占切分并行任务，写清各自可写的文件范围。
