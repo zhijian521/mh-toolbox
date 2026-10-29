@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
-import type { AccountStats, DateRangeValue, Transaction } from '../../app/types';
+import type { AccountStats, Transaction } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import { plain } from '../../services/desktop';
 import { U } from '../../domain/util.js';
 import AppIcon from '../../components/AppIcon.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
 import RangeFilter from '../../components/RangeFilter.vue';
+import { useDateRange } from '../../components/use-date-range';
 import PageHeader from '../../components/PageHeader.vue';
 import AccountEditor from './AccountEditor.vue';
 import AccountRecords from './AccountRecords.vue';
@@ -27,7 +28,7 @@ const rules = app.rules();
 const addButton = ref<HTMLButtonElement>();
 const character = ref('all');
 /** 快捷按钮与日期区间共用一份状态，默认落在本月。 */
-const range = ref<DateRangeValue>({ preset: 'month', ...U.rangeFor('month') });
+const range = useDateRange('month');
 const editing = ref<{ tx?: Transaction; preset?: Record<string, unknown> } | null>(null);
 const recordsOpen = ref(false);
 /** 打开弹窗的那个按钮：保存后把焦点还回去，连着记同类账时不用重新找。 */
@@ -64,8 +65,11 @@ const hasReserve = computed(() => records.value.some((tx) => tx.currency === 're
 /** 最近记录的小标题：带上当前范围，避免和「全部记录」混淆。 */
 const rangeText = computed(() => {
     const { from: start, to: end } = range.value;
+    // 只设了结束日期时也要说清楚：`RangeFilter` 允许清空开始日期，留空意味着「从最早」。
     if (!start && !end) return '全部时间';
-    return end ? start + ' 至 ' + end : start + ' 起';
+    if (!start) return '截至 ' + end;
+    if (!end) return start + ' 起';
+    return start + ' 至 ' + end;
 });
 function reserveSuffix(currency: string) {
     return currency === 'cash' && hasReserve.value ? ' · 含储备金' : '';

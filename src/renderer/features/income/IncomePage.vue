@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { DateRangeValue, Transaction } from '../../app/types';
+import type { Transaction } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import { plain, desktop } from '../../services/desktop';
 import { U } from '../../domain/util.js';
@@ -14,6 +14,7 @@ import {
 import AppIcon from '../../components/AppIcon.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
 import RangeFilter from '../../components/RangeFilter.vue';
+import { useDateRange } from '../../components/use-date-range';
 import PageHeader from '../../components/PageHeader.vue';
 import IncomeEditor from './IncomeEditor.vue';
 import IncomeRecords from './IncomeRecords.vue';
@@ -58,7 +59,7 @@ const app = useApplication();
 const rules = app.rules();
 const character = ref('all');
 /** 默认看今天：收益是当天打完一局就记的，默认「本月」会把还没发生的月末也算进区间。 */
-const range = ref<DateRangeValue>({ preset: 'today', ...U.rangeFor('today') });
+const range = useDateRange('today');
 const editing = ref<Transaction | null>(null);
 const recordsOpen = ref(false);
 const priceTarget = ref<{ item: CatalogItem; thenAdd: boolean; once: boolean } | null>(null);
@@ -169,8 +170,11 @@ const lootItem = computed(() =>
 );
 const rangeText = computed(() => {
     const { from: start, to: end } = range.value;
+    // 只设了结束日期时也要说清楚：`RangeFilter` 允许清空开始日期，留空意味着「从最早」。
     if (!start && !end) return '全部时间';
-    return end ? start + ' 至 ' + end : start + ' 起';
+    if (!start) return '截至 ' + end;
+    if (!end) return start + ' 起';
+    return start + ' 至 ' + end;
 });
 const quick = computed(() => {
     void app.data;
@@ -610,10 +614,12 @@ function editFromList(tx: Transaction) {
     opener.value = null;
     editing.value = plain(tx) as Transaction;
 }
-async function saved() {
+async function saved(dates?: string[]) {
     const tx = editing.value;
     editing.value = null;
-    await syncAccount([tx?.date || U.today()]);
+    // 编辑器把「改前 / 改后」的日期一起抛过来：改日期时两天都要重算，只传旧日期会
+    // 让新那天的「游戏收益」一直停在旧值。
+    await syncAccount(dates && dates.length ? dates : [tx?.date || U.today()]);
     await nextTick();
     restore();
 }

@@ -20,7 +20,11 @@ import BaseSelect from '../../components/BaseSelect.vue';
  * 保存时固定写 `cash`。
  */
 const props = defineProps<{ tx: Transaction }>();
-const emit = defineEmits<{ close: []; saved: []; remove: [] }>();
+/**
+ * `saved` 带上「改前 / 改后」两个日期：收益页只按这些天重算账号里的「游戏收益」。
+ * 只传旧日期的话，把记录从 28 号改到 29 号，29 号那条收益永远不会被重新结算。
+ */
+const emit = defineEmits<{ close: []; saved: [dates: string[]]; remove: [] }>();
 const app = useApplication();
 const rules = app.rules();
 
@@ -97,7 +101,7 @@ async function save() {
             ),
         );
         app.notify('记录已更新');
-        emit('saved');
+        emit('saved', [...new Set([props.tx.date, draft.date].filter(Boolean))]);
     } catch (failure) {
         error.value = failure instanceof Error ? failure.message : String(failure);
     }

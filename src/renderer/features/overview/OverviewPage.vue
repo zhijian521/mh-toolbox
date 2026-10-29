@@ -7,6 +7,7 @@ import AppIcon from '../../components/AppIcon.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
 import PageHeader from '../../components/PageHeader.vue';
 import RangeFilter from '../../components/RangeFilter.vue';
+import { useDateRange } from '../../components/use-date-range';
 
 /**
  * 总览：把收益、账号、目标三处的结论并排放一次。
@@ -28,8 +29,8 @@ const app = useApplication();
 const rules = app.rules();
 const character = ref('all');
 /** 日常收益按天看，账号账本按月看——两种事儿的时间尺度本来就不一样。 */
-const earningsRange = ref<DateRangeValue>({ preset: 'today', ...U.rangeFor('today') });
-const accountRange = ref<DateRangeValue>({ preset: 'month', ...U.rangeFor('month') });
+const earningsRange = useDateRange('today');
+const accountRange = useDateRange('month');
 
 const characterOptions = computed(() => [
     { value: 'all', label: '全部角色' },
@@ -77,6 +78,8 @@ const incomeCount = computed(
 );
 const rangeText = (value: DateRangeValue) => {
     if (!value.from && !value.to) return '全部时间';
+    // 清空开始日期时留空表示「从最早」，不能把空串拼成「 起」。
+    if (!value.from) return '截至 ' + value.to;
     if (!value.to) return value.from + ' 起';
     // 单日区间（默认的「本日」）写成「X 至 X」纯属自找阅读负担。
     return value.from === value.to ? value.from : value.from + ' 至 ' + value.to;
