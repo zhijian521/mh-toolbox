@@ -1,4 +1,4 @@
-// 速记物品目录，原样整理自 V1 `views/quick-items.js`（V1 归档，取法见 docs/SYNC.md）。
+// 速记物品目录，原样整理自 V1 `views/quick-items.js`（V1 归档取法：`git show e51908c:migration/initial-baseline/<path>`）。
 // 图标来自 V1 `assets/images/online-record/`，已随 V2 一起迁移。
 // 修改名单或价格档位前先确认游戏内说法，并同步 `docs/VALIDATION.md`。
 //

@@ -1,5 +1,5 @@
 // Extracted unchanged from the V2 initial migration snapshot; not a new verification of game data.
-// Original references: V1 docs/SCHOOL_TEMPLATES.md, archived in git history (see docs/SYNC.md).
+// Original references: V1 docs/SCHOOL_TEMPLATES.md, archived in git history (e51908c:migration/initial-baseline/).
 export const schoolSkillNames = {
     大唐官府: ['为官之道', '无双一击', '神兵鉴赏', '疾风步', '十方无敌', '紫薇之术', '文韬武略'],
     方寸山: ['黄庭经', '磬龙灭法', '霹雳咒', '符之术', '归元心法', '神道无念', '斜月步'],

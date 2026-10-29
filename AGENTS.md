@@ -38,7 +38,7 @@
 
 ## 四、开工前的固定动作
 
-- V2 位于仓库根目录；先读本文件与 `docs/ARCHITECTURE.md`（约定密度最高）。V1 归档（完整工程与初始文本快照）已从工作区移除，需要查阅时从 git 历史取，起点头绪见 `docs/SYNC.md`。
+- V2 位于仓库根目录；先读本文件与 `docs/ARCHITECTURE.md`（约定密度最高）。V1 归档（完整工程与初始文本快照）已从工作区移除，只存在于 git 历史，删除前最后一次提交是 `e51908c`：`git ls-tree -r --name-only e51908c:migration/initial-baseline` 看清单，`git show e51908c:migration/initial-baseline/<path>` 取单个文件。
 - 写页面或迁移模块前读 `docs/PAGE_GUIDE.md`：以角色页为范本的固定动作清单与反模式。
 - 读代码用 `read`/`grep`/`glob` 工具；**不要用 shell 的 cat/grep/find**。
 - 改动前列表计划（`todo_write`），按文件独占切分并行任务，写清各自可写的文件范围。
@@ -73,3 +73,4 @@
 | 组件单测（vitest 等）           | 暂不引入 | 领域规则由 `tests/domain/` 覆盖，交互由 `tests/e2e/` 覆盖；页面数量再翻一倍时重新评估                        |
 | 提交钩子（husky / lint-staged） | 不安装   | 校验放在 CI（`scripts/check-commits.mjs`），本地按需 `npm run lint:commits`，避免钩子在沙箱里误报            |
 | 物品库存与持有估值              | 不做     | 这套工具记的是「打了多少、卖了多少」，不维护仓库快照；物品价值一律按当前参考单价折算，没有剩余数量与卖出结算 |
+| 与 V1 归档的同步                | 不做     | V1 已从工作区移除、只留在 git 历史里。基线之后 V1 的改动不自动进入 V2，V2 的重构也不回写 V1，两边各自演进    |

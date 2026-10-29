@@ -66,13 +66,12 @@ Node 版本见 `.nvmrc`（22.22.2）。提交前缀限定 `feat`/`fix`/`docs`/`s
 - [配色令牌与暗色模式](docs/THEME.md)：令牌体系、切换机制、对比度红线。
 - [页面开发指南](docs/PAGE_GUIDE.md)：以角色页为范本的动作清单与反模式。
 - [验证记录](docs/VALIDATION.md)：每次改动的做法、踩过的坑与验证方式。
-- [V1 归档记录](docs/SYNC.md)：V1 从 git 历史里怎么取，采集起点与数据版本。
 
 游戏资料统一放在 `src/renderer/game-data/`，按主题分文件，页面与领域层引用同一份，规则见架构文档的「游戏资料集中维护原则」。
 
 ## 归档
 
-V1 的完整工程与文本快照已于 2026-10-29 从工作区移除，仓库里不再保留 `migration/` 目录。需要查阅 V1 实现时用 `git show <commit>:migration/initial-baseline/<path>` 从历史取出，迁移起点与口径记录见 [`docs/SYNC.md`](docs/SYNC.md)。
+V1 的完整工程与文本快照已于 2026-10-29 从工作区移除，仓库里不再保留 `migration/` 目录。需要查阅 V1 实现时从 git 历史取，删除前最后一次提交是 `e51908c`：`git ls-tree -r --name-only e51908c:migration/initial-baseline` 看清单，`git show e51908c:migration/initial-baseline/<path>` 取单个文件。
 
 ## 许可
 

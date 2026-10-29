@@ -13,7 +13,7 @@ export default function install(D, _U, _gateway, _localStorage) {
     Object.assign(
         D,
         /** @type {SchoolsMixin} */ ({
-            /* 门派资料静态快照，原始来源说明见 V1 归档的 docs/SCHOOL_TEMPLATES.md（见 docs/SYNC.md）。 */
+            /* 门派资料静态快照，原始来源说明见 V1 归档的 docs/SCHOOL_TEMPLATES.md（e51908c:migration/initial-baseline/）。 */
             schoolSkillNames: structuredClone(schoolSkillNames),
             /**
              * @this {Domain}
