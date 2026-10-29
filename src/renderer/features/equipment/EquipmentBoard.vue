@@ -226,6 +226,16 @@ function isPending(slot: string) {
 .eq-board-side {
     gap: 10px;
 }
+/*
+ * 两栏共用一条顶线，但左栏标题下面还有副标题和方案行（合计 81px），右栏只有
+ * 一行标题（36px）——第一排格子就被左栏这两行推低了 45px。把右侧标题块补到
+ * 同样的高度、再让出一行方案行的位置，两栏的第一排格子才从同一条水平线开始。
+ * 31 = 左栏（标题 40 + 间距 8 + 方案行 25 + 间距 8）− 右栏（标题 40 + 间距 10）。
+ */
+.eq-board-side > .eq-board-head:first-child {
+    min-height: 40px;
+    margin-bottom: 31px;
+}
 .eq-board-head {
     display: flex;
     align-items: baseline;
@@ -354,6 +364,11 @@ function isPending(slot: string) {
 @media (max-width: 1250px) {
     .eq-board-columns {
         grid-template-columns: minmax(0, 1fr);
+    }
+    /* 上下堆叠后两栏不再并排，不需要为对齐留空。 */
+    .eq-board-side > .eq-board-head:first-child {
+        min-height: 0;
+        margin-bottom: 0;
     }
 }
 @media (max-width: 900px) {

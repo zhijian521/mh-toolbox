@@ -380,14 +380,15 @@ module.exports = async function equipment(env) {
         warehouseRow.some((line) => line.includes('物理暴击等级')),
         '基础属性在列表里',
     );
-    // 2026-10-29 起列表不再折叠：灵尘、开光、奇袭这些配置项也摆出来。
+    // 2026-10-29 起列表不再折叠：灵尘、开光孔、奇袭这些配置项也摆出来。
     assert.ok(
         warehouseRow.some((line) => /灵尘/.test(line)),
         '列表里能看到灵尘等级',
     );
+    // 开光孔不再单独占一行，直接按游戏里的叫法写「奇袭特技」，空孔显示「空」。
     assert.ok(
-        warehouseRow.some((line) => /开光/.test(line)),
-        '列表里能看到开光孔',
+        warehouseRow.some((line) => /奇袭特技/.test(line)),
+        '列表里能看到奇袭特技孔',
     );
     assert.ok(
         !warehouseRow.some((line) => /五行|制造者|耐久|修理失败/.test(line)),
@@ -410,7 +411,7 @@ module.exports = async function equipment(env) {
         () => document.querySelector('.detail-grid .eq-props')?.textContent || '',
     );
     assert.ok(/灵尘/.test(detailText), '详情里能看到灵尘等级');
-    assert.ok(/开光/.test(detailText), '详情里能看到开光孔');
+    assert.ok(/奇袭特技/.test(detailText), '详情里能看到奇袭特技孔');
     assert.ok(/奇袭/.test(detailText), '详情里能看到奇袭法术');
     // 关掉详情，再关掉仓库——后面回到页面上的其它弹窗，层不能留着。
     const closeTop = () =>

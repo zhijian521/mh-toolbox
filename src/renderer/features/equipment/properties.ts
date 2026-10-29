@@ -209,7 +209,13 @@ export function propertyRows(rules: Domain, eq: EquipmentItem): PropertyRow[] {
     push('符石', detail.runes, 'upgrade');
     push('原有属性', detail.legacy, 'legacy');
 
-    /* 玉魄：灵尘、奇袭、开光一律垫底，与上面的词条用一档更淡的标签隔开。 */
+    /*
+     * 玉魄：灵尘、奇袭、开光孔一律垫底，与上面的词条用一档更淡的标签隔开。
+     *
+     * 孔数不再单独占一行——游戏里开光孔只会开到 1～3 个，编辑器里一眼能看见，
+     * 摆进属性只是占一行。孔位本身按游戏里的叫法写：阳玉魄开的是「奇袭特技」，
+     * 阴玉魄开的是「奇袭道具」（真实截图里就是 `奇袭特技：[空]` / `奇袭道具：[空]`）。
+     */
     if (rule.kind === 'jade') {
         if (detail.jade.dust !== null) push('灵尘', `${detail.jade.dust} 级`, 'upgrade', true);
         if (detail.jade.assault)
@@ -221,9 +227,16 @@ export function propertyRows(rules: Domain, eq: EquipmentItem): PropertyRow[] {
                     (detail.jade.chance == null ? '' : ` ${detail.jade.chance}%`),
                 'special',
             );
-        if (detail.jade.holes) push('开光', `${detail.jade.holes} 孔`, 'upgrade');
-        detail.jade.enchantments.forEach((value, index) =>
-            push(`孔 ${index + 1}`, value || '未强化', 'special'),
+        const holeName = eq.slot === '玉魄·阳' ? '奇袭特技' : '奇袭道具';
+        // 只列打过的孔；一个都没打就留一行「空」，免得几行一模一样的「空」把卡片撑高。
+        const filled = detail.jade.enchantments.filter((value) => value);
+        (filled.length ? filled : ['']).forEach((value, index) =>
+            push(
+                index ? '' : holeName,
+                // 手填的孔位常常自带「奇袭特技：」前缀，标签已经是这四个字了。
+                String(value).replace(/^奇袭(?:特技|道具)\s*[:：]?\s*/, '') || '空',
+                'special',
+            ),
         );
     }
     return rows;
