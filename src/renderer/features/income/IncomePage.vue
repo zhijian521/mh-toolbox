@@ -272,9 +272,8 @@ async function syncAccount(dates: string[]) {
  * 同步好的「游戏收益」都不回头改——下次速记或结束计时时，当天那条会按新口径重算。
  * 所以这是可随时来回切的开关，不是一次性的数据迁移。
  */
-async function toggleCardCost() {
-    if (app.busy) return;
-    const next = !cardCost.value;
+async function setCardCost(next: boolean) {
+    if (app.busy || next === cardCost.value) return;
     try {
         await app.execute((domain) =>
             domain.commit(() => domain.setQuickSettings({ cardCost: next })),
@@ -286,6 +285,15 @@ async function toggleCardCost() {
             true,
         );
     }
+}
+/** 两格滑块：左右方向键换一格并选中，与「记给谁」那排单选一致。 */
+function onCostKeys(event: KeyboardEvent) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const wanted = event.key === 'ArrowRight';
+    const buttons = (event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.cost-opt');
+    buttons[wanted ? 1 : 0]?.focus();
+    void setCardCost(wanted);
 }
 function remember() {
     const focused = document.activeElement;
@@ -465,21 +473,46 @@ async function recordsChanged(dates: string[]) {
                     <AppIcon name="coin" :size="13" />
                     点卡 {{ U.fmtMoney(quick.cardPrice / 10000) }}/点
                 </button>
-                <button
-                    class="chip cost-toggle"
+                <div
+                    class="cost-switch"
                     :class="{ off: !cardCost }"
-                    :disabled="app.busy"
-                    :aria-pressed="cardCost"
+                    role="radiogroup"
+                    aria-label="点卡成本是否计入收益"
                     :title="
                         cardCost
                             ? '点卡按 6 点/小时 × 单价折成成本，计入净收益与账号「游戏收益」'
                             : '不计点卡成本：之后的计时不再扣，已入账的点卡仍留在净收益里'
                     "
-                    @click="toggleCardCost"
+                    @keydown="onCostKeys"
                 >
-                    <AppIcon :name="cardCost ? 'check' : 'close'" :size="13" />
-                    {{ cardCost ? '计入点卡' : '不计点卡' }}
-                </button>
+                    <span
+                        class="cost-thumb"
+                        :class="{ right: !cardCost }"
+                        aria-hidden="true"
+                    ></span>
+                    <button
+                        type="button"
+                        class="cost-opt"
+                        :class="{ on: cardCost }"
+                        role="radio"
+                        :aria-checked="cardCost"
+                        :disabled="app.busy"
+                        @click="setCardCost(true)"
+                    >
+                        计入点卡
+                    </button>
+                    <button
+                        type="button"
+                        class="cost-opt"
+                        :class="{ on: !cardCost }"
+                        role="radio"
+                        :aria-checked="!cardCost"
+                        :disabled="app.busy"
+                        @click="setCardCost(false)"
+                    >
+                        不计点卡
+                    </button>
+                </div>
             </div>
             <IncomeStatGrid
                 :cards="statCards"
@@ -589,15 +622,104 @@ async function recordsChanged(dates: string[]) {
     color: var(--gold);
 }
 /*
- * 成本开关与「单价」那颗并排：单价是入口、这颗是状态，所以关掉时连图标一起转灰、
- * 边框改虚线——不用读文字也能看出「现在不折旧的」。
+ * 点卡成本口径：两格滑块，左右滑过去。
+ *
+ * 沿用「记给谁」那排的立体语言——槽是凹的（--well 底 + 上暗下亮渐变 + 内阴影 +
+ * 下沿高光），滑块是凸的（上亮下暗 + 上沿高光 + 投影）。只是后者不再每格各画一枚，
+ * 而是一枚铜牌在槽里滑，滑到位时轻轻过冲一点（cubic-bezier 的 1.28）。
+ *
+ * 关掉时铜牌「灭灯」，换成暖灰哑面、投影收掉一层：与金色是明度上的差别，
+ * 隔着半屏也分得清——之前那颗描边 chip 只差边框虚线，确实看不出来。
  */
-.cost-toggle.off {
-    border-style: dashed;
+.cost-switch {
+    position: relative;
+    display: inline-grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    padding: 2px;
+    border: 1px solid color-mix(in srgb, var(--bevel-lo) 72%, transparent);
+    border-radius: 999px;
+    background-color: var(--well);
+    background-image: linear-gradient(180deg, var(--bevel-lo), transparent 62%);
+    box-shadow:
+        inset 0 1px 2px var(--bevel-lo),
+        inset 0 -1px 0 var(--bevel-hi);
+    --thumb-bg: color-mix(in srgb, var(--gold) 74%, var(--ink));
+    --thumb-fg: var(--on-accent);
 }
-.cost-toggle.off,
-.cost-toggle.off svg {
+.cost-switch.off {
+    /*
+     * 灭灯：金→与槽底拉开一档的哑面，字回到正文色。
+     * 底色取 `--ink` 而不是 `--gold`：金的明度在两套主题里都比槽底高，混出来在浅色下
+     * 几乎和槽同色（`#ece3cc` 对 `#e8dcc0`）；`--ink` 是随主题翻转的，混进去两边都能
+     * 与槽拉开——浅色变中米褐、暗色变微亮的深棕。
+     */
+    --thumb-bg: color-mix(in srgb, var(--ink) 16%, var(--well));
+    --thumb-fg: var(--ink);
+}
+.cost-thumb {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 2px;
+    /* 轨道内宽的一半，向右平移自身宽度正好落到第二格。 */
+    width: calc(50% - 2px);
+    border-radius: 999px;
+    background-color: var(--thumb-bg);
+    background-image: linear-gradient(180deg, var(--bevel-hi), transparent 46%, var(--bevel-lo));
+    box-shadow:
+        inset 0 1px 0 var(--bevel-hi),
+        0 1px 1px var(--bevel-lo),
+        0 3px 7px color-mix(in srgb, var(--ink) 22%, transparent);
+    transition:
+        transform 240ms cubic-bezier(0.34, 1.28, 0.6, 1),
+        background-color 200ms ease;
+}
+.cost-thumb.right {
+    transform: translateX(100%);
+}
+.cost-switch.off .cost-thumb {
+    box-shadow:
+        inset 0 1px 0 var(--bevel-hi),
+        0 1px 1px var(--bevel-lo);
+}
+/* 按下去：铜牌被压回槽里，只留内阴影。 */
+.cost-switch:active .cost-thumb {
+    box-shadow: inset 0 2px 4px var(--bevel-lo);
+}
+.cost-opt {
+    position: relative;
+    z-index: 1;
+    padding: 3px 10px;
+    border: 0;
+    border-radius: 999px;
+    background: none;
     color: var(--muted);
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 17px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 180ms ease;
+}
+.cost-opt:hover:not(:disabled) {
+    color: var(--ink);
+}
+/* 选中那格的字跟着滑块换色：金底上用反差奶白，暖灰底上用正文色。 */
+.cost-opt.on,
+.cost-opt.on:hover:not(:disabled) {
+    color: var(--thumb-fg);
+    font-weight: 600;
+}
+.cost-opt:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 42%, transparent);
+}
+.cost-switch.off .cost-opt:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 45%, transparent);
+}
+.cost-opt:disabled {
+    cursor: default;
 }
 /* 右栏固定 288px：收益记录是速记的辅助视图，不该跟着窗口一起变宽。 */
 .quick-main {

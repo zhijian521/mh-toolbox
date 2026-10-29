@@ -495,7 +495,12 @@ module.exports = async function income(env) {
      * 那条在领域用例里验（`tests/domain/ledgers.test.cjs`），这里不再造一段会话，
      * 免得改动总览页要读的收益数字。
      */
-    const costToggle = () => read(() => document.querySelector('.cost-toggle')?.textContent.trim());
+    /* 两格滑块：选中的那格由 `aria-checked` 标出，滑块位置由 `.cost-thumb.right` 标出，
+       两者都要跟着动——只看文案的话，滑块卡住不动也会绿。 */
+    const costChecked = () =>
+        read(() =>
+            document.querySelector('.cost-switch [aria-checked="true"]')?.textContent.trim(),
+        );
     const cardStatValue = () =>
         read(() =>
             document
@@ -503,22 +508,21 @@ module.exports = async function income(env) {
                 .querySelector('.stat-value')
                 .textContent.trim(),
         );
-    assert.equal(await costToggle(), '计入点卡', '默认按点卡折成本');
+    assert.equal(await costChecked(), '计入点卡', '默认按点卡折成本');
     await read(() => {
-        document.querySelector('.cost-toggle').click();
+        document.querySelectorAll('.cost-switch .cost-opt')[1].click();
         return true;
     });
     await untilDisk(() => disk().quickSettings.cardCost === false, '开关已落盘');
-    await until(
-        () => document.querySelector('.cost-toggle')?.textContent.trim() === '不计点卡',
-        '开关文案翻成「不计点卡」',
-    );
+    await until(() => !!document.querySelector('.cost-thumb.right'), '滑块滑到「不计点卡」');
+    assert.equal(await costChecked(), '不计点卡', '选中格跟着换到右边');
     assert.equal(await cardStatValue(), '不计入', '点卡消耗卡写「不计入」而不是 0');
     // 再来回切一次：这是可逆的口径开关，不是一次性迁移。
     await read(() => {
-        document.querySelector('.cost-toggle').click();
+        document.querySelectorAll('.cost-switch .cost-opt')[0].click();
         return true;
     });
     await untilDisk(() => disk().quickSettings.cardCost === true, '切回计入并落盘');
-    assert.equal(await costToggle(), '计入点卡', '切回后文案复原');
+    await until(() => !document.querySelector('.cost-thumb.right'), '滑块滑回左边');
+    assert.equal(await costChecked(), '计入点卡', '切回后选中格复原');
 };
