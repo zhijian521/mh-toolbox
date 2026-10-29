@@ -57,7 +57,6 @@ const sort = useDragSort({
                     :list="auxiliary ? 'auxiliary-suggestions' : undefined"
                     :aria-label="(auxiliary ? '辅助' : '师门') + '技能名称 ' + (index + 1)"
                     placeholder="技能名称"
-                    required
                 />
                 <BaseNumber
                     v-model="skill.level"

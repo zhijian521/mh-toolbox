@@ -232,6 +232,8 @@ function registerIpc({ app, store, logger, theme, getWindow }) {
         });
         if (result.canceled) return { ok: false, canceled: true };
         try {
+            // 与其它导出同一条保护：文件坏了也不能把原始副本写回正在用的那一份。
+            assertExportPath(result.filePath, app.getPath('appData'), store.file);
             await fs.writeFile(result.filePath, raw.text, 'utf8');
             logger.info('已另存原始数据文件：' + result.filePath);
             return { ok: true, filePath: result.filePath };

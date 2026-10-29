@@ -685,17 +685,28 @@ export default function install(D, U, _gateway, _localStorage) {
                         const roster = this.rosterOf(session);
                         const single = !!charId && charId !== 'all';
                         if (single && !roster.includes(charId)) return;
-                        /* 单角色视角只看自己那一份点卡；「全部角色」看整段，不能按人头翻倍。 */
-                        const share = single ? 1 / Math.max(1, roster.length) : 1;
+                        /*
+                         * 单角色视角只看自己那一份点卡；「全部角色」看整段，不能按人头翻倍。
+                         *
+                         * 分摊必须与 `syncSession` 写流水时用同一个函数：那里是
+                         * `U.splitAmount`（尾差给前几位，合计永远等于总价），早先这里用
+                         * `cost / 人数` 再整体四舍五入，0.03 这类小额会出现「统计扣 0.02、
+                         * 流水只有 0.01」的对不上的情况。
+                         */
+                        const shareIndex = single ? Math.max(0, roster.indexOf(charId)) : -1;
                         const slices = this.sessionSlices(session).filter(
                             (s) => (!from || s.date >= from) && (!to || s.date <= to),
                         );
                         if (!slices.length) return;
                         result.count++;
                         slices.forEach((slice) => {
+                            const share =
+                                shareIndex < 0
+                                    ? slice.cost
+                                    : U.splitAmount(slice.cost, roster.length)[shareIndex];
                             result.minutes += slice.minutes;
-                            result.cost += slice.cost * share;
-                            if (liveIds.has(session.id)) result.liveCost += slice.cost * share;
+                            result.cost += share;
+                            if (liveIds.has(session.id)) result.liveCost += share;
                         });
                     },
                 );

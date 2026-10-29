@@ -4,7 +4,7 @@ import { useApplication } from '../../stores/application';
 import { plain } from '../../services/desktop';
 import { U } from '../../domain/util.js';
 import { defaultSchool } from '../../game-data/schools.js';
-import type { Character } from '../../app/types';
+import type { Character, Skill } from '../../app/types';
 import BaseDate from '../../components/BaseDate.vue';
 import BaseModal from '../../components/BaseModal.vue';
 import BaseNumber from '../../components/BaseNumber.vue';
@@ -74,6 +74,23 @@ async function save() {
         nav.go('growth');
         return;
     }
+    /*
+     * 技能行先在这里收拾干净，不靠 `required` 拦。
+     *
+     * 名称框挂 `required` 时，点「保存」会被原生校验悄悄拦下（表单的 submit 根本不触发），
+     * 页面自己的错误区一个字都不显示，而报错气泡多半指向已经滚出视野的那一行——表现就是
+     * 「点了没反应」。现在：只填了等级没填名称的行明确报错；什么都没填的空行直接丢掉。
+     */
+    const filled = (/** @type {Skill[]} */ list: Skill[]) =>
+        list.filter((skill) => String(skill.name || '').trim());
+    const nameless = [...draft.progress.schoolSkills, ...draft.progress.auxiliarySkills].filter(
+        (skill) => !String(skill.name || '').trim() && skill.level != null && skill.level !== '',
+    );
+    if (nameless.length) {
+        error.value = '技能行请补上名称，或删掉只填了等级的那一行';
+        nav.go('schoolSkills');
+        return;
+    }
     try {
         const result = (await app.execute((domain) =>
             domain.saveCharacter(
@@ -82,7 +99,11 @@ async function save() {
                     level: draft.level,
                     school: draft.school,
                     server: draft.server,
-                    progress: draft.progress,
+                    progress: {
+                        ...draft.progress,
+                        schoolSkills: filled(draft.progress.schoolSkills),
+                        auxiliarySkills: filled(draft.progress.auxiliarySkills),
+                    },
                 }),
                 props.character?.id,
                 { date: draft.changeDate, note: draft.changeNote },

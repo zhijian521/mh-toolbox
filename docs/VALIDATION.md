@@ -1447,3 +1447,26 @@ CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都�
 **宽度上限收到整块板面，而不是逐张卡片。** 格子靠 `1fr` 分宽，窗口一宽就被拉成一排 600px 的空壳卡片（2560 窗口实测 636 / 508），属性一行只有几个字，反而更散。先试过给 `.eq-slot` 加 `max-width`：卡片停住了，但单元格仍在，两列之间被拉开一道一百多像素的空档，比拉伸更难看。改成 `.eq-board { max-width: 1240px }` 之后内部比例原样保留，只是整块不再继续撑：1440 窗口本来就是 1200，看不出变化；1920 起格子停在 336（常规）/ 268（灵饰、玉魄），右边留白。
 
 **验证：** 用领域自己造种子（五个角色、常规 6 件 + 灵饰 4 件 + 玉魄 2 件、方案三只穿三格）在 1280 / 1440 / 1920 三档截图：1280 与 1440 的格子宽度与改动前逐像素一致（280 / 325），1920 从 458 / 366 收到 336 / 268；头像在每一档都贴住左上角，与「部位 · 等级」同一条顶线；方案三的空位态（12 格只穿 3 格）头像写部位字、正文写「空位 + 点击挑一件或截图识别」。端到端整套流程照旧 PASS，方案切换与「复制方案」「改名」都不依赖被删掉的那两颗元素。
+
+## 审查后修 A 类九处：刷新、日期与校验缺口
+
+日期：2026-10-29。起因：全项目审查列出 9 处缺陷，按影响排序逐条修。范围：`features/equipment/*`、`features/income/*`、`features/accounts/AccountsPage.vue`、`features/overview/OverviewPage.vue`、`features/characters/{CharacterEditor,SkillEditor}.vue`、`components/{BaseDate.vue,use-date-range.ts}`、`domain/{equipment.js,online.js}`、`main/ipc.cjs`、`tests/domain/{equipment,ledgers}.test.cjs`。
+
+| 检查            | 结果                      |
+| --------------- | ------------------------- |
+| 格式化          | `prettier --check .` 通过 |
+| ESLint          | 0 错误 0 警告             |
+| 类型检查        | `vue-tsc --noEmit` 0 错误 |
+| 领域与隔离测试  | 125 项通过 0 失败         |
+| Vite 生产构建   | 通过                      |
+| Electron 端到端 | PASS                      |
+
+**改完装备，格子和详情立刻变（原来要切一次方案）。** 根因不是响应式没开，而是传了领域里的活对象：`saveEquipment` 用 `Object.assign(previous, eq)` 原地改，对象引用不变，父组件虽然因为 `profile` 换了引用重渲染，传给格子的 prop 还是同一个对象，Vue 判定「属性没变」直接跳过子组件更新。现在 `EquipmentBoard` 的 `equipped()` 返回 `plain(...)` 快照；详情弹窗不再存对象，只存 `detailId`，内容按 id 派生（顺带解决「删掉的装备还开着详情」——`equipmentById` 返回空，弹窗自己收起）。仓库的 `references` 补了 `void app.data` 参与依赖，换装后「当前穿戴 / 其他方案备用」不再停在换装前。临时脚本实测：改名保存后格子与详情标题同时变新名，详情里记一次变动时间线立刻多一条。
+
+**日期三处。** ① 收益记录改日期后，只重算旧那天：`IncomeEditor` 的 `saved` 现在带上「改前 / 改后」两个日期，页面两天一起同步。② 桌面端常驻过夜，「本日 / 本月」停在昨天，新记的账看着像丢了：新增 `components/use-date-range.ts`，每分钟对一次系统日期并听 `visibilitychange` / `focus`，只在预设区间真的变了才替换（跨天、跨周、跨月、跨年），用户手改过日期（`preset === 'custom'`）完全不动；收益、账号、总览三页共用。③ 清空开始日期后区间文案变成「 至 X」：三处 `rangeText` 都补了「截至 X」分支。
+
+**校验四处。** ④ 截图识别失败（`status === 'error'`，`draft`/`detail` 均为空）时保存按钮仍亮着，点下去 `pruneDetail(null)` 抛 `TypeError`、整批存不了：`canSave` 增加 `failed` 计数，摘要行写明「N 件识别失败，先重试或移除」，`submit()` 再加一道「全部 ready 且有草稿」的兜底。⑤ 装备「记变动」的日期能点「清空」后保存，写出 `date: ''` 的流水（默认「本月」筛不到、时间线日期空白）：`BaseDate` 新增 `required` 语义（必填时不给「清空」），`recordEquipmentChange` 按 `writeTransaction` 同一条正则 + 往返校验挡在写库前，并补了领域测试。⑥ 新增空技能行点保存「没反应」：名称框去掉原生 `required`（它会悄悄拦掉 submit，页面自己的错误区一个字都不显示），改由 `CharacterEditor.save()` 判断——只填等级没填名称的明确报错并跳回该分区，什么都没填的空行直接丢掉。⑦ 点卡分摊两套口径：`onlineStats` 改用 `U.splitAmount(...)[index]`，与 `syncSession` 写流水时同一个函数，单角色统计与账本逐分一致；多开测试补了逐条比对断言。
+
+**主进程一处。** ⑧ `exportRaw`（急救通道的「另存原始副本」）补上 `assertExportPath`：与 `exportData` / `saveTextFile` 一样，不能把副本写回正在使用的 `data.json`。
+
+**没有改的。** 审查里的 B / C / D 类（类型检查只覆盖渲染层、三处混入写法、文档数字失真、重复工具函数等）本轮不动，留作单独一批。

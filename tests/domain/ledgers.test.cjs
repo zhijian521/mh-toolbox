@@ -607,6 +607,14 @@ test('多开计时把点卡按在线角色平摊，合计仍等于整段成本',
     const sum = cards.reduce((total, t) => total + Math.round(t.amount * 100), 0);
     assert.equal(sum, 289, '分摊后合计与整段成本一致，不多不少一分');
     assert.equal(new Set(cards.map((t) => t.characterId)).size, 3, '三个角色都拿到了点卡');
+    // 统计口径与写进账本的那一份必须逐分相同：两边各用一套除法时，0.9633 会被
+    // 分别圆成 0.96 与 0.97，界面上「扣的点卡」与流水对不上。
+    for (const card of cards)
+        assert.equal(
+            D.onlineStats(card.characterId, '2020-02-28', '2020-02-28').cost,
+            card.amount,
+            '单角色统计与点卡流水逐分对得上',
+        );
     // 单角色视角只看自己那一份，「全部角色」看整段——不能按人头翻倍。
     assert.equal(D.onlineStats('c2', '2020-02-28', '2020-02-28').cost, 0.96);
     assert.equal(D.onlineStats('c2', '2020-02-28', '2020-02-28').minutes, 7);
