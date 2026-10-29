@@ -1127,8 +1127,9 @@ async function onlineSaved(dates: string[]) {
     letter-spacing: 0.5px;
 }
 /*
- * 未选中：纸面凹槽里的一枚小签——底色比卡片深半档、内阴影收一道，看着「按得下去」。
- * 边框常驻但透明，hover 只换颜色，不会因为多出一条边而抖一格。
+ * 未选中：纸面上按出来的槽——底色用 --well（两套主题下都比卡片暗一档），再叠一层
+ * 上暗下亮的渐变、上沿一道内阴影、下沿一道高光。四样加起来才在 23px 的高度里读出凹。
+ * 不能直接拿 --panel-3 当槽底：它在亮色下比卡片深、在暗色下比卡片浅，凹槽会翻成凸起。
  */
 .target-pill {
     display: inline-flex;
@@ -1136,10 +1137,13 @@ async function onlineSaved(dates: string[]) {
     gap: 5px;
     padding: 2px 10px;
     min-height: 23px;
-    border: 1px solid transparent;
+    border: 1px solid color-mix(in srgb, var(--bevel-lo) 72%, transparent);
     border-radius: 999px;
-    background: var(--panel-3);
-    box-shadow: inset 0 1px 2px color-mix(in srgb, var(--ink) 6%, transparent);
+    background-color: var(--well);
+    background-image: linear-gradient(180deg, var(--bevel-lo), transparent 62%);
+    box-shadow:
+        inset 0 1px 2px var(--bevel-lo),
+        inset 0 -1px 0 var(--bevel-hi);
     color: var(--ink-2);
     font-family: inherit;
     font-size: 12px;
@@ -1158,10 +1162,11 @@ async function onlineSaved(dates: string[]) {
 }
 .target-pill:hover {
     border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+    background-color: color-mix(in srgb, var(--well) 74%, var(--paper));
     color: var(--ink);
 }
 .target-pill:active {
-    background: var(--paper-2);
+    background-color: color-mix(in srgb, var(--well) 88%, var(--ink));
 }
 .target-pill:focus-visible {
     outline: none;
@@ -1170,27 +1175,39 @@ async function onlineSaved(dates: string[]) {
 }
 /*
  * 选中：整枚灌金、字反过来（浅色下奶白、暗色下深墨），跟主按钮同一套语言。
- * 不再用「浅金底 + 金边」——那一档只比未选中深一点点，隔着半屏根本分不出来。
- * 外面加一圈同色柔光，把选中的那枚从纸面上托起来。
+ * 立体感靠「反过来」做——槽是上暗下亮，这枚是上亮下暗，于是它看起来是从纸面上
+ * 抬起来压着的一枚铜牌，而不是另一个槽。
+ * 不再用「浅金底 + 金边」——那一档只比未选中深一点，隔着半屏根本分不出来。
  */
 .target-pill.on {
     border-color: color-mix(in srgb, var(--gold) 78%, var(--ink));
-    background: color-mix(in srgb, var(--gold) 74%, var(--ink));
-    box-shadow: 0 1px 4px color-mix(in srgb, var(--gold) 34%, transparent);
+    background-color: color-mix(in srgb, var(--gold) 74%, var(--ink));
+    background-image: linear-gradient(180deg, var(--bevel-hi), transparent 46%, var(--bevel-lo));
+    box-shadow:
+        inset 0 1px 0 var(--bevel-hi),
+        0 1px 1px var(--bevel-lo),
+        0 4px 9px color-mix(in srgb, var(--gold) 34%, transparent);
     color: var(--on-accent);
     font-weight: 600;
 }
 .target-pill.on:hover {
-    background: color-mix(in srgb, var(--gold) 66%, var(--ink));
+    background-color: color-mix(in srgb, var(--gold) 66%, var(--ink));
     color: var(--on-accent);
 }
 .target-pill.on:active {
-    background: color-mix(in srgb, var(--gold) 58%, var(--ink));
+    /* 按下去：渐变倒过来，投影收紧——同一枚铜牌被压回纸里。 */
+    background-color: color-mix(in srgb, var(--gold) 58%, var(--ink));
+    background-image: linear-gradient(180deg, var(--bevel-lo), transparent 58%);
+    box-shadow:
+        inset 0 1px 3px var(--bevel-lo),
+        0 1px 2px color-mix(in srgb, var(--gold) 24%, transparent);
 }
 /* 灌金底会把金色焦点环吃掉，选中时改用墨色环——两种底色上都看得见。 */
 .target-pill.on:focus-visible {
     border-color: color-mix(in srgb, var(--gold) 78%, var(--ink));
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 55%, transparent);
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--ink) 55%, transparent),
+        0 3px 7px color-mix(in srgb, var(--gold) 30%, transparent);
 }
 /* 正在计时的号：名字前一颗绿点，比在 title 里写「计时中」看得见。 */
 .target-dot {

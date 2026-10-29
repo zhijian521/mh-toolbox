@@ -46,6 +46,18 @@
     --danger-bg: light-dark(#ead9c7, #3a2622);
     --warn-bg: light-dark(#eee4d3, #332c1f);
     --on-accent: light-dark(#fff8e7, #1a1610);
+    /*
+     * 微立体的两面：亮面恒为「偏白」、暗面恒为「偏黑」，两套主题下都不许反转。
+     * 所以不能用 --paper / --ink 顶替——那两枚在暗色下正好互换明暗，立体感会翻面。
+     * 都是半透明，既能压在任意底色上做渐变，也能直接当 inset 阴影用。
+     */
+    --bevel-hi: light-dark(#ffffffa6, #ffffff30);
+    --bevel-lo: light-dark(#2f2a2433, #00000073);
+    /*
+     * 凹陷面：比卡片底再暗一档。亮色下是压深的米色，暗色下是近黑的墨色——
+     * 两套主题里都「陷下去」，而 --panel-3 在暗色下比卡片浅，拿它做凹槽会变成凸起。
+     */
+    --well: light-dark(#ece3cc, #1a1710);
     --scrollbar-thumb: light-dark(#c2b58f, #4d4534);
     --scrollbar-thumb-hover: light-dark(#a68f5d, #6a5f45);
     --scrollbar-thumb-active: light-dark(#8f7546, #857551);
