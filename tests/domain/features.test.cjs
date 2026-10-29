@@ -29,36 +29,39 @@ const loot = {
     status: 'held',
 };
 
-test('分次出售、超卖校验、成交编辑和删除保持库存与实际收益一致', async () => {
+test('带成交关系的物品与库存保持一致，编辑与删除成交记录不走样', async () => {
     const D = fixture();
     const item = await D.saveTransaction(loot);
-    const first = await D.commit(() =>
-        D.settleItem(item, { date: '2026-01-02', amount: 18, quantity: 4 }),
-    );
-    assert.equal(D.itemRemaining(item), 6);
+    const sale = await D.saveTransaction({
+        ledger: 'earnings',
+        recordType: 'money',
+        kind: 'income',
+        currency: 'cash',
+        characterId: 'c1',
+        date: '2026-01-02',
+        amount: 18,
+        itemRecordId: item.id,
+        saleQuantity: 4,
+    });
+    const live = () => D.state.transactions.find((tx) => tx.id === item.id);
+    assert.equal(D.itemRemaining(live()), 6);
+    assert.equal(live().status, 'held');
     // 不记库存：统计只报物品标价合计，没有「持有估值」这回事。
     assert.equal(D.stats(D.earnings()).itemValue, 50);
     assert.equal(D.stats(D.earnings()).income, 18);
-    const second = await D.commit(() =>
-        D.settleItem(item, { date: '2026-01-03', amount: 30, quantity: 6 }),
-    );
-    assert.equal(item.status, 'sold');
-    await assert.rejects(
-        D.commit(() => D.settleItem(item, { date: '2026-01-04', amount: 1, quantity: 1 })),
-        /重复/,
-    );
-    await D.saveTransaction({ saleQuantity: 2, amount: 9 }, first.id);
-    let current = D.state.transactions.find((tx) => tx.id === item.id);
-    assert.equal(D.itemRemaining(current), 2);
-    assert.equal(current.status, 'held');
-    await assert.rejects(D.saveTransaction({ quantity: 7 }, current.id), /少于/);
-    await assert.rejects(D.saveTransaction({ saleQuantity: 5 }, first.id), /可出售/);
-    await D.commit(() => D.removeTransaction(second.id));
-    current = D.state.transactions.find((tx) => tx.id === item.id);
-    assert.equal(D.itemRemaining(current), 8);
-    assert.equal(D.stats(D.earnings()).income, 9);
-    await D.commit(() => D.removeTransaction(item.id));
-    assert.equal(D.state.transactions.length, 0);
+    // 改成交数量，剩余量跟着变；改到等于获得数量即视为卖完，改小又回到持有。
+    await D.saveTransaction({ saleQuantity: 2 }, sale.id);
+    assert.equal(D.itemRemaining(live()), 8);
+    await D.saveTransaction({ saleQuantity: 10 }, sale.id);
+    assert.equal(live().status, 'sold');
+    await D.saveTransaction({ saleQuantity: 2 }, sale.id);
+    assert.equal(live().status, 'held');
+    // 获得数量不能少于已出售数量；成交数量不能超过可出售数量。
+    await assert.rejects(D.saveTransaction({ quantity: 1 }, item.id), /少于/);
+    await assert.rejects(D.saveTransaction({ saleQuantity: 11 }, sale.id), /可出售/);
+    await D.commit(() => D.removeTransaction(sale.id));
+    assert.equal(D.itemRemaining(live()), 10);
+    assert.equal(D.stats(D.earnings()).income, 0);
 });
 
 test('旧整单出售迁移保留金额，增加获得数量后释放库存，序列化往返幂等', () => {
@@ -90,23 +93,23 @@ test('旧整单出售迁移保留金额，增加获得数量后释放库存，�
     assert.deepEqual(plain(D.normalize(D.state)), plain(D.state));
 });
 
-test('串行提交中首次保存失败会回滚，排队写入继续读取正确状态，重试不重复成交', async () => {
+test('串行提交中首次保存失败会回滚，排队写入继续读取正确状态，重试不重复删除', async () => {
     const D = fixture();
-    const item = await D.saveTransaction(loot);
+    const first = await D.saveTransaction(loot);
+    const second = await D.saveTransaction({ ...loot, itemName: '宝石二' });
     let calls = 0;
     D.persist = async () => {
         if (++calls === 1) throw new Error('磁盘写入失败');
     };
     const results = await Promise.allSettled([
-        D.commit(() => D.settleItem(item, { date: '2026-01-02', amount: 10, quantity: 3 })),
-        D.commit(() => D.settleItem(item, { date: '2026-01-02', amount: 20, quantity: 4 })),
+        D.commit(() => D.removeTransaction(first.id)),
+        D.commit(() => D.removeTransaction(second.id)),
     ]);
     assert.equal(results[0].status, 'rejected');
     assert.equal(results[1].status, 'fulfilled');
-    assert.equal(D.itemRemaining(D.state.transactions[0]), 6);
-    assert.equal(D.state.transactions.length, 2);
-    await D.commit(() => D.settleItem(item, { date: '2026-01-02', amount: 10, quantity: 3 }));
-    assert.equal(D.itemRemaining(D.state.transactions[0]), 3);
+    assert.equal(D.state.transactions.length, 1, '回滚的那次不留痕，成功的那次才生效');
+    await D.commit(() => D.removeTransaction(first.id));
+    assert.equal(D.state.transactions.length, 0, '重试删除同一记录只生效一次');
 });
 
 test('目标历史编辑、删除保留旧基础进度，完成日期独立，失败可重试', async () => {
@@ -208,7 +211,17 @@ test('CSV 包含 BOM、单位、引号换行与公式防护，物品不带库存
     const D = fixture();
     D.charById('c1').name = '=SUM(A1:A2)';
     const item = await D.saveTransaction({ ...loot, note: '文字,"引号"\n第二行' });
-    await D.commit(() => D.settleItem(item, { date: '2026-01-02', amount: 6, quantity: 2 }));
+    await D.saveTransaction({
+        ledger: 'earnings',
+        recordType: 'money',
+        kind: 'income',
+        currency: 'cash',
+        characterId: 'c1',
+        date: '2026-01-02',
+        amount: 6,
+        itemRecordId: item.id,
+        saleQuantity: 2,
+    });
     const csv = D.recordsCsv(D.state.transactions);
     assert.ok(csv.startsWith('\uFEFF'));
     assert.ok(csv.includes('"梦幻币（万）"'));

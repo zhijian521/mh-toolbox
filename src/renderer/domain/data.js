@@ -175,10 +175,6 @@ export function createData(localStorage) {
             localStorage.setItem('mh.charFilter', v);
         },
 
-        /** @this {Domain} */
-        chars() {
-            return this.state.characters;
-        },
         /** @this {Domain} @param {string} id */
         charById(id) {
             return this.state.characters.find(function (c) {
@@ -189,16 +185,6 @@ export function createData(localStorage) {
         charName(id) {
             const c = this.charById(id);
             return c ? c.name : '未知角色';
-        },
-
-        /* 按全局角色筛选（不筛选日期） */
-        /** @this {Domain} @param {any[]} list @returns {any[]} */
-        scope(list) {
-            if (this.charFilter === 'all') return list;
-            const f = this.charFilter;
-            return list.filter(function (x) {
-                return x.characterId === f;
-            });
         },
 
         /** @this {Domain} @param {any[]} [list] @returns {any[]} */

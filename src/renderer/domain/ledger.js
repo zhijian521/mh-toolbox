@@ -463,61 +463,6 @@ export default function install(D, U, _gateway, _localStorage) {
                 return previous || record;
             },
 
-            /**
-             * @this {Domain}
-             * @param {any} item
-             * @param {any} data
-             * @returns {any}
-             */
-            settleItem(item, data) {
-                item = this.state.transactions.find(
-                    /** @param {any} tx */
-                    (tx) => tx.id === item.id && tx.recordType === 'item',
-                );
-                if (!item) throw new Error('物品记录不存在');
-                if (item.recordType !== 'item' || item.status === 'sold')
-                    throw new Error('该物品无法重复出售');
-                if (
-                    !Number.isFinite(data.amount) ||
-                    data.amount < 0 ||
-                    !/^\d{4}-\d{2}-\d{2}$/.test(data.date) ||
-                    U.fmtDate(U.parseDate(data.date)) !== data.date ||
-                    data.date < item.date
-                )
-                    throw new Error('请填写有效成交金额，出售日期不能早于获得日期');
-                const quantity = data.quantity == null ? this.itemRemaining(item) : data.quantity;
-                if (
-                    !Number.isSafeInteger(quantity) ||
-                    quantity < 1 ||
-                    quantity > this.itemRemaining(item)
-                )
-                    throw new Error('出售数量需为正整数，且不能超过剩余数量');
-                const sale = {
-                    id: U.uid(),
-                    ledger: 'earnings',
-                    recordType: 'money',
-                    characterId: item.characterId,
-                    date: data.date,
-                    kind: 'income',
-                    currency: 'cash',
-                    category: '摆摊卖货',
-                    amount: data.amount,
-                    minutes: 0,
-                    note:
-                        item.itemName +
-                        ' ×' +
-                        quantity +
-                        ' 出售' +
-                        (data.note ? ' · ' + data.note : ''),
-                    itemRecordId: item.id,
-                    saleQuantity: quantity,
-                    createdAt: Date.now(),
-                };
-                this.state.transactions.push(sale);
-                this.syncItem(item.id);
-                return sale;
-            },
-
             /** @this {Domain} @param {string} id */
             removeTransaction(id) {
                 const tx = this.state.transactions.find(/** @param {any} t */ (t) => t.id === id);

@@ -18,6 +18,3 @@ export const priceCategories = [
     '召唤兽',
     '其他',
 ];
-
-/** 分类缺失或为空时的兜底值。 */
-export const defaultPriceCategory = '其他';

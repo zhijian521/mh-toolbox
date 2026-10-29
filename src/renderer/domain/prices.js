@@ -80,11 +80,6 @@ export default function install(D, U, _gateway, _localStorage) {
                     );
             },
 
-            /** @this {Domain} @param {string} id @returns {any} */
-            priceItemById(id) {
-                return this.state.prices.find((/** @type {any} */ item) => item.id === id);
-            },
-
             /**
              * 价格历史按「日期倒序、同一天后记的在前」排好再给界面。
              * @this {Domain}

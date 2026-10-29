@@ -475,7 +475,6 @@ export interface DesktopGateway {
     readBackup(name: string): Promise<Result>;
     diagnostics(): Promise<Diagnostics>;
     openPath(target: string): Promise<{ ok: boolean; error?: string }>;
-    openDataFile(): Promise<{ ok: boolean; error?: string }>;
     logError(text: string): Promise<{ ok: boolean }>;
 }
 /**

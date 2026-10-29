@@ -127,23 +127,32 @@ test('实际收益、物品估值、人民币及梦幻币账号收支分别统�
     assert.equal(D.txIn('c1', '2026-10-02', '2026-10-02').length, 3);
     assert.equal(D.txIn('c2', '', '', 'account').length, 1);
 });
-test('出售物品只按成交额计入收入，禁止重复出售，删除成交恢复持有', () => {
+test('物品成交不改变标价合计，删除物品会带走关联成交记录', async () => {
     const D = domain();
+    D.persist = async () => {};
     D.state = D.normalize(fixture());
-    const item = D.state.transactions.find((t) => t.id === 'q1');
-    assert.throws(() => D.settleItem(item, { date: '2026-09-30', amount: 145 }));
-    const sale = D.settleItem(item, { date: '2026-10-03', amount: 145 });
+    const saleInput = {
+        ledger: 'earnings',
+        recordType: 'money',
+        kind: 'income',
+        currency: 'cash',
+        characterId: 'c1',
+        itemRecordId: 'q1',
+        saleQuantity: 1,
+    };
+    // 成交日期不能早于获得日期
+    await assert.rejects(
+        D.saveTransaction({ ...saleInput, date: '2026-09-30', amount: 145 }),
+        /归属/,
+    );
+    const sale = await D.saveTransaction({ ...saleInput, date: '2026-10-03', amount: 145 });
     assert.equal(D.stats(D.earnings()).income, 255);
     assert.equal(D.stats(D.earnings()).itemValue, 150, '卖出不改变物品标价合计');
-    assert.throws(() => D.settleItem(item, { date: '2026-10-04', amount: 145 }));
-    D.removeTransaction(sale.id);
-    assert.equal(item.status, 'held');
-    assert.equal(D.stats(D.earnings()).income, 110);
-    D.settleItem(item, { date: '2026-10-04', amount: 140 });
-    D.removeTransaction(item.id);
+    D.removeTransaction('q1');
     assert.equal(
-        D.state.transactions.some((t) => t.itemRecordId === item.id),
+        D.state.transactions.some((t) => t.id === sale.id),
         false,
+        '删除物品要带走它的成交记录',
     );
     assert.equal(D.stats(D.earnings()).income, 110);
 });
@@ -177,11 +186,22 @@ test('装备双向关联不会重复记账，编辑替换时间线，删除收�
         false,
     );
 });
-test('新备份往返保留物品结算关系、币种、手续费及装备关联', () => {
+test('新备份往返保留物品结算关系、币种、手续费及装备关联', async () => {
     const D = domain();
+    D.persist = async () => {};
     D.state = D.normalize(fixture());
     const item = D.state.transactions.find((t) => t.id === 'q1');
-    const sale = D.settleItem(item, { date: '2026-10-03', amount: 145 });
+    const sale = await D.saveTransaction({
+        ledger: 'earnings',
+        recordType: 'money',
+        kind: 'income',
+        currency: 'cash',
+        characterId: 'c1',
+        date: '2026-10-03',
+        amount: 145,
+        itemRecordId: item.id,
+        saleQuantity: 1,
+    });
     D.state = D.normalize(JSON.parse(JSON.stringify(D.state)));
     assert.equal(D.state.transactions.find((t) => t.id === item.id).saleId, sale.id);
     assert.equal(D.accountStats(D.accounts(), 'rmb').net, 183);

@@ -156,10 +156,8 @@ interface Domain {
     orderedCards: (items: any[]) => any[];
     moveCard: (items: any[], id: string, changes: any) => void;
     setCharFilter: (v: string) => void;
-    chars: () => any[];
     charById: (id: string) => any;
     charName: (id: string) => string;
-    scope: (list: any[]) => any[];
     earnings: (list: any[]) => any[];
     accounts: (list: any[]) => any[];
     itemValue: (t: any, quantity?: number) => number;
@@ -255,7 +253,6 @@ interface Domain {
     removeTransaction: (id: string) => void;
     syncAccountEarnings: (dates: string[]) => Promise<any[]>;
     quickShares: (ids: string[], total: number) => Array<{ characterId: string; amount: number }>;
-    settleItem: (item: any, data: any) => any;
     saveTransaction: (input: any, id?: string) => Promise<any>;
     saveQuickLoot: (input: any) => Promise<any[]>;
     writeTransaction: (input: any, id?: string) => any;
@@ -367,7 +364,6 @@ interface Domain {
 
     // ---- prices.js：物价卡片（独立集合，不受角色筛选影响） ----
     orderedPrices: (items?: any[]) => any[];
-    priceItemById: (id: string) => any;
     /** 价格历史按日期倒序，同一天后记的在前。 */
     priceLogsSorted: (item: any) => any[];
     /** 当前价 = 最新一条历史；没有记录返回 null。 */

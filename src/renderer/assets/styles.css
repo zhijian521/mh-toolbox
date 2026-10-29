@@ -39,7 +39,6 @@
     --green: light-dark(#4a7c59, #7faf8c);
     --blue: light-dark(#3d5a6c, #8aa7b8);
     /* 语义令牌：这几个原本是各组件里手写的值，暗色下必须换一套。 */
-    --hover: light-dark(#fffdf6, #262218);
     --shadow: light-dark(#2f2a2414, #00000059);
     --shadow-lg: light-dark(#2f2a242e, #00000080);
     /* 遮罩不能跟 --ink 走：暗色下 --ink 是浅色，混出来会把背景提亮而不是压暗。 */

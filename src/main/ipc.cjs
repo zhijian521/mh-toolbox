@@ -1,6 +1,5 @@
 const { ipcMain, dialog, shell, clipboard } = require('electron');
 const fs = require('node:fs/promises');
-const nodeFs = require('node:fs');
 const { assertExportPath } = require('./export-path.cjs');
 const { createEquipmentOcr } = require('./equipment-ocr.cjs');
 
@@ -271,15 +270,6 @@ function registerIpc({ app, store, logger, theme, getWindow }) {
         if (!allowed.has(target)) throw new Error('不允许打开该路径');
         const error = await shell.openPath(target);
         return error ? { ok: false, error } : { ok: true };
-    });
-    handle('openDataFile', async () => {
-        // 打开所在目录并选中文件，data.json 可能不存在（首次启动）时退化为打开目录。
-        if (!nodeFs.existsSync(store.file)) {
-            const error = await shell.openPath(store.directory);
-            return error ? { ok: false, error } : { ok: true };
-        }
-        shell.showItemInFolder(store.file);
-        return { ok: true };
     });
     handle('logError', (text) => {
         // 渲染进程主动上报的异常：限长，避免异常风暴把日志刷爆。

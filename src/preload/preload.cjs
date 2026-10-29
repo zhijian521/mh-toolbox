@@ -39,7 +39,6 @@ contextBridge.exposeInMainWorld('mhV2', {
     readBackup: (name) => ipcRenderer.invoke('mhv2:readBackup', name),
     diagnostics: () => ipcRenderer.invoke('mhv2:diagnostics'),
     openPath: (target) => ipcRenderer.invoke('mhv2:openPath', target),
-    openDataFile: () => ipcRenderer.invoke('mhv2:openDataFile'),
     // 渲染层未捕获异常转交主进程落盘，只写日志，不参与业务。
     logError: (text) => ipcRenderer.invoke('mhv2:logError', text),
 });
