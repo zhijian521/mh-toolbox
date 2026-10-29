@@ -45,7 +45,7 @@ async function save() {
         await app.execute((domain) =>
             domain.savePriceLog(
                 props.item.id,
-                { ...plain(draft), price: Math.round(parsed.value! * 10000) },
+                { ...plain(draft), price: U.wanToCash(parsed.value) },
                 props.log?.id,
             ),
         );

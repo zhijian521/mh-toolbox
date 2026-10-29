@@ -41,11 +41,10 @@ export interface Character {
     [key: string]: unknown;
 }
 /**
- * 尚未迁移模块（收益、装备、在线）的记录形状。
+ * 通用记录形状：流水、会话、成长历史、装备变动这些「一行一条」的数据都用它。
  *
- * 这些页面还没搬过来，字段名在领域层已稳定但界面尚未消费，因此只声明渲染层
- * 实际用到的外键，其余键留给 `unknown`——比整块 `any` 安全：读错字段名会报错，
- * 迁移对应模块时再逐字段收紧。
+ * 只声明渲染层实际用到的外键，其余键留给 `unknown`——比整块 `any` 安全：
+ * 读错字段名会报错，需要更强约束的地方再单独声明具体接口。
  */
 export interface RecordEntry {
     id: string;
@@ -490,7 +489,6 @@ export interface Domain {
     schemaVersion: number;
     init(): Promise<void>;
     normalize(data: unknown): AppData;
-    persist(options?: { backupReason?: string }): Promise<unknown>;
     replaceState(data: unknown, reason?: string): Promise<unknown>;
     validateBackup(data: unknown): void;
     /**
@@ -592,12 +590,6 @@ export interface Domain {
         to: string,
         includeActive?: boolean,
     ): EarningsStats;
-    /**
-     * 物品还没卖掉的件数（获得数量减去已成交数量）。
-     *
-     * 只用于成交时的超卖校验与默认数量，不是给界面看的「库存」——这套工具不维护库存视图。
-     */
-    itemRemaining(tx: Transaction): number;
     /** 数量 × 单价（默认用记录自己的数量），保留两位；物品价值的唯一口径。 */
     itemValue(tx: Transaction, quantity?: number): number;
     /** 物品记录的计价单价（万）：当前参考价优先，没有则退回记录里填的价。 */
@@ -626,8 +618,6 @@ export interface Domain {
     rosterOf(session: RecordEntry): string[];
     /** 正在计时的角色清单，没有计时返回空数组；速记按它决定记给谁。 */
     onlineRoster(): string[];
-    /** 把一次速记的金额按在线角色拆开，尾差守恒；返回空数组表示没有可记的角色。 */
-    quickShares(ids: string[], total: number): Array<{ characterId: string; amount: number }>;
     /** 会话折算：`range` 由起止时间算时长与点卡，`duration` 用给定分钟数。 */
     makeSession(input: RecordEntry): RecordEntry & { minutes: number; cost: number };
     /** 会话校验，空串表示通过；补录与调整起点前先跑一遍领域规则。 */
@@ -646,7 +636,6 @@ export interface Domain {
     adjustSessionStart(startAt: number, sessionId?: string): Promise<unknown>;
     /** 结束一段或多段计时；一次提交，失败整体回滚。时长为 0 的段直接撤掉。 */
     stopSessions(sessionIds: string[]): Promise<ActiveSession[]>;
-    settleRunning(sessionId: string, patch?: RecordEntry): ActiveSession | null;
     saveSession(input: RecordEntry, finishActiveId?: string): Promise<RecordEntry>;
     /**
      * 删掉一段在线记录与它结算出的全部点卡流水（同步方法，只改内存，
@@ -692,7 +681,6 @@ export interface Domain {
     equipmentDetails(eq: EquipmentItem): EquipmentDetail;
     emptyEquipmentDetails(): EquipmentDetail;
     validateEquipmentDetails(slot: string, level: unknown, detail: EquipmentDetail): void;
-    equipmentDetailsSnapshot(slot: string, detail: EquipmentDetail): EquipmentSnapshot;
     gearLogsOf(id: string): RecordEntry[];
     /** 粘贴文本导入：解析单件、转成档案、校验、批量入库都由领域负责，页面只做核对。 */
     equipmentImportLimits: { count: number; bytes: number; pixels: number };

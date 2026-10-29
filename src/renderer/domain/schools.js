@@ -1,8 +1,6 @@
 // @ts-check
 import { schoolSkillNames } from '../game-data/school-skills.js';
 
-// Migrated from the immutable v1 baseline; see docs/SYNC.md.
-
 /** @typedef {Partial<Domain> & ThisType<Domain>} SchoolsMixin */
 
 /**

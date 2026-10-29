@@ -279,8 +279,8 @@ const unit = computed(() => props.goal.unit || '万');
     border-color: color-mix(in srgb, var(--blue) 45%, transparent);
 }
 .goal-badge.type-gear {
-    color: light-dark(#8a5a2b, #c49a6a);
-    border-color: color-mix(in srgb, light-dark(#8a5a2b, #c49a6a) 45%, transparent);
+    color: var(--bronze);
+    border-color: color-mix(in srgb, var(--bronze) 45%, transparent);
 }
 .goal-overdue {
     color: var(--red);

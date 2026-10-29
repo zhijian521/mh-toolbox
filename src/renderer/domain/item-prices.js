@@ -75,15 +75,6 @@ export function parseCsvRows(text) {
     return rows;
 }
 
-/**
- * 单元格文本化：加引号并转义内部引号，保证名称里带逗号也不会错行。
- * @param {unknown} value
- * @returns {string}
- */
-function cell(value) {
-    return '"' + String(value == null ? '' : value).replace(/"/g, '""') + '"';
-}
-
 /** @param {any} value @returns {number} 万为单位的数值，非法按 0 */
 function wan(value) {
     const parsed = Number(String(value == null ? '' : value).replace(/[,，\s]/g, ''));
@@ -92,11 +83,11 @@ function wan(value) {
 
 /**
  * @param {Domain} D
- * @param {any} _U
+ * @param {any} U
  * @param {unknown} _gateway
  * @param {unknown} _localStorage
  */
-export default function install(D, _U, _gateway, _localStorage) {
+export default function install(D, U, _gateway, _localStorage) {
     /**
      * 导出单价表：没设过价的也占一行（单价留空），
      * 这样用户在 Excel 里看到的是完整清单，而不是只有改过的那几个。
@@ -109,7 +100,7 @@ export default function install(D, _U, _gateway, _localStorage) {
             const price = this.itemPrice(String(item.id));
             rows.push([String(item.id), item.name, price > 0 ? String(price / 10000) : '']);
         });
-        return '\uFEFF' + rows.map((row) => row.map(cell).join(',')).join('\r\n') + '\r\n';
+        return U.csvText(rows);
     };
 
     /**
@@ -166,7 +157,7 @@ export default function install(D, _U, _gateway, _localStorage) {
                 cleared.push(id);
                 return;
             }
-            writes.push({ id, price: Math.round(value * 10000) });
+            writes.push({ id, price: U.wanToCash(value) });
         });
 
         if (!writes.length && !cleared.length) {

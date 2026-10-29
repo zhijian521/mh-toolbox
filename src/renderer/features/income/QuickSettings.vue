@@ -28,7 +28,7 @@ async function save() {
         await app.execute((domain) =>
             domain.commit(() =>
                 domain.setQuickSettings({
-                    cardPrice: Math.round(Number(cardPrice.value) * 10000),
+                    cardPrice: U.wanToCash(cardPrice.value),
                 }),
             ),
         );

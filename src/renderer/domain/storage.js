@@ -1,5 +1,4 @@
 // @ts-check
-// Migrated from the immutable v1 baseline; see docs/SYNC.md.
 
 /**
  * @typedef {object} StorageGateway 存储通道，由 preload 暴露，也是唯一碰磁盘的地方。

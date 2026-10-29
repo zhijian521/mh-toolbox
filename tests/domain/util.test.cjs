@@ -36,11 +36,9 @@ test('金额按万为基准，满一万万折算亿，空值与非法值显示�
     assert.equal(U.fmtMoney('12'), '12 万');
 });
 
-test('整数、数字与人民币格式的千分位与小数位', () => {
+test('数字与人民币格式的千分位与小数位', () => {
     assert.equal(U.fmtNumber(1234.567), '1,234.57');
     assert.equal(U.fmtNumber(null), '0');
-    assert.equal(U.fmtInt(1234.5), '1,235');
-    assert.equal(U.fmtInt(null), '0');
     assert.equal(U.fmtAmount(1234.5, 'rmb'), '¥ 1,234.50');
     assert.equal(U.fmtAmount(12, 'cash'), '12 万');
     assert.equal(U.fmtAmount(null, 'rmb'), '¥ 0.00');
@@ -85,18 +83,41 @@ test('快捷区间按当前本地日期计算，自定义范围可只设一端',
     assert.deepEqual(U.rangeFor('unknown'), { from: '', to: '' });
 });
 
-test('剩余天数取整朝向未来，百分比封顶 999%', () => {
+test('剩余天数取整朝向未来，空值返回 0', () => {
     assert.equal(U.daysLeft(U.today()), 0);
     assert.equal(U.daysLeft(U.addDays(U.today(), 3)), 3);
     assert.equal(U.daysLeft(U.addDays(U.today(), -2)), -2);
     // 空值返回 0 而不是 NaN，界面才不会显示 NaN。
     assert.equal(U.daysLeft(''), 0);
     assert.equal(U.daysLeft(null), 0);
+});
 
-    assert.equal(U.fmtPercent(1, 4), '25%');
-    assert.equal(U.fmtPercent(3, 2), '150%');
-    assert.equal(U.fmtPercent(1, 0), '0%');
-    assert.equal(U.fmtPercent(1000, 1), '999%');
+test('两位小数、万与游戏币互转、CSV 转义、记录倒序各只有一份实现', () => {
+    assert.equal(U.round2(0.015), 0.02);
+    assert.equal(U.round2('1.234'), 1.23);
+    assert.equal(U.round2(null), 0);
+    assert.equal(U.wanToCash(1.5), 15000);
+    assert.equal(U.wanToCash(''), 0);
+    assert.equal(U.cashToWan(15000), 1.5);
+
+    assert.equal(U.csvCell('a,b'), '"a,b"');
+    assert.equal(U.csvCell('说"好"'), '"说""好"""');
+    // 以 = + - @ 开头的文本会被 Excel 当公式，前置单引号中和。
+    assert.equal(U.csvCell('=1+1'), '"\'=1+1"');
+    assert.equal(U.csvCell(12), '"12"');
+    assert.equal(U.csvText([['a', 1]]), '\uFEFF"a","1"\r\n');
+
+    const rows = [
+        { date: '2026-10-28', createdAt: 3 },
+        { date: '2026-10-28', createdAt: 9 },
+        { date: '2026-10-29', createdAt: 1 },
+        { date: '2026-10-27' },
+    ];
+    assert.deepEqual(
+        rows.sort(U.byDateDesc).map((row) => row.date + ':' + (row.createdAt || 0)),
+        ['2026-10-29:1', '2026-10-28:9', '2026-10-28:3', '2026-10-27:0'],
+        '日期倒序、同一天后记的在前，缺 createdAt 也不会排到最前',
+    );
 });
 
 test('uid 连续调用不重复', () => {

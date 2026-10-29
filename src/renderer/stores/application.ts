@@ -157,8 +157,8 @@ export const useApplication = defineStore('application', () => {
      * 串行执行一次数据修改并发布快照。
      *
      * 返回值可以是 Promise，也可以直接是值：领域里有一批方法只改内存、同步返回
-     * （`removeTransaction`、`settleItem` 就是），它们通常由调用方用 `commit` 包一层，
-     * 但 `commit` 之外的同步方法同样可以交给这里，不必再套一层 `async`。
+     * （`removeTransaction`、`removeEquipment` 就是），它们通常由调用方用 `commit`
+     * 包一层，但 `commit` 之外的同步方法同样可以交给这里，不必再套一层 `async`。
      */
     async function execute<T>(operation: (domain: Domain) => T | Promise<T>): Promise<T> {
         pending.value++;

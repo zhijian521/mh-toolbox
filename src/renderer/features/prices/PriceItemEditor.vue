@@ -91,7 +91,7 @@ async function save() {
         const input = {
             ...plain(draft),
             category,
-            price: priceWan === null ? null : Math.round(priceWan * 10000),
+            price: priceWan === null ? null : U.wanToCash(priceWan),
         };
         const saved = await app.execute((domain) => domain.savePriceItem(input, props.item?.id));
         emit('saved', saved.id);

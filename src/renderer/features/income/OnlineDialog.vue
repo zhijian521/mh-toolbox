@@ -114,7 +114,7 @@ const draft = computed(() =>
         date: date.value,
         minutes: span.value,
         accounts: accounts.value,
-        cardPrice: Math.round((Number(price.value) || 0) * 10000),
+        cardPrice: U.wanToCash(price.value),
         note: note.value.trim(),
         source: 'manual',
     }),
@@ -130,7 +130,7 @@ const hourCost = computed(
             date: U.today(),
             minutes: 60,
             accounts: accounts.value,
-            cardPrice: Math.round((Number(price.value) || 0) * 10000),
+            cardPrice: U.wanToCash(price.value),
             source: 'manual',
         }).cost,
 );
@@ -179,7 +179,7 @@ async function save() {
             error.value = '没有可加入的角色：勾上的号都已在计时中';
             return;
         }
-        const priceValue = Math.round((Number(price.value) || 0) * 10000);
+        const priceValue = U.wanToCash(price.value);
         if (!Number.isFinite(priceValue) || priceValue <= 0) {
             error.value = '请填写有效的点卡单价';
             return;

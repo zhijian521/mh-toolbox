@@ -146,7 +146,6 @@ const earningsSpan = computed(() => ({
     from: earningsDays.value[0],
     to: earningsDays.value[earningsDays.value.length - 1],
 }));
-const round2 = (value: number) => Math.round(value * 100) / 100;
 /**
  * 按天累加净额。
  *
@@ -160,7 +159,7 @@ function dailySeries(list: Transaction[], net: (tx: Transaction) => number, days
         if (!window.has(tx.date)) return;
         bucket.set(tx.date, (bucket.get(tx.date) || 0) + net(tx));
     });
-    const values = days.map((date) => round2(bucket.get(date) || 0));
+    const values = days.map((date) => U.round2(bucket.get(date) || 0));
     const peak = Math.max(...values.map((value) => Math.abs(value))) || 1;
     return days.map((date, index) => ({ date, value: values[index], ratio: values[index] / peak }));
 }
@@ -205,20 +204,10 @@ const accountTrend = computed(() => {
     };
 });
 const trendTotal = (series: Array<{ value: number }>) =>
-    round2(series.reduce((sum, point) => sum + point.value, 0));
+    U.round2(series.reduce((sum, point) => sum + point.value, 0));
 
-const recentEarnings = computed(() =>
-    earningsTx.value
-        .slice()
-        .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0))
-        .slice(0, 6),
-);
-const recentAccounts = computed(() =>
-    accountTx.value
-        .slice()
-        .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0))
-        .slice(0, 6),
-);
+const recentEarnings = computed(() => earningsTx.value.slice().sort(U.byDateDesc).slice(0, 6));
+const recentAccounts = computed(() => accountTx.value.slice().sort(U.byDateDesc).slice(0, 6));
 
 /** 进行中的目标，最多四张——总览是提醒「还有什么事」，不是目标列表。 */
 const goals = computed(() => {

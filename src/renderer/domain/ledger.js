@@ -1,5 +1,4 @@
 // @ts-check
-// Migrated from the immutable v1 baseline; see docs/SYNC.md.
 
 /** @typedef {Partial<Domain> & ThisType<Domain>} LedgerMixin */
 
@@ -146,7 +145,6 @@ export default function install(D, U, _gateway, _localStorage) {
                     ),
                 );
                 if (!list.length) return Promise.resolve([]);
-                const round2 = (/** @type {number} */ value) => Math.round(value * 100) / 100;
                 return this.commit(() => {
                     /** @type {Array<{ date: string, characterId: string, amount: number }>} */
                     const entries = [];
@@ -212,7 +210,7 @@ export default function install(D, U, _gateway, _localStorage) {
                                         },
                                     );
                                     const online = this.onlineStats(characterId, date, date, true);
-                                    const amount = round2(cash + items - online.cost);
+                                    const amount = U.round2(cash + items - online.cost);
                                     const note =
                                         online.minutes > 0
                                             ? '在线 ' +

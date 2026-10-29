@@ -47,10 +47,7 @@ const closeButton = ref<HTMLButtonElement>();
 
 const all = computed<Transaction[]>(() => {
     void app.data;
-    return rules
-        .accounts()
-        .slice()
-        .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+    return rules.accounts().slice().sort(U.byDateDesc);
 });
 const categoryOptions = computed(() => {
     const used = new Set(all.value.map((tx) => tx.category));

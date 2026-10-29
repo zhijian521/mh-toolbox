@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useApplication } from '../../stores/application';
+import { U } from '../../domain/util.js';
 import BaseModal from '../../components/BaseModal.vue';
 import NumberStepper from '../../components/NumberStepper.vue';
 import NumberValue from '../../components/NumberValue.vue';
@@ -35,7 +36,7 @@ async function save() {
         error.value = '请填写大于 0 的单价';
         return;
     }
-    const raw = Math.round(parsed.value * 10000);
+    const raw = U.wanToCash(parsed.value);
     try {
         if (!props.once)
             await app.execute((domain) =>

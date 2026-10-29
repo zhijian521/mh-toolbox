@@ -48,7 +48,7 @@ const records = computed<Transaction[]>(() => {
     return rules
         .txIn(character.value, range.value.from, range.value.to, 'account')
         .slice()
-        .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+        .sort(U.byDateDesc);
 });
 const stats = computed<Record<'rmb' | 'cash', AccountStats>>(() => ({
     rmb: rules.accountStats(records.value, 'rmb'),

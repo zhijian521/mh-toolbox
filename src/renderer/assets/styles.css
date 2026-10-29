@@ -38,6 +38,8 @@
     --gold: light-dark(#a67c2e, #d2a44e);
     --green: light-dark(#4a7c59, #7faf8c);
     --blue: light-dark(#3d5a6c, #8aa7b8);
+    /* 铜色：装备类目标/徽章专用。金给金钱、蓝给进度、绿给已达成，装备需要自己那一档。 */
+    --bronze: light-dark(#8a5a2b, #c49a6a);
     /* 语义令牌：这几个原本是各组件里手写的值，暗色下必须换一套。 */
     --shadow: light-dark(#2f2a2414, #00000059);
     --shadow-lg: light-dark(#2f2a242e, #00000080);

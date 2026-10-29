@@ -8,7 +8,7 @@ import { onBeforeUnmount, ref } from 'vue';
  */
 export type DropPosition = 'before' | 'after';
 
-export interface SortMove {
+interface SortMove {
     key: string;
     from: number;
     to: number;

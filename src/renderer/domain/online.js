@@ -1,5 +1,4 @@
 // @ts-check
-// Migrated from the immutable v1 baseline; see docs/SYNC.md.
 
 /** @typedef {Partial<Domain> & ThisType<Domain>} OnlineMixin */
 
@@ -710,7 +709,7 @@ export default function install(D, U, _gateway, _localStorage) {
                         });
                     },
                 );
-                result.cost = Math.round(result.cost * 100) / 100;
+                result.cost = U.round2(result.cost);
                 return result;
             },
 

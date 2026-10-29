@@ -35,7 +35,7 @@ export const quickItems = withIcon(fixedItemMeta);
 /** 不固定价格组：每次记录前现填单价。 */
 export const quickVariable = withIcon(variableItemMeta);
 /** 完整目录，`quickItemById` 用它反查名称与图标。 */
-export const quickCatalog = [...quickItems, ...quickVariable];
+const quickCatalog = [...quickItems, ...quickVariable];
 
 /** @param {number} id @returns {{ id: number, name: string, img: string, icon: string } | undefined} */
 export function quickItemById(id) {

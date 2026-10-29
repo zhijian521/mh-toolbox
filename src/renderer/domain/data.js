@@ -1,4 +1,5 @@
 // @ts-check
+import { U } from './util.js';
 import { schools } from '../game-data/schools.js';
 import { priceCategories } from '../game-data/price-catalog.js';
 import {
@@ -6,8 +7,6 @@ import {
     petTraining,
     auxiliarySkillNames,
 } from '../game-data/character-progress.js';
-
-// Migrated from the immutable v1 baseline; see docs/SYNC.md.
 
 /**
  * 这里只构造状态与常量，其余一百多个方法由各模块 install 混入同一个对象，
@@ -223,7 +222,7 @@ export function createData(localStorage) {
          * @returns {number}
          */
         itemValue(t, quantity = t.quantity) {
-            return Math.round((Number(quantity) || 0) * this.itemUnitPrice(t) * 100) / 100;
+            return U.round2((Number(quantity) || 0) * this.itemUnitPrice(t));
         },
 
         /**
@@ -280,9 +279,7 @@ export function createData(localStorage) {
                 .filter(function (l) {
                     return l.equipmentId === eqId;
                 })
-                .sort(function (a, b) {
-                    return b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0);
-                });
+                .sort((a, b) => U.byDateDesc(a, b));
         },
     });
 

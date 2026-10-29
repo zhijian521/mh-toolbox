@@ -1,5 +1,4 @@
 // @ts-check
-// Migrated from the immutable v1 baseline; see docs/SYNC.md.
 
 /** @typedef {Partial<Domain> & ThisType<Domain>} CharactersMixin */
 
@@ -293,10 +292,7 @@ export default function install(D, U, _gateway, _localStorage) {
                                 characterName: character.name,
                             })),
                     )
-                    .sort(
-                        (/** @type {any} */ a, /** @type {any} */ b) =>
-                            b.date.localeCompare(a.date) || b.createdAt - a.createdAt,
-                    );
+                    .sort((/** @type {any} */ a, /** @type {any} */ b) => U.byDateDesc(a, b));
             },
 
             /**

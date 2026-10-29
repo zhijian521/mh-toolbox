@@ -60,7 +60,7 @@ const logs = computed<GoalLog[]>(() => {
     return current.value.logs
         .filter((log) => (!start || log.date >= start) && (!end || log.date <= end))
         .slice()
-        .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+        .sort(U.byDateDesc);
 });
 const total = computed(() => (automatic.value ? changes.value.length : logs.value.length));
 const pages = computed(() => Math.max(1, Math.ceil(total.value / 12)));

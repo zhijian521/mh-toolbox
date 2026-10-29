@@ -79,10 +79,7 @@ const characterOptions = computed(() => [
 ]);
 const records = computed<Transaction[]>(() => {
     void app.data;
-    return rules
-        .txIn(character.value, range.value.from, range.value.to)
-        .slice()
-        .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+    return rules.txIn(character.value, range.value.from, range.value.to).slice().sort(U.byDateDesc);
 });
 /** 正在计时的会话；秒表与统计分别按自己的节拍刷新。 */
 const actives = computed(() => {
@@ -313,7 +310,7 @@ const accountSettled = computed(() => {
             sum + (tx.kind === 'income' ? Number(tx.amount) || 0 : -(Number(tx.amount) || 0)),
         0,
     );
-    return { count: txs.length, net: Math.round(net * 100) / 100 };
+    return { count: txs.length, net: U.round2(net) };
 });
 
 function priceText(id: number) {

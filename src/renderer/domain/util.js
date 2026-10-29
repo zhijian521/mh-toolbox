@@ -44,6 +44,70 @@ export function addDays(dateStr, days) {
 }
 
 /**
+ * 保留两位小数。金额、小时数、比例都按这一个口径收，避免各处自己写 `Math.round(x*100)/100`。
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function round2(value) {
+    return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+/**
+ * 记录倒序：先按日期，同一天里后记的排在前面。
+ *
+ * 账号、收益、目标历史、总览、装备时间线都用这一套；以前这段比较在 8 个地方各写一遍，
+ * 少写一个 `|| 0` 就会让 `createdAt` 缺失的记录排到最前。
+ * @param {{ date?: string, createdAt?: number }} a
+ * @param {{ date?: string, createdAt?: number }} b
+ * @returns {number}
+ */
+export function byDateDesc(a, b) {
+    return (
+        String(b.date || '').localeCompare(String(a.date || '')) ||
+        (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0)
+    );
+}
+
+/**
+ * 「万」写成游戏币原值：`1.5` → `15000`。界面上的价格输入框全是万为单位。
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function wanToCash(value) {
+    return Math.round((Number(value) || 0) * 10000);
+}
+
+/**
+ * 游戏币原值写成「万」：`15000` → `1.5`。与 {@link wanToCash} 互为反向。
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function cashToWan(value) {
+    return (Number(value) || 0) / 10000;
+}
+
+/**
+ * CSV 单元格：加引号、转义内部引号，并中和会被表格软件当公式执行的文本。
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function csvCell(value) {
+    let text = String(value == null ? '' : value);
+    // 以 = + - @ 开头的文本会被 Excel 当公式执行，前置单引号中和。
+    if (typeof value === 'string' && /^[\s]*[=+@-]/.test(text)) text = "'" + text;
+    return '"' + text.replace(/"/g, '""') + '"';
+}
+
+/**
+ * 二维数组 → 带 BOM 的 CRLF 文本，直接落盘就是 Excel 认得的 CSV。
+ * @param {Array<Array<unknown>>} rows
+ * @returns {string}
+ */
+export function csvText(rows) {
+    return '\uFEFF' + rows.map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+}
+
+/**
  * 游戏币按「万」为基准，满一万万自动折算为「亿」。
  * @param {number | string | null | undefined} value
  * @returns {string} 无法解析时返回破折号
@@ -52,7 +116,7 @@ export function fmtMoney(value) {
     if (value == null || Number.isNaN(Number(value))) return '—';
     const amount = Number(value);
     if (Math.abs(amount) >= 10000) return (amount / 10000).toFixed(2) + ' 亿';
-    const rounded = Math.round(amount * 100) / 100;
+    const rounded = round2(amount);
     return (Number.isInteger(rounded) ? rounded : rounded.toFixed(2)) + ' 万';
 }
 
@@ -62,15 +126,6 @@ export function fmtMoney(value) {
  */
 export function fmtNumber(value) {
     return Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
-}
-
-/**
- * @param {number | string | null | undefined} value
- * @returns {string} 四舍五入后的整数字符串；空值返回 `0`
- */
-export function fmtInt(value) {
-    if (value == null || Number.isNaN(Number(value))) return '0';
-    return Math.round(Number(value)).toLocaleString('zh-CN');
 }
 
 /**
@@ -99,7 +154,7 @@ export function fmtMinutes(minutes) {
     // 计时中的分钟数是个长小数（0.016666666666666666），直接拼出来会满屏尾巴。
     if (minutes < 1) return Math.max(1, Math.round(minutes * 60)) + ' 秒';
     // 先按两位小数收一次，再决定用分钟还是小时：59.999 收完是 60，该显示成小时。
-    const rounded = Math.round(minutes * 100) / 100;
+    const rounded = round2(minutes);
     if (rounded < 60) return rounded + ' 分钟';
     return (minutes / 60).toFixed(1) + ' 小时';
 }
@@ -149,16 +204,6 @@ export function daysLeft(dateStr) {
 }
 
 /**
- * @param {number} part
- * @param {number} total
- * @returns {string} 整数百分比，上限 999%
- */
-export function fmtPercent(part, total) {
-    if (!total) return '0%';
-    return Math.min(999, Math.round((part / total) * 100)) + '%';
-}
-
-/**
  * 把一笔金额按份数拆开，尾差落在前几份，保证各份之和与原额完全一致。
  *
  * 点卡分摊与速记均分都要这条：`30 / 7` 这种除不尽的数如果各自四舍五入，
@@ -187,11 +232,15 @@ export const U = {
     addDays,
     fmtMoney,
     fmtNumber,
-    fmtInt,
     fmtAmount,
     fmtMinutes,
+    round2,
+    byDateDesc,
+    wanToCash,
+    cashToWan,
+    csvCell,
+    csvText,
     rangeFor,
     daysLeft,
-    fmtPercent,
     splitAmount,
 };

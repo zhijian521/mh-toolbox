@@ -1,5 +1,4 @@
 // @ts-check
-// Migrated from the immutable v1 baseline; see docs/SYNC.md.
 
 /**
  * 记录导出：把筛选后的流水渲染成 CSV。
@@ -24,8 +23,8 @@
  * @property {string} [note]
  */
 
-/** @param {ExportDomain} D @param {unknown} _U @param {unknown} _gateway @param {unknown} _localStorage */
-export default function install(D, _U, _gateway, _localStorage) {
+/** @param {ExportDomain} D @param {any} U @param {unknown} _gateway @param {unknown} _localStorage */
+export default function install(D, U, _gateway, _localStorage) {
     /* 导出复用列表筛选结果，金额列明确单位，文本避免被表格软件当作公式执行。 */
     /**
      * @this {ExportDomain}
@@ -33,13 +32,6 @@ export default function install(D, _U, _gateway, _localStorage) {
      * @returns {string} 带 BOM 的 CRLF 文本
      */
     D.recordsCsv = function (records) {
-        /** @param {unknown} value @returns {string} */
-        const cell = (value) => {
-            let text = String(value == null ? '' : value);
-            // 以 = + - @ 开头的文本会被 Excel 当公式执行，前置单引号中和。
-            if (typeof value === 'string' && /^[\s]*[=+@-]/.test(text)) text = "'" + text;
-            return '"' + text.replace(/"/g, '""') + '"';
-        };
         /** @type {Array<Array<string | number>>} */
         const rows = [
             [
@@ -82,6 +74,6 @@ export default function install(D, _U, _gateway, _localStorage) {
                 tx.note || '',
             ]);
         });
-        return '\uFEFF' + rows.map((row) => row.map(cell).join(',')).join('\r\n') + '\r\n';
+        return U.csvText(rows);
     };
 }
