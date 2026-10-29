@@ -268,7 +268,6 @@ function switchCharacter(id: string) {
                                     :class="{ full: index <= item.used }"
                                 />
                             </span>
-                            <span class="eq-char-count">{{ item.used }}/{{ item.total }}</span>
                         </span>
                     </button>
                 </div>
@@ -398,18 +397,22 @@ function switchCharacter(id: string) {
  * 换号的动机十次有八次是「去看那个还没配齐的小号」，一眼看出谁缺几格，比逐个点开快。
  * 只有选中的那张变金边、名字加粗、进度条转金；未选中的卡保持纸色描边，
  * 一排里只强调「我在看谁」。
+ *
+ * 尺寸按「五个号一屏排完、不用左右滚」倒推：1400 宽时 5×168 还有富余，
+ * 1024 宽一路收到 120 也放得下（数字见 `docs/VALIDATION.md`）。卡上不写「9/12」——
+ * 那段字要吃掉三四十像素，为此多滚一次不值；具体件数在 title 里。
  */
 .eq-toolbar {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 14px;
+    gap: 10px;
+    margin-bottom: 12px;
 }
 .eq-chars {
     display: flex;
     flex: 1 1 auto;
     min-width: 0;
-    gap: 8px;
+    gap: 6px;
     /* 卡片自带边框与底色，横向滚动时不能把它们裁掉半条边。 */
     padding: 1px;
     overflow-x: auto;
@@ -422,16 +425,16 @@ function switchCharacter(id: string) {
     display: flex;
     flex-direction: column;
     /*
-     * 卡片随这一行分配宽度，但卡在 208：再放宽，上半行只剩「名字章 + 名字」两条，
-     * 右边空出一大块，反而不像卡；176 以下进度条又挤成一串小点。号多时横向滚动。
+     * 宽度随这一行分配：上限 168（再放宽上半行就空），下限 120（五个号在 1024 窗口
+     * 也能挤进一屏）。到下限还装不下才横向滚动——五个号以内不该出现滚动条。
      */
     flex: 1 1 0;
-    min-width: 176px;
-    max-width: 208px;
-    gap: 8px;
-    padding: 9px 11px 10px;
+    min-width: 120px;
+    max-width: 168px;
+    gap: 5px;
+    padding: 6px 8px 7px;
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: 5px;
     background: var(--paper);
     color: var(--muted);
     text-align: left;
@@ -443,7 +446,7 @@ function switchCharacter(id: string) {
 .eq-char-head {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 7px;
     min-width: 0;
 }
 /*
@@ -454,13 +457,13 @@ function switchCharacter(id: string) {
     display: grid;
     place-items: center;
     flex: none;
-    width: 30px;
-    height: 30px;
+    width: 24px;
+    height: 24px;
     border: 1px solid var(--line-2);
-    border-radius: 5px;
+    border-radius: 4px;
     background: var(--paper-2);
     color: var(--muted);
-    font-size: 13.5px;
+    font-size: 12px;
     line-height: 1;
     transition:
         background-color 120ms ease,
@@ -476,33 +479,25 @@ function switchCharacter(id: string) {
 .eq-char-foot {
     display: flex;
     align-items: center;
-    gap: 8px;
 }
 .eq-char-meter {
     display: flex;
     flex: 1 1 auto;
-    gap: 3px;
+    gap: 2px;
     min-width: 0;
 }
 /*
- * 空槽压到 26% 才分得清：一格 5px 高，空与满都取 --line-2 时整排读起来是一条虚线，
- * 「12/12」和「0/12」看着差不多。满槽用 --ink-2，选中那张再转金。
+ * 空槽压到 26% 才分得清：空与满都取 --line-2 时整排读起来是一条虚线，
+ * 「穿满」和「一件没穿」看着差不多。满槽用 --muted，选中那张再转金。
  */
 .eq-char-meter i {
     flex: 1 1 0;
-    height: 5px;
-    border-radius: 2.5px;
+    height: 4px;
+    border-radius: 2px;
     background: color-mix(in srgb, var(--line-2) 26%, transparent);
 }
 .eq-char-meter i.full {
     background: var(--muted);
-}
-.eq-char-count {
-    flex: none;
-    color: var(--muted);
-    font-size: 10px;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
 }
 .eq-char:hover:not(:disabled) {
     border-color: var(--line-2);
@@ -528,7 +523,7 @@ function switchCharacter(id: string) {
     background: var(--gold);
 }
 .eq-char-name {
-    font-size: 13px;
+    font-size: 12.5px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -538,8 +533,8 @@ function switchCharacter(id: string) {
 }
 .eq-char-sub {
     color: var(--muted);
-    font-size: 11px;
-    line-height: 1.35;
+    font-size: 10px;
+    line-height: 1.3;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -553,6 +548,15 @@ function switchCharacter(id: string) {
 .eq-toolbar-hint {
     color: var(--muted);
     font-size: 11.5px;
+}
+/*
+ * 窄窗口把这行「N 件档案」收起来，宽度让给卡片：五个号时每人多 12px，
+ * 「109 级 · 大唐官府」就不用截成「大唐…」。件数还能在仓库里看。
+ */
+@media (max-width: 1200px) {
+    .eq-toolbar-hint {
+        display: none;
+    }
 }
 /* 仓库是「另一个视图」而不是主操作，用图标 + 文字，别再给主色。 */
 .eq-warehouse-btn {
