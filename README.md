@@ -1,6 +1,6 @@
 # 梦幻养老助手 V2
 
-Electron + Vite + Vue 3 + Pinia 的桌面应用，用于梦幻西游的养成与账本记录。全部页面已从 V1 迁移完成，V1 完整归档在 `migration/baseline/`。
+Electron + Vite + Vue 3 + Pinia 的桌面应用，用于梦幻西游的养成与账本记录。全部页面已从 V1 迁移完成，V1 的初始文本快照保留在 `migration/initial-baseline/`。
 
 ## 启动
 
@@ -72,9 +72,7 @@ Node 版本见 `.nvmrc`（22.22.2）。提交前缀限定 `feat`/`fix`/`docs`/`s
 
 ## 归档
 
-`migration/baseline/` 是目录调整时的完整 V1 工程，`migration/initial-baseline/` 是不可覆盖的初始文本快照，`migration/baseline.json` 记录初次采集的 Git HEAD、未提交状态、数据版本与文件 SHA-256（`tests/isolation.test.mjs` 会校验它）。三者都不参与构建与检查。
-
-`npm run migration:status` 只读比对归档 V1 与初始基线，不写任何文件。
+`migration/initial-baseline/` 是不可覆盖的初始文本快照，`migration/baseline.json` 记录初次采集的 Git HEAD、未提交状态、数据版本与文件 SHA-256（`tests/isolation.test.mjs` 会校验它）。两者都不参与构建与检查。原先那份可运行的 V1 完整工程 `migration/baseline/` 已在 2026-10-29 移除，历史仍留在 Git 里。
 
 ## 许可
 

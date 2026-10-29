@@ -40,7 +40,6 @@
 3. `npm run verify`：把上面两步串成一次，提交前跑这条即可。
 4. `npm run dist:dir`：生产资源、preload、字体与应用入口打包。
 5. 使用临时 profile 的 `tests/inspect.electron.cjs` 检查实际窗口，示例数据不进入用户数据。
-6. 每个后续模块开始前与结束前运行 `migration:status`，并记录已同步差异。
 
 ## 明确不做的事
 

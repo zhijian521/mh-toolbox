@@ -7,32 +7,6 @@ concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
 jobs:
-    legacy:
-        runs-on: windows-latest
-        env:
-            # npm ci 的 postinstall 会下载 Electron，缓存到工作区内再交给 actions/cache。
-            ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
-            ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
-        defaults:
-            run:
-                working-directory: migration/baseline
-        steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: migration/baseline/package-lock.json
-            - uses: actions/cache@v4
-              with:
-                  path: .cache
-                  key: ${{ runner.os }}-electron-legacy-${{ hashFiles('migration/baseline/package-lock.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-electron-legacy-
-            - run: npm ci
-            - run: npm run check
-            - run: npm test
-            - run: npm run test:electron
     v2:
         runs-on: windows-latest
         env:

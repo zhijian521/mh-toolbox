@@ -13,7 +13,6 @@ src/renderer/domain/        从基线迁入的领域规则，ES 模块工厂
 src/renderer/stores/        Pinia 应用状态、完成或回滚后的界面快照
 src/renderer/services/      桌面接口、外观偏好（`theme.ts`，设置页与侧栏共用）及普通数据转换
 src/renderer/assets/        独立字体、许可和样式；只保留设计基座
-migration/baseline/         原 V1 完整工程，作为迁移参考
 migration/initial-baseline/ 不可变初始文本快照
 migration/baseline.json     初始快照的采集信息与文件哈希
 tests/domain/               从基线复制的领域回归用例
@@ -65,7 +64,7 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 - 窗口把 `window.open` 全部拒绝、`will-navigate` 一律拦截，所以界面里的外链点不动。外链只能走 `mhV2.openExternal`，主进程只放行 `https` 且域名为 `github.com` / `polyformproject.org` 的地址，其余记日志后拒绝。
 - V2 主工程位于仓库根目录，脚本仅监听自身源码。所有输出均位于根目录的 `dist/` 和 `release/`。
 - 打包使用本工程已安装的 Electron 分发目录，避免打包时重复下载另一份运行时。
-- `.github/workflows/ci.yml` 中的 V2 job 在根目录依次执行 `npm ci`、`npm run check`、`npm run build`、`npm run test:electron`；V1 的 legacy job 在 `migration/baseline/` 执行原有检查。
+- `.github/workflows/ci.yml` 只有 V2 一个 job，在根目录依次执行 `npm ci`、`npm run check`、`npm run build`、`npm run test:electron`。原先针对归档 V1 的 legacy job 已随 `migration/baseline/` 一并移除。
 
 ## 本地 OCR 的边界
 
@@ -88,7 +87,7 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，取代固定单�
 - 格式交给 Prettier，风格规则一律不进 ESLint，避免两套格式化互相改写。
 - `eslint.config.js` 按运行环境分组：渲染层用浏览器全局，`src/main`、`src/preload` 与 `electron-builder.config.cjs` 是 CJS 加 Node 全局，`scripts`、`tests` 是 Node 且允许 `console`。`tests/*.electron.cjs` 额外补上浏览器全局，因为断言体通过 `executeJavaScript` 在渲染进程求值。
 - Vue 只启用 `flat/essential`；`flat/recommended` 里的缩进、属性换行等规则与 Prettier 冲突，不启用。
-- `migration/**` 整目录忽略：V1 工程与不可变初始快照均不参与 V2 的静态检查或格式化，初始快照由哈希测试单独校验。
+- `migration/**` 整目录忽略：不可变初始快照不参与 V2 的静态检查或格式化，它由 `tests/isolation.test.mjs` 的哈希测试单独校验。
 - 领域安装函数签名统一是 `install(D, U, gateway, localStorage)`，多数模块只用到其中一两个参数，未用形参加 `_` 前缀，由 `argsIgnorePattern` 放行；不要为了消警告删掉形参，位置一旦错位就会到运行时才暴露。
 
 ## 类型检查
