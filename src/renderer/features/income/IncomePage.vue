@@ -632,7 +632,7 @@ async function onlineSaved(dates: string[]) {
 }
 </script>
 <template>
-    <PageHeader title="收益" description="物品速记 · 在线时长与点卡 · 物品卖出后才计入收入">
+    <PageHeader title="收益" description="物品速记 · 在线计时 · 按天分账">
         <template #actions>
             <ul v-if="liveList.length" class="live-list">
                 <li v-for="item in liveList" :key="item.id" class="live">
@@ -743,31 +743,7 @@ async function onlineSaved(dates: string[]) {
                             </button>
                         </div>
                     </header>
-                    <p class="section-label">
-                        固定价格 · 点一下记一条，右键改价
-                        <span class="price-csv">
-                            <button
-                                class="icon-btn"
-                                type="button"
-                                :disabled="app.busy || priceCsvBusy"
-                                title="导出单价表：存成 CSV，用表格软件批量改"
-                                aria-label="导出单价表"
-                                @click="exportPriceCsv"
-                            >
-                                <AppIcon name="download" :size="16" />
-                            </button>
-                            <button
-                                class="icon-btn"
-                                type="button"
-                                :disabled="app.busy || priceCsvBusy"
-                                title="导入单价表：留空不改，填 0 清除，单位是万"
-                                aria-label="导入单价表"
-                                @click="importPriceCsv"
-                            >
-                                <AppIcon name="upload" :size="16" />
-                            </button>
-                        </span>
-                    </p>
+                    <p class="section-label">固定价格 · 点一下记一条，右键改价</p>
                     <div class="item-grid">
                         <button
                             v-for="item in quickItems"
@@ -803,6 +779,29 @@ async function onlineSaved(dates: string[]) {
                             <span class="item-name">{{ item.name }}</span>
                         </button>
                     </div>
+                    <footer class="card-foot">
+                        <span class="card-foot-label">单价表</span>
+                        <button
+                            class="icon-btn"
+                            type="button"
+                            :disabled="app.busy || priceCsvBusy"
+                            title="导出单价表：存成 CSV，用表格软件批量改"
+                            aria-label="导出单价表"
+                            @click="exportPriceCsv"
+                        >
+                            <AppIcon name="download" :size="16" />
+                        </button>
+                        <button
+                            class="icon-btn"
+                            type="button"
+                            :disabled="app.busy || priceCsvBusy"
+                            title="导入单价表：留空不改，填 0 清除，单位是万"
+                            aria-label="导入单价表"
+                            @click="importPriceCsv"
+                        >
+                            <AppIcon name="upload" :size="16" />
+                        </button>
+                    </footer>
                 </section>
                 <section class="card loot-card">
                     <header class="card-title">
@@ -1186,18 +1185,30 @@ async function onlineSaved(dates: string[]) {
     letter-spacing: 0.4px;
 }
 /*
- * 单价表的两颗图标：低频操作，贴着分组标题右侧，不占主界面的按钮位置。
+ * 单价表的导入导出：低频操作，压到卡片右下角。
  *
- * 常驻浅底与细边框，和物品卡片同一档（`--paper-2` + `--line`），一眼能认出「这是能点的」；
- * hover 换成金色边框，与筛选栏那颗 chip 同一套反馈。图标 16px——纸加箭头在 13px 下
- * 线条会糊成一块。
+ * 原先挂在「固定价格」那行右端，和右上角的角色排挤在同一竖线上——两处都是右对齐，
+ * 眼睛容易把「换记给谁」和「导入 CSV」看成一组。挪到底部后与主操作彻底分开，
+ * 顺带把分组标题还给物品格子。
  */
-.price-csv {
-    display: inline-flex;
+.card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
     gap: 6px;
-    margin-left: auto;
-    align-self: center;
+    margin-top: 14px;
 }
+.card-foot-label {
+    margin-right: 1px;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.4px;
+}
+/*
+ * 两颗图标：常驻浅底与细边框，和物品卡片同一档（`--paper-2` + `--line`），
+ * 一眼能认出「这是能点的」；hover 换成金色边框，与筛选栏那颗 chip 同一套反馈。
+ * 图标 16px——纸加箭头在 13px 下线条会糊成一块。
+ */
 .icon-btn {
     display: inline-flex;
     align-items: center;
