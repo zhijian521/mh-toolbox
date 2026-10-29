@@ -328,16 +328,36 @@ export default function install(D, U, _gateway, _localStorage) {
                     session.date = U.fmtDate(new Date(session.startAt));
                 }
                 if (session.mode !== 'legacy') {
-                    session.cost =
-                        Math.round(
-                            ((session.minutes / 60) *
-                                POINTS_PER_HOUR *
-                                session.accounts *
-                                session.cardPrice) /
-                                100,
-                        ) / 100;
+                    /* 点卡成本口径由收益页的开关决定：关掉后这一段记为 0。流水、统计卡、
+                       账号「游戏收益」全从这个 `cost` 派生，所以开关只在这里判一次。 */
+                    session.cost = this.cardCostEnabled()
+                        ? Math.round(
+                              ((session.minutes / 60) *
+                                  POINTS_PER_HOUR *
+                                  session.accounts *
+                                  session.cardPrice) /
+                                  100,
+                          ) / 100
+                        : 0;
                 }
                 return session;
+            },
+
+            /**
+             * 是否把点卡折成成本。
+             *
+             * 关掉时按 0 计：用户可能在账号页直接记了充值的人民币支出，不想让收益页
+             * 再按「时长 × 6 点 × 单价」扣一遍梦幻币。这只是口径开关，不会删掉会话上
+             * 已经算好的成本——已结算的记录照旧显示，只有之后的计时与补记不折旧的。
+             *
+             * 默认开：老数据没有这个字段时保持原来「算点卡」的行为。
+             *
+             * @this {Domain}
+             * @returns {boolean}
+             */
+            cardCostEnabled() {
+                const settings = this.state.quickSettings || {};
+                return settings.cardCost !== false;
             },
 
             /**
@@ -366,6 +386,11 @@ export default function install(D, U, _gateway, _localStorage) {
                 const owners = roster.length ? roster : [session.characterId];
                 this.sessionSlices(session).forEach(
                     /** @param {any} slice */ (slice) => {
+                        /* 关掉点卡成本时不写任何流水：连「点卡 0 元」那种行也不留。
+                           注意判的是开关而不是 `cost > 0`——开着的时候，短到成本被
+                           四舍五入成 0 的时段仍要留一行，否则「有时长、没点卡」会让
+                           两张卡对不上（这是既有行为，别顺手改掉）。 */
+                        if (!this.cardCostEnabled()) return;
                         /* 多开时点卡按人头平摊：每个在线的号各有一条「点卡」，金额之和仍等于
                            这段会话的总价。全挂在一个号上会让另一个号零成本、结算成纯负数。 */
                         const shares = U.splitAmount(slice.cost, owners.length);
@@ -556,22 +581,35 @@ export default function install(D, U, _gateway, _localStorage) {
             },
 
             /**
-             * 速记参数：点卡单价（单位：游戏币）。
+             * 速记参数：点卡单价（单位：游戏币）与是否把点卡折成成本。
              *
              * 只影响之后的计时与补记，不改已经结算过的会话。
              *
              * 这里以前还存「同时在线角色数」，但它是个派生量：人数由实际开着的计时段
              * 表达（一段一号），参数表里再存一个数字，改成错峰计时后就必然与真实成本
-             * 对不上。所以参数表只剩单价。
+             * 对不上。所以参数表只剩单价与成本开关。
+             *
+             * 两个字段分开写：页面上是两颗独立的按钮，改单价不能顺手把开关重置回默认，
+             * 反过来也一样。
              *
              * @this {Domain}
-             * @param {{ cardPrice?: number }} input
+             * @param {{ cardPrice?: number, cardCost?: boolean }} input
              */
             setQuickSettings(input) {
-                const cardPrice = Number(input.cardPrice);
-                if (!Number.isFinite(cardPrice) || cardPrice <= 0)
-                    throw new Error('请填写有效的点卡单价');
-                this.state.quickSettings = { cardPrice };
+                const current = this.state.quickSettings || {};
+                /** @type {{ cardPrice: number, cardCost: boolean }} */
+                const next = {
+                    cardPrice: Number(current.cardPrice) || 15000,
+                    cardCost: current.cardCost !== false,
+                };
+                if (input.cardPrice !== undefined) {
+                    const cardPrice = Number(input.cardPrice);
+                    if (!Number.isFinite(cardPrice) || cardPrice <= 0)
+                        throw new Error('请填写有效的点卡单价');
+                    next.cardPrice = cardPrice;
+                }
+                if (input.cardCost !== undefined) next.cardCost = !!input.cardCost;
+                this.state.quickSettings = next;
             },
 
             /**

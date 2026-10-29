@@ -289,9 +289,13 @@ export default function install(D, _U, _gateway, _localStorage) {
                 const plain = (value) =>
                     value !== null && typeof value === 'object' && !Array.isArray(value);
                 const quick = plain(data.quickSettings) ? data.quickSettings : {};
-                /* 参数表只剩单价：老档里的 `accounts` 静默丢掉——它是派生量，留着会与
-                   真实成本对不上。历史会话自己的 `accounts` 快照不受影响，照旧结算。 */
-                s.quickSettings = { cardPrice: number(quick.cardPrice) || 15000 };
+                /* 参数表只剩单价与成本开关：老档里的 `accounts` 静默丢掉——它是派生量，
+                   留着会与真实成本对不上。历史会话自己的 `accounts` 快照不受影响，照旧结算。
+                   成本开关缺省为「计入」，老档读出来仍按原来的方式算点卡。 */
+                s.quickSettings = {
+                    cardPrice: number(quick.cardPrice) || 15000,
+                    cardCost: quick.cardCost !== false,
+                };
                 s.itemPrices = plain(data.itemPrices) ? Object.assign({}, data.itemPrices) : {};
                 // 物价卡片是独立集合：只做逐条降级，坏数据不动其余字段，也不抛错。
                 s.prices = objects(data.prices).map(

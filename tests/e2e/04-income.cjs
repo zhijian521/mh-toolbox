@@ -486,4 +486,39 @@ module.exports = async function income(env) {
         /^截至 \d{4}-\d{2}-\d{2}$/.test(rangeText || ''),
         '只设结束日期时文案是「截至 X」，实际：' + rangeText,
     );
+
+    /*
+     * 点卡成本开关放在最末：前面每一条断言都建立在「按时长扣点卡」上，
+     * 中途切会把它们一起推翻。收尾时切回「计入」，不影响后面的备份与重启用例。
+     *
+     * 只验「点得到、文案与卡片跟着翻、值真的落盘」——「关掉后不再写点卡流水」
+     * 那条在领域用例里验（`tests/domain/ledgers.test.cjs`），这里不再造一段会话，
+     * 免得改动总览页要读的收益数字。
+     */
+    const costToggle = () => read(() => document.querySelector('.cost-toggle')?.textContent.trim());
+    const cardStatValue = () =>
+        read(() =>
+            document
+                .querySelectorAll('.stat-grid .stat')[1]
+                .querySelector('.stat-value')
+                .textContent.trim(),
+        );
+    assert.equal(await costToggle(), '计入点卡', '默认按点卡折成本');
+    await read(() => {
+        document.querySelector('.cost-toggle').click();
+        return true;
+    });
+    await untilDisk(() => disk().quickSettings.cardCost === false, '开关已落盘');
+    await until(
+        () => document.querySelector('.cost-toggle')?.textContent.trim() === '不计点卡',
+        '开关文案翻成「不计点卡」',
+    );
+    assert.equal(await cardStatValue(), '不计入', '点卡消耗卡写「不计入」而不是 0');
+    // 再来回切一次：这是可逆的口径开关，不是一次性迁移。
+    await read(() => {
+        document.querySelector('.cost-toggle').click();
+        return true;
+    });
+    await untilDisk(() => disk().quickSettings.cardCost === true, '切回计入并落盘');
+    assert.equal(await costToggle(), '计入点卡', '切回后文案复原');
 };

@@ -122,7 +122,12 @@ const rangeText = computed(() => {
 });
 const quick = computed(() => {
     void app.data;
-    return rules.state.quickSettings || { cardPrice: 15000 };
+    return rules.state.quickSettings || { cardPrice: 15000, cardCost: true };
+});
+/** 点卡是否折成成本。判断在领域里（缺省为开），页面不各写一遍 `!== false`。 */
+const cardCost = computed(() => {
+    void app.data;
+    return rules.cardCostEnabled();
 });
 /**
  * 这笔记给谁。
@@ -197,9 +202,13 @@ const statCards = computed(() => {
         {
             key: 'card',
             label: '点卡消耗',
-            value: U.fmtMoney(s.cardCost),
-            note: '每号每小时 ' + POINTS_PER_HOUR + ' 点 · 按实际在线号计',
-            tone: 'out',
+            /* 关掉成本口径时不能写成 0：那会被读成「这段时间没玩」。
+               领域那边 `cost` 已经是 0，卡片负责把「为什么是 0」说清楚。 */
+            value: cardCost.value ? U.fmtMoney(s.cardCost) : '不计入',
+            note: cardCost.value
+                ? '每号每小时 ' + POINTS_PER_HOUR + ' 点 · 按实际在线号计'
+                : '之后不再扣点卡',
+            tone: cardCost.value ? 'out' : '',
         },
         {
             key: 'item',
@@ -252,6 +261,28 @@ async function syncAccount(dates: string[]) {
         app.notify(
             '收益已记录，但同步到账号失败：' +
                 (failure instanceof Error ? failure.message : String(failure)),
+            true,
+        );
+    }
+}
+/**
+ * 切点卡成本口径。
+ *
+ * 翻的是「之后要不要按时长 × 6 点 × 单价扣钱」这一面：已结算的会话、账号里已经
+ * 同步好的「游戏收益」都不回头改——下次速记或结束计时时，当天那条会按新口径重算。
+ * 所以这是可随时来回切的开关，不是一次性的数据迁移。
+ */
+async function toggleCardCost() {
+    if (app.busy) return;
+    const next = !cardCost.value;
+    try {
+        await app.execute((domain) =>
+            domain.commit(() => domain.setQuickSettings({ cardCost: next })),
+        );
+        app.notify(next ? '已计入点卡成本' : '已关闭点卡成本：收益不再扣点卡');
+    } catch (failure) {
+        app.notify(
+            '切换失败：' + (failure instanceof Error ? failure.message : String(failure)),
             true,
         );
     }
@@ -434,8 +465,31 @@ async function recordsChanged(dates: string[]) {
                     <AppIcon name="coin" :size="13" />
                     点卡 {{ U.fmtMoney(quick.cardPrice / 10000) }}/点
                 </button>
+                <button
+                    class="chip cost-toggle"
+                    :class="{ off: !cardCost }"
+                    :disabled="app.busy"
+                    :aria-pressed="cardCost"
+                    :title="
+                        cardCost
+                            ? '点卡按 6 点/小时 × 单价折成成本，计入净收益与账号「游戏收益」'
+                            : '不计点卡成本：之后的计时不再扣，已入账的点卡仍留在净收益里'
+                    "
+                    @click="toggleCardCost"
+                >
+                    <AppIcon :name="cardCost ? 'check' : 'close'" :size="13" />
+                    {{ cardCost ? '计入点卡' : '不计点卡' }}
+                </button>
             </div>
-            <IncomeStatGrid :cards="statCards" :settled="accountSettled" />
+            <IncomeStatGrid
+                :cards="statCards"
+                :settled="accountSettled"
+                :cost-note="
+                    cardCost
+                        ? '金额 = 速记金币 + 物品估值 − 点卡；同一天同角色只留一条，随时覆盖'
+                        : '金额 = 速记金币 + 物品估值；点卡成本已关闭，不再扣减'
+                "
+            />
             <div class="quick-main">
                 <IncomeQuickPanel
                     :target="target"
@@ -533,6 +587,17 @@ async function recordsChanged(dates: string[]) {
 }
 .chip svg {
     color: var(--gold);
+}
+/*
+ * 成本开关与「单价」那颗并排：单价是入口、这颗是状态，所以关掉时连图标一起转灰、
+ * 边框改虚线——不用读文字也能看出「现在不折旧的」。
+ */
+.cost-toggle.off {
+    border-style: dashed;
+}
+.cost-toggle.off,
+.cost-toggle.off svg {
+    color: var(--muted);
 }
 /* 右栏固定 288px：收益记录是速记的辅助视图，不该跟着窗口一起变宽。 */
 .quick-main {

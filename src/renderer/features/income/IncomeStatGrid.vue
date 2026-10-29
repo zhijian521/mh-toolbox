@@ -11,6 +11,8 @@ import { U } from '../../domain/util.js';
 defineProps<{
     cards: IncomeStatCard[];
     settled: { count: number; net: number };
+    /** 「游戏收益」的算式说明：关掉点卡成本时不能还说「− 点卡」。 */
+    costNote: string;
 }>();
 </script>
 
@@ -22,11 +24,7 @@ defineProps<{
             <small class="stat-note">{{ item.note }}</small>
         </article>
     </div>
-    <p
-        v-if="settled.count"
-        class="sync-note"
-        title="金额 = 速记金币 + 物品估值 − 点卡；同一天同角色只留一条，随时覆盖"
-    >
+    <p v-if="settled.count" class="sync-note" :title="costNote">
         账号「游戏收益」随记录自动更新 · 本范围
         <b>{{ settled.count }}</b>
         条 · 净

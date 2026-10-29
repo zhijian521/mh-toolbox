@@ -373,11 +373,11 @@ test('在线校验阻止重叠、反向、未来及无效时长，邻接时段�
     assert.equal(D.state.sessions.length, 2);
 });
 
-test('参数表只存点卡单价，历史超范围人数的会话仍能结算', async () => {
+test('参数表只存点卡单价与成本开关，历史超范围人数的会话仍能结算', async () => {
     const D = onlineDomain();
     // 人数是派生量（一段一个号），不再进参数表：就算传了 accounts 也只会被丢掉。
     D.setQuickSettings({ accounts: 30, cardPrice: 16000 });
-    assert.deepEqual(D.state.quickSettings, { cardPrice: 16000 });
+    assert.deepEqual(D.state.quickSettings, { cardPrice: 16000, cardCost: true });
     assert.throws(() => D.setQuickSettings({ cardPrice: 0 }), /单价/);
     // 新计时一律单角色段：人数由段数表达。
     const active = (await D.startSessions(['c1']))[0];
@@ -714,4 +714,69 @@ test('多开后两个号各自结算出净值，不会一个吃收益、另一�
         true,
         '两个号的净额都是正的',
     );
+});
+
+test('关掉点卡成本后不再写点卡流水，历史那段照旧保留', async () => {
+    const D = onlineDomain();
+    const date = '2020-02-28';
+    const cardRows = () =>
+        D.state.transactions.filter((t) => t.source === 'online' && t.category === '点卡');
+    // 默认口径下先存一段：180 分钟 × 5 角色 × 15000 / 点 = 135 万。
+    await D.saveSession(onlineInput);
+    assert.equal(cardRows().length, 1);
+    assert.equal(cardRows()[0].amount, 135);
+
+    D.setQuickSettings({ cardCost: false });
+    // 两个字段分开写：改开关不动单价，改单价也不动开关。
+    assert.equal(D.state.quickSettings.cardPrice, 15000);
+    assert.equal(D.cardCostEnabled(), false);
+
+    const later = '2020-03-01';
+    await D.saveSession(Object.assign({}, onlineInput, { date: later }));
+    assert.equal(cardRows().length, 1, '关闭后不再新增点卡流水，0 元行也不留');
+    assert.equal(D.state.sessions.find((s) => s.date === later).cost, 0, '这一段成本记 0');
+    const stats = D.onlineStats('c1', later, later);
+    assert.equal(stats.minutes, 180, '时长照旧记');
+    assert.equal(stats.cost, 0, '点卡消耗为 0');
+    assert.equal(D.earningsStats('c1', later, later).cardCost, 0);
+    // 历史那段不回头改：这是「已有的不管」，开关只管之后。
+    assert.equal(D.onlineStats('c1', date, date).cost, 135);
+
+    // 重新打开就恢复：新的一段照常算钱。
+    D.setQuickSettings({ cardPrice: 16000 });
+    assert.equal(D.state.quickSettings.cardCost, false, '改单价不动开关');
+    D.setQuickSettings({ cardCost: true });
+    assert.equal(D.state.quickSettings.cardPrice, 16000, '改开关不动单价');
+    const again = '2020-03-02';
+    // 单价仍按会话自己的快照（`onlineInput` 里的 15000）算，参数表的 16000 只作用于新计时。
+    await D.saveSession(Object.assign({}, onlineInput, { date: again }));
+    assert.equal(cardRows().length, 2);
+    assert.equal(D.onlineStats('c1', again, again).cost, 135, '180 分钟 × 5 × 15000');
+});
+
+test('关掉点卡成本后账号「游戏收益」只算速记与物品', async () => {
+    const D = onlineDomain();
+    const date = '2020-03-03';
+    D.setQuickSettings({ cardCost: false });
+    await D.saveSession(Object.assign({}, onlineInput, { date }));
+    D.state.transactions.push({
+        id: 'q1',
+        ledger: 'earnings',
+        recordType: 'money',
+        source: 'quick',
+        characterId: 'c1',
+        date,
+        kind: 'income',
+        currency: 'cash',
+        category: '捉鬼',
+        amount: 300,
+    });
+    const entries = await D.syncAccountEarnings([date]);
+    assert.deepEqual(entries, [{ date, characterId: 'c1', amount: 300 }], '不再扣 135 万点卡');
+    const settled = D.state.transactions.filter(
+        (t) => t.ledger === 'account' && t.category === '游戏收益',
+    );
+    assert.equal(settled.length, 1);
+    assert.equal(settled[0].amount, 300);
+    assert.match(settled[0].note, /在线 3\.00 小时/, '时长仍写进备注');
 });

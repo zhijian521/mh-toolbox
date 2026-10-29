@@ -18,6 +18,8 @@ const emit = defineEmits<{ close: []; saved: [] }>();
 const app = useApplication();
 const rules = app.rules();
 const cardPrice = ref<number | string>(rules.state.quickSettings.cardPrice / 10000);
+/** 只读展示：开关在收益页那颗 chip 上，弹窗里不再放第二个入口。 */
+const cardCost = rules.cardCostEnabled();
 const dirty = ref(false);
 const error = ref('');
 
@@ -58,6 +60,13 @@ async function save() {
             </label>
         </form>
         <p class="hint preview">折算：每号每小时 {{ U.fmtMoney(6 * Number(cardPrice)) }}</p>
+        <!-- 开关在收益页的筛选行上，这里只报当前口径：单价照旧保存，重新打开就用这个价。 -->
+        <p class="hint state">
+            当前口径：{{ cardCost ? '计入点卡成本' : '不计点卡成本' }}
+            <template v-if="!cardCost">
+                （收益与账号「游戏收益」都不扣点卡，单价仍按这里保存）
+            </template>
+        </p>
         <p v-if="error" class="error form-error" role="alert">{{ error }}</p>
         <template #footer="{ close }">
             <button class="btn" :disabled="app.busy" @click="close">取消</button>
@@ -87,6 +96,10 @@ async function save() {
 }
 .preview {
     margin: 12px 0 0;
+    font-size: 12px;
+}
+.state {
+    margin: 6px 0 0;
     font-size: 12px;
 }
 </style>
