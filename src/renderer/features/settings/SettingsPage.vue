@@ -115,9 +115,9 @@ const helpItems = [
         text: '备份、外观与这份帮助',
         steps: [
             '外观三选一：跟随系统、浅色、深色，改完立即生效。',
-            '数据区可导出备份、导入备份，导入会先校验再覆盖当前数据。',
+            '数据区可导出、导入备份，导入会先校验再覆盖当前数据。',
             '换机或重装前先导出备份，数据只存在本机。',
-            '「清空 V2 数据」不可撤销，执行前有二次确认。',
+            '同一栏底部的「清空 V2 数据」不可撤销，执行前有二次确认并先留一份本地副本。',
             '关于里有版本、数据版本、许可范围与源码地址。',
         ],
     },
@@ -268,20 +268,23 @@ async function wipe() {
                         导入 JSON 备份
                     </button>
                 </div>
-            </section>
-            <section class="paper-section danger-section">
-                <h2>清空数据</h2>
-                <p>删除角色及全部记录，清空前自动保留本地副本。</p>
-                <button
-                    class="btn danger"
-                    :disabled="busy"
-                    @click="
-                        confirmWipe = true;
-                        error = '';
-                    "
-                >
-                    清空 V2 数据
-                </button>
+                <!--
+                    清空与备份同处一张卡，但用虚线隔开、按钮靠右：它得让人一眼看见在哪儿，
+                    又不能紧挨最常用的「导出备份」——并排隔 8px 的两个按钮最容易点错。
+                -->
+                <div class="data-danger">
+                    <p>清空会删除角色及全部记录，操作前自动保留本地副本。</p>
+                    <button
+                        class="btn danger"
+                        :disabled="busy"
+                        @click="
+                            confirmWipe = true;
+                            error = '';
+                        "
+                    >
+                        清空 V2 数据
+                    </button>
+                </div>
             </section>
         </div>
         <div class="settings-column">
@@ -424,9 +427,29 @@ async function wipe() {
 .paper-section .actions {
     margin-top: 14px;
 }
-/* 危险操作单独一张卡：和最常用的「导出备份」挤在一起最容易点错。 */
-.danger-section {
-    border-color: color-mix(in srgb, var(--red) 24%, var(--line));
+/*
+ * 清空数据收在「数据」卡底部：虚线把「日常备份」与「不可撤销」分开，
+ * 按钮靠右远离导出/导入；位置固定在这一栏，用户记得住它在哪。
+ * 虚线用 `--line-2` 而不是 `--line`，也不是按比例稀释过的色：1px 虚线本来就比实线
+ * 淡一档，深色下那两种写法几乎看不见，同一条规则会出现两种主题两种效果。
+ * 继承的 `.paper-section p` 有 12px 下边距，这里要归零，否则文字与按钮基线错开。
+ */
+.data-danger {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 12px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--line-2);
+}
+.data-danger p {
+    flex: 1 1 240px;
+    min-width: 0;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--muted);
 }
 .theme-choices {
     display: flex;
@@ -647,10 +670,9 @@ async function wipe() {
 }
 @media (max-width: 1150px) {
     /*
-     * 单列时用 display: contents 把「列」这层盒子抹掉，五张卡直接成为同一个
-     * grid 的项——这样才有机会用 order 把「清空数据」挪到最末。
-     * 只改 flex-direction 的话，顺序仍是 外观、数据、清空、帮助、关于，
-     * 危险操作夹在中间。
+     * 单列时用 display: contents 把「列」这层盒子抹掉，四张卡直接成为同一个
+     * grid 的项。清空已收进「数据」卡底部，不再需要 order 把危险操作挪到最末——
+     * 它跟着「数据」走，位置与双列时一致。
      */
     .settings-page {
         display: grid;
@@ -659,9 +681,6 @@ async function wipe() {
     }
     .settings-column {
         display: contents;
-    }
-    .danger-section {
-        order: 1;
     }
 }
 </style>
