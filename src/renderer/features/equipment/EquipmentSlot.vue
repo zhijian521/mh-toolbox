@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import type { EquipmentItem } from '../../app/types';
 import { useApplication } from '../../stores/application';
-import EquipmentGlyph from './EquipmentGlyph.vue';
+import CharacterAvatar from '../../components/CharacterAvatar.vue';
 import EquipmentProperties from './EquipmentProperties.vue';
 
 const props = withDefaults(
@@ -50,6 +50,33 @@ const levelText = computed(() => {
         : props.eq.level;
     return value === '' || value == null ? '' : value + ' 级';
 });
+/**
+ * 印在头像右下角的那一个字：取玩家的口头叫法，不是机械截字。
+ *
+ * 「武器」取第二个字会得到「器」、「衣服」得「服」、「鞋子」得「子」——都不成字眼；
+ * 真要跟部位对得上，只能用一张表。装备名千变万化，部位才是稳定的那一维，
+ * 所以印的是部位而不是装备。
+ */
+const PART_SEALS: Record<string, string> = {
+    头盔: '盔',
+    项链: '链',
+    武器: '武',
+    衣服: '衣',
+    腰带: '腰',
+    鞋子: '鞋',
+    戒指: '戒',
+    耳饰: '耳',
+    手镯: '镯',
+    佩饰: '佩',
+    '玉魄·阳': '阳',
+    '玉魄·阴': '阴',
+};
+const partSeal = computed(() => {
+    const chars = Array.from(props.part);
+    return PART_SEALS[props.part] || chars[chars.length - 1] || props.part;
+});
+/** 空位没有名字可展示，就把部位字写在正面，省得一格空白看不出是什么。 */
+const avatarName = computed(() => (props.eq ? props.eq.name : partSeal.value));
 const nameText = computed(() => {
     if (props.eq) return props.eq.name;
     if (props.locked) return '未解锁';
@@ -81,10 +108,12 @@ const hint = computed(() => {
         :data-slot="part"
         @click="emit('open')"
     >
-        <!-- 插槽：凹陷的方孔托住部位图标，像游戏里那排格子，而不是一块纯色方块。 -->
-        <span class="eq-socket">
-            <EquipmentGlyph :part="part" :size="34" />
-            <span v-if="!eq && !locked" class="eq-add" aria-hidden="true">＋</span>
+        <!--
+            左侧是角色页那种头像：山水一笔 + 名字首字，右下角一枚部位小印。
+            装备名千变万化，部位才是稳定的那一维，所以印的是部位。
+        -->
+        <span class="eq-icon">
+            <CharacterAvatar :name="avatarName" :seal="eq ? partSeal : ''" :tone="tone" />
         </span>
         <span class="eq-main">
             <span class="eq-meta">
@@ -147,96 +176,18 @@ const hint = computed(() => {
     border-style: dashed;
     border-color: var(--gold);
 }
-/* 插槽：62px 凹槽 + 四角刻线。刻线是「格子」这件事最省墨的表达，比加阴影干净。 */
-.eq-socket {
-    position: relative;
-    display: grid;
-    place-items: center;
+/* 头像跟着格子色调：山水与角印都是 --q，空位退回线色。 */
+.eq-icon {
+    display: flex;
     flex: none;
-    width: 62px;
-    height: 62px;
-    border: 1px solid color-mix(in srgb, var(--q) 46%, var(--line));
-    border-radius: 6px;
-    color: var(--q);
-    background: radial-gradient(
-        118% 118% at 34% 20%,
-        color-mix(in srgb, var(--q) 20%, var(--paper-2)),
-        var(--paper-2) 74%
-    );
-    /* 上沿压深、下沿提亮：一个往里凹的孔，与凸起的纸面相反。 */
-    box-shadow:
-        inset 0 1px 3px color-mix(in srgb, var(--ink) 16%, transparent),
-        inset 0 -1px 0
-            light-dark(
-                color-mix(in srgb, #fff 55%, transparent),
-                color-mix(in srgb, #000 45%, transparent)
-            );
 }
-/* 四角刻线：用两条渐变各画左上/右下两个角，比四个伪元素省。 */
-.eq-socket::after {
-    content: '';
-    position: absolute;
-    inset: 3px;
-    border-radius: 3px;
-    pointer-events: none;
-    background:
-        linear-gradient(
-                to right,
-                color-mix(in srgb, var(--q) 62%, transparent) 0 7px,
-                transparent 7px
-            )
-            0 0 / 100% 1px no-repeat,
-        linear-gradient(
-                to bottom,
-                color-mix(in srgb, var(--q) 62%, transparent) 0 7px,
-                transparent 7px
-            )
-            0 0 / 1px 100% no-repeat,
-        linear-gradient(
-                to left,
-                color-mix(in srgb, var(--q) 62%, transparent) 0 7px,
-                transparent 7px
-            )
-            100% 100% / 100% 1px no-repeat,
-        linear-gradient(
-                to top,
-                color-mix(in srgb, var(--q) 62%, transparent) 0 7px,
-                transparent 7px
-            )
-            100% 100% / 1px 100% no-repeat;
-}
-.eq-slot.vacant .eq-socket {
-    color: color-mix(in srgb, var(--muted) 58%, var(--paper));
-    border-color: var(--line);
-}
-.eq-slot.vacant .eq-socket::after {
-    background: none;
-}
-.eq-slot.locked .eq-socket {
-    color: color-mix(in srgb, var(--muted) 62%, var(--paper));
-}
-/* 空位右下角那枚「加号」：贴着插槽边缘挂出去，像格子角上的空位标记。 */
-.eq-add {
-    position: absolute;
-    right: -6px;
-    bottom: -6px;
-    display: grid;
-    place-items: center;
-    width: 17px;
-    height: 17px;
-    border: 1px solid var(--line-2);
-    border-radius: 50%;
-    background: var(--paper);
+.eq-slot.vacant .eq-icon :deep(.avatar-initial),
+.eq-slot.locked .eq-icon :deep(.avatar-initial) {
     color: var(--muted);
-    font-size: 11px;
-    line-height: 1;
-    transition:
-        color 120ms ease,
-        border-color 120ms ease;
 }
-.eq-slot:hover .eq-add {
-    border-color: var(--gold);
-    color: var(--gold);
+/* 未解锁的玉魄整枚压暗：那里点了也不会有反应，别再画得跟能点一样。 */
+.eq-slot.locked .eq-icon {
+    opacity: 0.5;
 }
 .eq-main {
     display: flex;

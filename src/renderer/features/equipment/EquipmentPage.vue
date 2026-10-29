@@ -4,6 +4,7 @@ import type { EquipmentItem, EquipmentProfile } from '../../app/types';
 import { plain } from '../../services/desktop';
 import { useApplication } from '../../stores/application';
 import AppIcon from '../../components/AppIcon.vue';
+import CharacterAvatar from '../../components/CharacterAvatar.vue';
 import BaseModal from '../../components/BaseModal.vue';
 import PageHeader from '../../components/PageHeader.vue';
 import EquipmentBoard from './EquipmentBoard.vue';
@@ -249,9 +250,7 @@ function switchCharacter(id: string) {
                         @click="switchCharacter(item.id)"
                     >
                         <span class="eq-char-head">
-                            <span class="eq-char-seal" aria-hidden="true">
-                                {{ item.name.slice(0, 1) }}
-                            </span>
+                            <CharacterAvatar :name="item.name" size="sm" seal="" />
                             <span class="eq-char-text">
                                 <span class="eq-char-name">{{ item.name }}</span>
                                 <span class="eq-char-sub">
@@ -449,27 +448,6 @@ function switchCharacter(id: string) {
     gap: 7px;
     min-width: 0;
 }
-/*
- * 名字章：取昵称首字，别处不用惦记头像。
- * 用圆角方章而不是圆形——圆形在卡片里像一枚头像占位，方章更像盖上去的号牌。
- */
-.eq-char-seal {
-    display: grid;
-    place-items: center;
-    flex: none;
-    width: 24px;
-    height: 24px;
-    border: 1px solid var(--line-2);
-    border-radius: 4px;
-    background: var(--paper-2);
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 1;
-    transition:
-        background-color 120ms ease,
-        border-color 120ms ease,
-        color 120ms ease;
-}
 .eq-char-text {
     display: flex;
     flex-direction: column;
@@ -504,20 +482,23 @@ function switchCharacter(id: string) {
     background: var(--paper-2);
     color: var(--ink);
 }
-.eq-char:hover:not(:disabled) .eq-char-seal {
-    border-color: color-mix(in srgb, var(--gold) 62%, var(--line-2));
-    color: var(--gold);
-}
 .eq-char.on {
     border-color: var(--gold);
     background: var(--paper-2);
     color: var(--ink);
 }
-.eq-char.on .eq-char-seal {
+/*
+ * 头像跟着卡片一起表态：未选中只是描边，选中时框住它的那圈转金。
+ * 头像本身不换底色——角色页的头像是「这号长什么样」，不是状态的开关。
+ */
+.eq-char:hover:not(:disabled) .character-avatar {
+    border-color: color-mix(in srgb, var(--gold) 55%, var(--line-2));
+}
+.eq-char.on .character-avatar {
     border-color: var(--gold);
-    background: var(--gold);
-    color: var(--on-accent);
-    font-weight: 600;
+    box-shadow:
+        inset 0 0 0 2px var(--paper),
+        0 0 0 1px color-mix(in srgb, var(--gold) 45%, transparent);
 }
 .eq-char.on .eq-char-meter i.full {
     background: var(--gold);
