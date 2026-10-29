@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useApplication } from '../../stores/application';
 import BaseNumber from '../../components/BaseNumber.vue';
+import BaseCheck from '../../components/BaseCheck.vue';
 import BaseSelect, { type SelectOption } from '../../components/BaseSelect.vue';
 import type { DraftDetail, DraftRow } from './properties';
 
@@ -137,8 +138,7 @@ function toggleEffect(effect: string) {
 function gemOf(type: string) {
     return detail.value.gems.find((gem) => gem.type === type) || null;
 }
-function toggleGem(type: string, event: Event) {
-    const on = (event.target as HTMLInputElement).checked;
+function toggleGem(type: string, on: boolean) {
     const rest = detail.value.gems.filter((gem) => gem.type !== type);
     if (on) rest.push({ type, level: null });
     // 按部位允许的宝石顺序排，写入文本的顺序才是稳定的。
@@ -380,14 +380,12 @@ const durabilityMax = computed(() => (isJade.value ? 300 : 999999));
             </div>
             <div v-if="isGear" class="gems">
                 <div v-for="type in rule.gems" :key="type" class="gem">
-                    <label class="check">
-                        <input
-                            type="checkbox"
-                            :checked="!!gemOf(type)"
-                            @change="toggleGem(type, $event)"
-                        />
-                        {{ type }}
-                    </label>
+                    <BaseCheck
+                        :model-value="!!gemOf(type)"
+                        :label="type"
+                        :size="16"
+                        @update:model-value="(on) => toggleGem(type, on)"
+                    />
                     <BaseNumber
                         :model-value="gemOf(type) ? gemOf(type)!.level : null"
                         :min="0"
@@ -685,18 +683,6 @@ const durabilityMax = computed(() => (isJade.value ? 300 : 999999));
     opacity: 0;
     pointer-events: none;
 }
-.check {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12.5px;
-}
-.check input {
-    width: 14px;
-    height: 14px;
-    margin: 0;
-    accent-color: var(--gold);
-}
 .gems {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -707,6 +693,14 @@ const durabilityMax = computed(() => (isJade.value ? 300 : 999999));
     display: flex;
     align-items: center;
     gap: 8px;
+}
+/*
+ * 宝石名是 2～3 个字，16px 的勾选框和它之间不需要 8px 那么开，
+ * 省下的宽度留给右边的等级输入框——这一行总宽只有 160px。
+ */
+.gem .check {
+    gap: 6px;
+    font-size: 12.5px;
 }
 .gem .number-field {
     flex: 1;

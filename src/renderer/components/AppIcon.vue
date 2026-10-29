@@ -1,5 +1,10 @@
 <script setup lang="ts">
-withDefaults(defineProps<{ name: string; size?: number }>(), { size: 18 });
+withDefaults(defineProps<{ name: string; size?: number; stroke?: number }>(), {
+    size: 18,
+    /* 线条粗细按 24 的 viewBox 计。1.6 在 18px 下约 1.2px，是图标该有的分量；
+       勾这类要塞进小方块、还要和实心底拉开对比的，调用方可以单独加粗。 */
+    stroke: 1.6,
+});
 const paths: Record<string, string> = {
     user: 'M20 21v-2a7 7 0 0 0-14 0v2M13 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8',
     book: 'M4 3h13l3 3v15H4zM8 8h7M8 12h8M8 16h5',
@@ -56,7 +61,7 @@ const paths: Record<string, string> = {
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        :stroke-width="name === 'grip' ? 3 : 1.6"
+        :stroke-width="name === 'grip' ? 3 : stroke"
         stroke-linecap="round"
         stroke-linejoin="round"
         aria-hidden="true"

@@ -4,6 +4,7 @@ import type { EquipmentItem } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import { U } from '../../domain/util.js';
 import BaseModal from '../../components/BaseModal.vue';
+import BaseCheck from '../../components/BaseCheck.vue';
 import BaseNumber from '../../components/BaseNumber.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
 import BaseDate from '../../components/BaseDate.vue';
@@ -124,10 +125,15 @@ async function save() {
                     @update:model-value="dirty = true"
                 />
             </label>
-            <label v-if="bookable" class="check full">
-                <input v-model="sync" type="checkbox" name="sync" @change="dirty = true" />
+            <BaseCheck
+                v-if="bookable"
+                v-model="sync"
+                class="full"
+                name="sync"
+                @change="dirty = true"
+            >
                 同时记入账号账本（{{ current.t }}）
-            </label>
+            </BaseCheck>
             <label class="full">
                 备注
                 <input
@@ -160,17 +166,6 @@ async function save() {
 .gear-form label {
     display: block;
     font-size: 12.5px;
-}
-.check {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-}
-.check input {
-    width: 15px;
-    height: 15px;
-    margin: 0;
-    accent-color: var(--gold);
 }
 .gear-warn {
     margin: 12px 0 0;

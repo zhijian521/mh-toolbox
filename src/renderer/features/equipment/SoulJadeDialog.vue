@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { useApplication } from '../../stores/application';
 import BaseModal from '../../components/BaseModal.vue';
+import BaseCheck from '../../components/BaseCheck.vue';
 import BaseNumber from '../../components/BaseNumber.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
 
@@ -69,10 +70,9 @@ async function save() {
     <BaseModal title="命魂之玉 · 修炼设置" :busy="app.busy" :dirty="dirty" @close="emit('close')">
         <p class="hint">三套方案共用。取消解锁会卸下三套里的玉魄，装备档案仍留在仓库。</p>
         <form id="soul-jade-form" class="form-grid soul-form" @submit.prevent="save">
-            <label class="check full">
-                <input v-model="unlocked" type="checkbox" name="unlocked" @change="dirty = true" />
+            <BaseCheck v-model="unlocked" class="full" name="unlocked" @change="dirty = true">
                 已解锁命魂之玉
-            </label>
+            </BaseCheck>
             <label class="full">
                 基础属性
                 <BaseSelect
@@ -113,17 +113,6 @@ async function save() {
 .soul-form label {
     display: block;
     font-size: 12.5px;
-}
-.check {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-}
-.check input {
-    width: 15px;
-    height: 15px;
-    margin: 0;
-    accent-color: var(--gold);
 }
 .soul-hint {
     margin: 10px 0 0;

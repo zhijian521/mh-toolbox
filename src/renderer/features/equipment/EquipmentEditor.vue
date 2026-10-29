@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import type { EquipmentItem, EquipmentProfile } from '../../app/types';
 import { useApplication } from '../../stores/application';
 import BaseModal from '../../components/BaseModal.vue';
+import BaseCheck from '../../components/BaseCheck.vue';
 import BaseNumber from '../../components/BaseNumber.vue';
 import BaseSelect from '../../components/BaseSelect.vue';
 import EquipmentFields from './EquipmentFields.vue';
@@ -185,15 +186,15 @@ async function save() {
                             @update:model-value="dirty = true"
                         />
                     </label>
-                    <label v-if="canEquipNow" class="check full">
-                        <input
-                            v-model="equipNow"
-                            type="checkbox"
-                            name="equipNow"
-                            @change="dirty = true"
-                        />
+                    <BaseCheck
+                        v-if="canEquipNow"
+                        v-model="equipNow"
+                        class="full"
+                        name="equipNow"
+                        @change="dirty = true"
+                    >
                         保存后放进正在查看的方案（替换该部位，原档案保留）
-                    </label>
+                    </BaseCheck>
                     <label class="full">
                         备注
                         <textarea
@@ -247,17 +248,6 @@ async function save() {
 .col-info label {
     display: block;
     font-size: 12.5px;
-}
-.check {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-}
-.check input {
-    width: 15px;
-    height: 15px;
-    margin: 0;
-    accent-color: var(--gold);
 }
 /*
  * 属性区是一条竖线隔开的独立卷轴：字段多的时候只滚里面的字段，左边的档案、
