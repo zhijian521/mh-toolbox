@@ -49,6 +49,11 @@ const soulOpen = ref(false);
 const planDialog = ref<'rename' | 'copy' | null>(null);
 const importOpen = ref(false);
 const shotOpen = ref(false);
+/**
+ * 从空位点进来的截图识别：记住是哪一套，入库后默认穿到那一套。
+ * 工具栏的「截图识别」留 null，识别完只入库、不动搭配。
+ */
+const shotIndex = ref<number | null>(null);
 
 /** 角色被删掉后标签还指着旧 ID 时回落到第一个，避免整页抛「角色不存在」。 */
 watch(
@@ -95,6 +100,22 @@ function addFromPick() {
     picking.value = null;
     if (target) openEditor(null, { index: target.index, slot: target.slot });
 }
+/**
+ * 从选装弹窗直接截图识别：关掉选装、带着方案号打开截图弹窗。
+ * 识别出的装备会入库；该部位空着就顺手穿上（领域 `importEquipment` 的行为）。
+ */
+function shotFromPick() {
+    const target = picking.value;
+    picking.value = null;
+    shotIndex.value = target ? target.index : null;
+    shotOpen.value = true;
+}
+function openShot() {
+    // 工具栏的入口不接管搭配，也不该在选装弹窗之上再叠一层。
+    picking.value = null;
+    shotIndex.value = null;
+    shotOpen.value = true;
+}
 /** 详情里点「配置到本套」或「卸下」：改的是引用，档案本身不动。 */
 async function assign(slot: string, id: string) {
     if (!profile.value || app.busy) return;
@@ -135,7 +156,9 @@ function imported() {
 }
 function shotImported() {
     shotOpen.value = false;
-    warehouseOpen.value = true;
+    // 从空位进来时留在装备栏：刚穿上的那件就在眼前，不用再去仓库找。
+    if (shotIndex.value === null) warehouseOpen.value = true;
+    shotIndex.value = null;
 }
 /** 切角色时把仓库关掉：那一列档案属于上一个角色，留着会误点。 */
 function switchCharacter(id: string) {
@@ -162,7 +185,7 @@ function switchCharacter(id: string) {
                 type="button"
                 :disabled="app.busy || !app.characters.length"
                 title="从装备属性截图本地识别，可一次放多张"
-                @click="shotOpen = true"
+                @click="openShot"
             >
                 截图识别
             </button>
@@ -196,10 +219,15 @@ function switchCharacter(id: string) {
                         :aria-selected="item.id === character"
                         @click="switchCharacter(item.id)"
                     >
-                        <span class="eq-char-name">{{ item.name }}</span>
-                        <span class="eq-char-sub">
-                            {{ item.level ? item.level + ' 级' : '未填等级' }} ·
-                            {{ item.school }}
+                        <span class="eq-char-seal" aria-hidden="true">
+                            {{ item.name.slice(0, 1) }}
+                        </span>
+                        <span class="eq-char-text">
+                            <span class="eq-char-name">{{ item.name }}</span>
+                            <span class="eq-char-sub">
+                                {{ item.level ? item.level + ' 级' : '未填等级' }} ·
+                                {{ item.school }}
+                            </span>
                         </span>
                     </button>
                 </div>
@@ -234,6 +262,7 @@ function switchCharacter(id: string) {
         @close="picking = null"
         @saved="picking = null"
         @add="addFromPick"
+        @shot="shotFromPick"
     />
     <EquipmentWarehouse
         v-if="warehouseOpen && profile"
@@ -292,7 +321,11 @@ function switchCharacter(id: string) {
     <EquipmentScreenshotDialog
         v-if="shotOpen && profile"
         :profile="profile"
-        @close="shotOpen = false"
+        :index="shotIndex"
+        @close="
+            shotOpen = false;
+            shotIndex = null;
+        "
         @saved="shotImported"
     />
     <BaseModal v-if="removing" title="删除装备档案" :busy="app.busy" @close="cancelRemove">
@@ -319,8 +352,10 @@ function switchCharacter(id: string) {
 <style scoped>
 /*
  * 角色名字签：一屏之内看得到几个号就能直接点几个号。
- * 选中的一枚在行下那道横线上压一段金线，其余只有名字——一排框会把注意力
- * 分给五个同样重的方块，而这里只有「我在看谁」需要被强调。
+ *
+ * 每枚签左侧是一枚「名字章」（首个字），选中时章变实金、名字加粗，行下那道横线上
+ * 再压一段金线；未选中的章只有描边、文字退回灰。这样一排里既有可点的形体，
+ * 又只有「我在看谁」被强调——整枚签都上色的话，五个号会抢同一份注意力。
  */
 .eq-toolbar {
     display: flex;
@@ -342,11 +377,11 @@ function switchCharacter(id: string) {
 }
 .eq-char {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     flex: none;
-    gap: 1px;
-    max-width: 11em;
-    padding: 5px 13px 6px;
+    gap: 9px;
+    max-width: 12em;
+    padding: 4px 13px 5px 5px;
     /* 下边框压住行线（-1px），选中态的金线才会嵌在那条线上而不是浮在上方。 */
     margin-bottom: -1px;
     border: 0;
@@ -359,6 +394,40 @@ function switchCharacter(id: string) {
         color 120ms ease,
         border-color 120ms ease,
         background-color 120ms ease;
+}
+/* 名字章：取昵称首字，别处不用惦记头像。未选中是一枚空心小圆章。 */
+.eq-char-seal {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--line-2);
+    border-radius: 50%;
+    background: var(--paper-2);
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        color 120ms ease;
+}
+.eq-char-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+.eq-char.on .eq-char-seal {
+    border-color: var(--gold);
+    background: var(--gold);
+    color: var(--on-accent);
+    font-weight: 600;
+}
+.eq-char:hover:not(:disabled) .eq-char-seal {
+    border-color: color-mix(in srgb, var(--gold) 62%, var(--line-2));
+    color: var(--gold);
 }
 .eq-char:hover:not(:disabled) {
     background: color-mix(in srgb, var(--paper) 62%, transparent);

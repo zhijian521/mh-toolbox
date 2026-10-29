@@ -351,7 +351,17 @@ function isPending(slot: string) {
     color: var(--line-2);
     font-size: 12px;
 }
-.eq-gear-grid,
+/*
+ * 常规装备与灵饰都是两列。
+ *
+ * 试过三列：属性一条不折叠之后，197px 宽的格子把「防御 +45 · 魔法 +80」挤成两行，
+ * 卡片反而从 200 长到 320，比两列还高。宽度够才是省高度的前提。
+ */
+.eq-gear-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
 .eq-accessory-grid,
 .eq-jade-grid {
     display: grid;

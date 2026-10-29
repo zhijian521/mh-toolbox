@@ -81,16 +81,20 @@ function statText(label: string, row: EquipmentRow) {
 }
 
 /**
- * 把装备属性摊平成「标签 + 值」的行，格子、仓库、详情三处共用。
+ * 把装备属性摊平成「标签 + 值」的行。格子、仓库、选装、详情四处共用同一份口径。
  *
- * 主要属性合成一行（游戏里就是并排显示的两条），其余每条一行。`full` 只在详情里
- * 打开，补上五行、耐久、修理、制造者与备注，以及钟灵石、套装、灵尘、奇袭、开光孔
- * 这些「怎么配的」——格子里塞这些会把属性挤得看不见，列表行高也会翻倍。
+ * 主要属性合成一行（游戏里就是并排显示的两条），其余每条一行。**一处不折叠**：
+ * 2026-10-29 用户要求「属性全部展示、不折叠」，所以原先只在详情里出现的钟灵石、
+ * 套装、符石、灵尘、奇袭、开光孔、原有属性，现在四处都列出来——它们是这件装备的
+ * 完整配置，收起来反而要挨个点开比对。
+ *
+ * 反过来，五行、耐久、修理失败、制造者**不列**：这四项不参与比较，也不影响要不要
+ * 换装，摆进格子只会把真正要看的属性挤下去。数据仍然完整保存，编辑器里照旧能改。
  *
  * 属性为空时返回空数组而不是占位行：调用方需要区分「没录」和「录了但是 0」，
  * 由各自决定要不要显示「未录入属性」。
  */
-export function propertyRows(rules: Domain, eq: EquipmentItem, full = false): PropertyRow[] {
+export function propertyRows(rules: Domain, eq: EquipmentItem): PropertyRow[] {
     const detail = rules.equipmentDetails(eq);
     const rule = rules.equipmentRule(eq.slot);
     const label = (key: string) => rules.equipmentStats[key] || key;
@@ -110,6 +114,8 @@ export function propertyRows(rules: Domain, eq: EquipmentItem, full = false): Pr
     detail.melt.forEach((row) => add('熔炼', statText(label(row.key), row), 'attribute'));
     add('特技', detail.technique, 'special');
     detail.effects.forEach((effect) => add('特效', effect, 'special'));
+    if (detail.clock.name)
+        add('钟灵石', `${detail.clock.name} ${detail.clock.level} 级`, 'special');
 
     // 锻炼段数、宝石与精炼合成一行：它们都是「这件装备打到什么程度」。
     const socket: string[] = [];
@@ -130,40 +136,24 @@ export function propertyRows(rules: Domain, eq: EquipmentItem, full = false): Pr
             'upgrade',
         );
 
-    /*
-     * 钟灵石、套装、灵尘、奇袭、开光孔都只在详情里列。
-     *
-     * 它们是「这件装备怎么配的」，不是「这件装备有多强」。列表与格子平铺这些，一件灵饰
-     * 会摊成七行：真正要看的主要属性与三条附加被挤到过半看不见，列表行高也跟着翻倍。
-     * 详情（`full`）里一行不少，列表只留装备本身的属性。
-     */
-    if (full) {
-        if (detail.clock.name)
-            add('钟灵石', `${detail.clock.name} ${detail.clock.level} 级`, 'special');
-        add('套装', detail.suit, 'special');
-        add('符石', detail.runes, 'upgrade');
-        if (rule.kind === 'jade') {
-            if (detail.jade.dust !== null) add('灵尘', `${detail.jade.dust} 级`, 'upgrade');
-            if (detail.jade.assault)
-                add(
-                    '奇袭',
-                    detail.jade.assault +
-                        (detail.jade.chance == null ? '' : ` ${detail.jade.chance}%`),
-                    'special',
-                );
-            if (detail.jade.holes) add('开光', `${detail.jade.holes} 孔`, 'upgrade');
-            detail.jade.enchantments.forEach((value, index) =>
-                add(`孔 ${index + 1}`, value || '未强化', 'special'),
+    add('套装', detail.suit, 'special');
+    add('符石', detail.runes, 'upgrade');
+    if (rule.kind === 'jade') {
+        if (detail.jade.dust !== null) add('灵尘', `${detail.jade.dust} 级`, 'upgrade');
+        if (detail.jade.assault)
+            // 游戏里写「奇袭法术」，标签已经是「奇袭」，值里再去掉这两个字，
+            // 否则列表读起来是「奇袭 奇袭法术 0.5%」。
+            add(
+                '奇袭',
+                String(detail.jade.assault).replace(/^奇袭/, '') +
+                    (detail.jade.chance == null ? '' : ` ${detail.jade.chance}%`),
+                'special',
             );
-        }
-        if (detail.legacy) add('原有属性', detail.legacy, 'legacy');
+        if (detail.jade.holes) add('开光', `${detail.jade.holes} 孔`, 'upgrade');
+        detail.jade.enchantments.forEach((value, index) =>
+            add(`孔 ${index + 1}`, value || '未强化', 'special'),
+        );
     }
-    if (full) {
-        add('五行', detail.element, 'legacy');
-        if (detail.durability !== null) add('耐久', String(detail.durability), 'legacy');
-        if (detail.repair !== null) add('修理失败', `${detail.repair} 次`, 'legacy');
-        add('制造者', detail.maker, 'legacy');
-        add('备注', eq.note, 'legacy');
-    }
+    if (detail.legacy) add('原有属性', detail.legacy, 'legacy');
     return rows;
 }

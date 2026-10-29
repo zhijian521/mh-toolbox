@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import type { EquipmentItem } from '../../app/types';
 import { useApplication } from '../../stores/application';
-import AppIcon from '../../components/AppIcon.vue';
+import EquipmentGlyph from './EquipmentGlyph.vue';
 import EquipmentProperties from './EquipmentProperties.vue';
 
 const props = withDefaults(
@@ -20,21 +20,6 @@ const emit = defineEmits<{ open: [] }>();
 const app = useApplication();
 const rules = app.rules();
 
-/** 部位图标：与 AppIcon 里的键一一对应。 */
-const icons: Record<string, string> = {
-    武器: 'sword',
-    头盔: 'helmet',
-    项链: 'necklace',
-    衣服: 'armor',
-    腰带: 'belt',
-    鞋子: 'boots',
-    戒指: 'ring',
-    耳饰: 'earring',
-    手镯: 'bracelet',
-    佩饰: 'pendant',
-    '玉魄·阳': 'jade-yang',
-    '玉魄·阴': 'jade-yin',
-};
 /**
  * 插槽色调：跟着「这件装备练到什么程度」走，而不是随便上色。
  *
@@ -76,7 +61,7 @@ const tip = computed(() => {
     if (props.eq) return '';
     if (props.locked) return '先设置命魂之玉';
     if (props.pending) return '旧档案有多件候选，点开挑一件';
-    return '点击从仓库挑一件';
+    return '点击挑一件或截图识别';
 });
 const hint = computed(() => {
     if (props.eq) return `${props.part}：${props.eq.name}，查看属性与操作`;
@@ -98,7 +83,7 @@ const hint = computed(() => {
     >
         <!-- 插槽：凹陷的方孔托住部位图标，像游戏里那排格子，而不是一块纯色方块。 -->
         <span class="eq-socket">
-            <AppIcon :name="icons[part] || 'sword'" :size="27" />
+            <EquipmentGlyph :part="part" :size="34" />
             <span v-if="!eq && !locked" class="eq-add" aria-hidden="true">＋</span>
         </span>
         <span class="eq-main">
@@ -107,7 +92,8 @@ const hint = computed(() => {
                 <span v-if="levelText" class="eq-level">{{ levelText }}</span>
             </span>
             <span class="eq-name">{{ nameText }}</span>
-            <EquipmentProperties v-if="eq" :eq="eq" :lines="3" />
+            <!-- 属性一条不少：不再折叠成「还有 N 条」，宁可格子高一点。 -->
+            <EquipmentProperties v-if="eq" :eq="eq" />
             <span v-else class="eq-tip">{{ tip }}</span>
         </span>
     </button>
@@ -116,11 +102,12 @@ const hint = computed(() => {
 <style scoped>
 .eq-slot {
     display: flex;
-    /* 插槽与右侧文字块整体居中：空位两行字、满格三四行属性，高度不同也不会一边吊着。 */
+    /* 插槽与文字块整体居中：空位两行字、满格五六行属性，高度不同也不会一边吊着。 */
     align-items: center;
     gap: 11px;
     width: 100%;
-    min-height: 100px;
+    height: 100%;
+    min-height: 104px;
     padding: 9px 11px;
     border: 1px solid var(--line);
     border-radius: 5px;
@@ -136,7 +123,7 @@ const hint = computed(() => {
         background 120ms ease;
 }
 .eq-slot:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--q) 48%, var(--line-2));
+    border-color: color-mix(in srgb, var(--q) 52%, var(--line-2));
     background: linear-gradient(
         180deg,
         color-mix(in srgb, var(--q) 12%, var(--paper)) 0%,
@@ -160,33 +147,70 @@ const hint = computed(() => {
     border-style: dashed;
     border-color: var(--gold);
 }
+/* 插槽：62px 凹槽 + 四角刻线。刻线是「格子」这件事最省墨的表达，比加阴影干净。 */
 .eq-socket {
     position: relative;
     display: grid;
     place-items: center;
     flex: none;
-    width: 58px;
-    height: 58px;
-    border: 1px solid color-mix(in srgb, var(--q) 48%, var(--line));
+    width: 62px;
+    height: 62px;
+    border: 1px solid color-mix(in srgb, var(--q) 46%, var(--line));
     border-radius: 6px;
     color: var(--q);
     background: radial-gradient(
-        120% 120% at 32% 22%,
-        color-mix(in srgb, var(--q) 17%, var(--paper-2)),
-        var(--paper-2) 72%
+        118% 118% at 34% 20%,
+        color-mix(in srgb, var(--q) 20%, var(--paper-2)),
+        var(--paper-2) 74%
     );
     /* 上沿压深、下沿提亮：一个往里凹的孔，与凸起的纸面相反。 */
     box-shadow:
-        inset 0 1px 3px color-mix(in srgb, var(--ink) 15%, transparent),
+        inset 0 1px 3px color-mix(in srgb, var(--ink) 16%, transparent),
         inset 0 -1px 0
             light-dark(
                 color-mix(in srgb, #fff 55%, transparent),
                 color-mix(in srgb, #000 45%, transparent)
             );
 }
+/* 四角刻线：用两条渐变各画左上/右下两个角，比四个伪元素省。 */
+.eq-socket::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 3px;
+    pointer-events: none;
+    background:
+        linear-gradient(
+                to right,
+                color-mix(in srgb, var(--q) 62%, transparent) 0 7px,
+                transparent 7px
+            )
+            0 0 / 100% 1px no-repeat,
+        linear-gradient(
+                to bottom,
+                color-mix(in srgb, var(--q) 62%, transparent) 0 7px,
+                transparent 7px
+            )
+            0 0 / 1px 100% no-repeat,
+        linear-gradient(
+                to left,
+                color-mix(in srgb, var(--q) 62%, transparent) 0 7px,
+                transparent 7px
+            )
+            100% 100% / 100% 1px no-repeat,
+        linear-gradient(
+                to top,
+                color-mix(in srgb, var(--q) 62%, transparent) 0 7px,
+                transparent 7px
+            )
+            100% 100% / 1px 100% no-repeat;
+}
 .eq-slot.vacant .eq-socket {
-    color: color-mix(in srgb, var(--muted) 55%, var(--paper));
+    color: color-mix(in srgb, var(--muted) 58%, var(--paper));
     border-color: var(--line);
+}
+.eq-slot.vacant .eq-socket::after {
+    background: none;
 }
 .eq-slot.locked .eq-socket {
     color: color-mix(in srgb, var(--muted) 62%, var(--paper));
@@ -217,6 +241,8 @@ const hint = computed(() => {
 .eq-main {
     display: flex;
     flex-direction: column;
+    /* 同一排的格子会被拉到等高，内容垂直居中，多出来的空白才不会全堆在底部。 */
+    justify-content: center;
     flex: 1;
     gap: 2px;
     min-width: 0;

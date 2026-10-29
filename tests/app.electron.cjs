@@ -1411,6 +1411,36 @@ app.on('browser-window-created', (_event, win) => {
                 '还没有档案，格子都是空位',
             );
 
+            // 空位选装里也能直接截图识别：带着当前方案号进去，入库后默认穿到这一套。
+            await read(() => document.querySelectorAll('.eq-slot')[2].click());
+            // 档案还没有时选装弹窗里没有候选列表，等的是「空态」那句话。
+            await until(
+                () => !!document.querySelector('.eq-picker, .eq-picker-empty'),
+                '空位选装弹窗',
+            );
+            // 顶栏也有一个同名的「截图识别」，这里要点弹窗里那颗。
+            await read(() => {
+                const modal = document.querySelector('.modal');
+                [...modal.querySelectorAll('button')]
+                    .find((button) => button.textContent.trim() === '截图识别')
+                    .click();
+            });
+            await until(() => !!document.querySelector('.shot-drop'), '选装里的截图识别');
+            assert.notEqual(
+                await read(() =>
+                    document.querySelector('.shot-plan .select-value')?.textContent.trim(),
+                ),
+                '只入库，不自动穿戴',
+                '从空位进来时默认选中正在看的那一套',
+            );
+            await click('取消');
+            await until(() => !document.querySelector('.shot-drop'), '截图识别已关闭');
+            assert.equal(
+                await read(() => !!document.querySelector('.eq-picker')),
+                false,
+                '截图弹窗关掉后不再叠着一个选装弹窗',
+            );
+
             // 新增一件武器：只填档案，属性留空也是合法档案（属性编辑器另有一步验证）。
             await click('＋ 新增装备');
             await until(() => !!document.querySelector('#equipment-form'), '新增装备弹窗');
@@ -1731,9 +1761,22 @@ app.on('browser-window-created', (_event, win) => {
                 warehouseRow.some((line) => line.includes('物理暴击等级')),
                 '基础属性在列表里',
             );
+            // 2026-10-29 起列表不再折叠：灵尘、开光、奇袭这些配置项也摆出来。
             assert.ok(
-                !warehouseRow.some((line) => /灵尘|开光/.test(line)),
-                '灵尘与开光不占列表的行',
+                warehouseRow.some((line) => /灵尘/.test(line)),
+                '列表里能看到灵尘等级',
+            );
+            assert.ok(
+                warehouseRow.some((line) => /开光/.test(line)),
+                '列表里能看到开光孔',
+            );
+            assert.ok(
+                !warehouseRow.some((line) => /五行|制造者|耐久|修理失败/.test(line)),
+                '五行、制造者、耐久、修理失败不进列表',
+            );
+            assert.ok(
+                !warehouseRow.some((line) => /还有 \d+ 条/.test(line)),
+                '属性不再折叠成「还有 N 条」',
             );
             await read(() => {
                 [...document.querySelectorAll('.eq-row')]

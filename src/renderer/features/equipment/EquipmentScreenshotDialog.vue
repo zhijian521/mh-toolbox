@@ -38,7 +38,11 @@ interface ShotItem {
     confidence: number;
 }
 
-const props = defineProps<{ profile: EquipmentProfile }>();
+/**
+ * `index` 只在「从某个空位点进来」时传：默认入库后就穿到那一套，
+ * 免得用户识别完还要回装备栏再点一次。从工具栏进来时留空，不自动穿戴。
+ */
+const props = defineProps<{ profile: EquipmentProfile; index?: number | null }>();
 const emit = defineEmits<{ close: []; saved: [] }>();
 const app = useApplication();
 const rules = app.rules();
@@ -47,7 +51,7 @@ const limits = rules.equipmentImportLimits;
 
 const items = ref<ShotItem[]>([]);
 const selectedId = ref('');
-const plan = ref('');
+const plan = ref(props.index == null ? '' : String(props.index));
 const error = ref('');
 const saving = ref(false);
 const reading = ref(0);

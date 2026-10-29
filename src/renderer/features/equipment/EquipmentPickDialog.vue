@@ -6,7 +6,7 @@ import BaseModal from '../../components/BaseModal.vue';
 import EquipmentProperties from './EquipmentProperties.vue';
 
 const props = defineProps<{ profile: EquipmentProfile; index: number; part: string }>();
-const emit = defineEmits<{ close: []; saved: []; add: [] }>();
+const emit = defineEmits<{ close: []; saved: []; add: []; shot: [] }>();
 const app = useApplication();
 const rules = app.rules();
 const error = ref('');
@@ -70,7 +70,7 @@ async function assign(id: string) {
                     <b>{{ eq.name }}</b>
                     <span v-if="eq.id === current" class="eq-pick-tag">当前</span>
                 </span>
-                <EquipmentProperties :eq="eq" :lines="4" />
+                <EquipmentProperties :eq="eq" />
                 <small class="eq-pick-refs">
                     {{
                         referencesOf(eq)
@@ -86,6 +86,15 @@ async function assign(id: string) {
             <button class="btn" :disabled="app.busy" @click="close">取消</button>
             <button v-if="current" class="btn" :disabled="app.busy" @click="assign('')">
                 卸下本套
+            </button>
+            <button
+                class="btn"
+                type="button"
+                :disabled="app.busy"
+                title="截游戏里的装备图，本地识别后直接填入这一套"
+                @click="emit('shot')"
+            >
+                截图识别
             </button>
             <button class="btn primary" type="button" :disabled="app.busy" @click="emit('add')">
                 ＋ 新增并装备

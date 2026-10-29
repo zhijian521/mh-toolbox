@@ -42,7 +42,9 @@ const logs = computed(() => rules.gearLogsOf(props.eq.id) as unknown as GearLog[
     <BaseModal :title="eq.slot + ' · ' + eq.name" wide :busy="app.busy" @close="emit('close')">
         <div class="detail-grid">
             <section class="detail-main">
-                <EquipmentProperties :eq="eq" full aligned />
+                <EquipmentProperties :eq="eq" aligned />
+                <!-- 备注不是属性，不进属性表：它是「我自己记的一句话」，跟着详情走。 -->
+                <p v-if="eq.note" class="detail-note">{{ eq.note }}</p>
                 <p class="detail-meta">
                     {{ rules.charName(eq.characterId) }} ·
                     {{ rules.equipmentStatuses[status] }}
@@ -124,6 +126,14 @@ const logs = computed(() => rules.gearLogsOf(props.eq.id) as unknown as GearLog[
 .detail-main,
 .detail-side {
     min-width: 0;
+}
+.detail-note {
+    margin: 8px 0 0;
+    padding-left: 9px;
+    border-left: 2px solid var(--line);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--ink);
 }
 .detail-meta {
     margin: 6px 0 0;
