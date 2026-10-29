@@ -12,7 +12,24 @@ module.exports = {
         // 只带 Windows x64 的推理库：整包 236 MB，别的平台目录纯属白占体积。
         '!node_modules/onnxruntime-node/bin/napi-*/{darwin,linux,android}/**/*',
         '!node_modules/onnxruntime-node/bin/napi-*/win32/{arm64,ia32}/**/*',
+        /**
+         * DirectML 那套 GPU 推理组件 37 MB 全部排掉。
+         *
+         * 识别子进程写死了 `executionProviders: ['cpu']`（`equipment-ocr-worker.cjs:34`），
+         * 这三个 dll 只在 DML EP 下才被拖起来，留着就是白占体积。
+         */
+        '!node_modules/onnxruntime-node/bin/**/{DirectML.dll,dxcompiler.dll,dxil.dll}',
     ],
+    /**
+     * 只留中文界面语言包。
+     *
+     * `locales/` 默认带 55 种语言共 44 MB，全是 Chromium 自己的 UI 与拼写检查用的；
+     * 本应用界面全自绘、菜单也不用 Electron 内置那套，删掉别的语言不影响任何功能。
+     * `en-US` 留着保底（部分系统对话框会回退到它）。
+     */
+    electronLanguages: ['zh-CN', 'en-US'],
+    /** 安装包用最大压缩：多花一两分钟，NSIS / 便携版能小一成左右。 */
+    compression: 'maximum',
     /**
      * 原生库与模型必须解包。
      *

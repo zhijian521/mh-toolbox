@@ -1365,3 +1365,23 @@ CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都�
 **改动：** 新增 `src/main/update.cjs`（`compareVersions` 纯函数 + `createUpdateChecker`，`net` 由调用方注入以便测试）；`ipc.cjs` 注册 `checkUpdate` 并传 `net`；`preload.cjs` 与 `app/types.ts` 同步（`UpdateCheck` 接口）；设置页「关于」加一行状态 + 一颗按钮，有新版时转金并换成「打开下载页」，说明折叠在 `details` 里限高滚动；进页面静默查一次（失败咽下去），手点才提示失败。README 补「更新」一节，`ARCHITECTURE` 补一条网络边界说明，使用帮助的设置条补两条。
 
 **验证。** 新增 `tests/update.test.mjs` 6 项：版本比较按数字段（`0.10.0 > 0.9.0`、预发布小于同号正式版）、feed 混着 `web-legacy` 时挑出真正的最新版、已是最新时不花 API 配额（断言 fetch 只被调一次且是 feed）、预发布不推给正式版用户、feed 挂了才退 API（且 API 限流时根本不调用）、两条通道都失败只报一句「连不上 GitHub」。真实链路用临时 profile 跑通：`current 0.2.0 / latest 0.2.0 / hasUpdate false`，说明正文从 feed 的 HTML 里正确转成纯文本。再用 `app.setVersion('0.1.0')` 造出有新版的状态，截图核对：金色「有新版本 0.2.0（当前 0.1.0）」、主色「打开下载页」、说明展开后 200px 高内滚动且卡片 `scrollWidth - clientWidth = 0`。门禁：`npm run check` 139 项全过、lint 0-0、`vue-tsc` 0 错误。
+
+## 打包体积优化：只留中文语言包、排掉 DirectML
+
+日期：2026-10-29。起因：用户提出「打包后的应用很大」。先用 `electron-builder --dir` 实打一次量基线，不是估：**解包 440 MB**，其中 `梦幻养老助手 V2.exe` 201 MB（Electron 本体）、`app.asar.unpacked` 93 MB（onnxruntime 57 / sharp 19 / OCR 模型 16）、`locales` 44 MB、`dxcompiler.dll` 25 MB、`LICENSES.chromium.html` 15 MB。改的是前三块里能动的两块，业务代码零改动。
+
+判据是「这一份运行时到底会不会被加载」：
+
+1. **`locales` 55 种语言删到 2 种。** 界面全自绘、菜单也不用 Electron 内置那套，`scripts` 与 `src/` 里没有任何 `getLocale` 调用；`electronLanguages: ['zh-CN','en-US']` 之后只有两个 pak。`en-US` 留着是因为个别系统对话框会回退到它。
+2. **onnxruntime 的 DirectML 三件套（37.5 MB）排掉。** `DirectML.dll` 18 MB + `dxcompiler.dll` 18 MB + `dxil.dll` 1.5 MB，只在 DML EP 下才被拖起来，而 `equipment-ocr-worker.cjs:34` 写死 `executionProviders: ['cpu']`。`onnxruntime.dll` 21 MB 是必需的，留着。
+3. `compression: 'maximum'`，只影响安装包，不影响解包。
+
+结果：**解包 440 → 361 MB（−79 MB，−18%）**，`onnxruntime` 57 → 21 MB，`locales` 44 → 2 MB。安装包 129 MB、便携版 121 MB。
+
+**「不加代码」的红线两条。** 一、`LICENSES.chromium.html` 15 MB 必须留——Chromium 的 BSD 条款要求随二进制分发许可证文本，删了是合规问题，而它在 LZMA 里只占一两 MB。二、`libGLESv2.dll` 8 MB、`vk_swiftshader.dll` 6 MB、`d3dcompiler_47.dll` 5 MB 是软件渲染兜底，本机 GPU 本来就会崩（所以端到端要 `--disable-gpu`），删掉换台机器可能直接白屏。
+
+**验证没有停在「能打包」。** 用打包产物自己的原生库（`app.asar.unpacked/node_modules`）跑固件 `tests/fixtures/equipment-jade.png`，完整走一遍 sharp 缩放 + ONNX 推理：8 行、340 ms，首行「上古玉魄·阳」，与既有识别结果一致——证明缺了 DirectML 那两个 dll 后 CPU EP 照常建 session。再用独立数据目录启动打包后的 exe，12 秒不退（`timeout` 返回 124）、`data.json` 时间戳未变，说明起来了且没碰用户数据。
+
+**三个坑。** ① `release/` 里三个 asar 被某个进程锁住，`emptyDir` 与 `rm` 都失败（safe-delete shim 还会把 `rm` 转成 trash，而 trash 在这个盘上本身报错），本次改用 `-c.directories.output=release-hold` 输出；锁的成因未查明，重启后即可删除。② Git Bash 的 `timeout` 不认 `--`，`--no-sandbox` 还会被它当自己的选项，冒烟要直接跑 exe 不带参数。③ `files` 的排除规则只作用于 app 自身，不影响 electronDist 的复制，所以 `default_app.asar`（1 MB）去不掉——为一个文件加 `afterPack` 钩子不划算，留着。
+
+**明确不做的两项。** sharp（19 MB）换成 `nativeImage` 可以省，但拿到的是 BGRA、缩放算法也不同，识别率要重新回归；OCR 模型（16 MB）改成首次下载会破坏「装好即离线可用」。

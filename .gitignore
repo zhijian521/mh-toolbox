@@ -1,6 +1,8 @@
 node_modules/
 dist/
 release/
+# 临时打包目录（体积对比用），不进仓库
+release-*/
 .runtime/
 test-results/
 *.tsbuildinfo
