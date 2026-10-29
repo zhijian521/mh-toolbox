@@ -46,7 +46,7 @@ scripts/test-electron.mjs   逐个运行 tests/*.electron.cjs，跳过 inspect.*
 
 所有写入经领域的串行 commit 队列。事务内读取最新状态，修改后落盘，失败恢复整个内存快照。角色资料、养成历史、排序及关联删除保持现有规则。IPC 传递普通对象，避免 Vue 代理无法结构化克隆。
 
-文件保存使用临时文件加 rename；导入、清空、schema 变化前复制旧文件。磁盘已有版本高于保存数据时拒绝降级覆盖。数据版本为 9（8 → 9 只做一处收敛：角色的 `activeEquipmentSet` 并入 `viewedEquipmentSet`，切到哪套方案就是在穿哪套；8 时计时中的会话已由单个 `activeSession` 改为 `activeSessions` 数组，每个在线角色一段、各自起停），独立于应用 `0.2.0` 的版本号。
+文件保存使用临时文件加 rename；导入、清空、schema 变化前复制旧文件。磁盘已有版本高于保存数据时拒绝降级覆盖。数据版本为 9（8 → 9 只做一处收敛：角色的 `activeEquipmentSet` 并入 `viewedEquipmentSet`，切到哪套方案就是在穿哪套；8 时计时中的会话已由单个 `activeSession` 改为 `activeSessions` 数组，每个在线角色一段、各自起停），独立于应用 `0.3.0` 的版本号。
 
 ## 错误处理分层
 
