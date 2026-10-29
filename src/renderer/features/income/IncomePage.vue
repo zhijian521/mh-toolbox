@@ -1114,57 +1114,83 @@ async function onlineSaved(dates: string[]) {
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
-    gap: 5px;
+    gap: 6px;
     margin-left: auto;
     min-width: 0;
 }
 /* 标题行位置低了一档，按钮排跟着抬高：`line-height` 撑出的空白由这里补回来。 */
 .target-label {
-    margin-right: 2px;
+    margin-right: 3px;
     color: var(--muted);
     font-size: 11px;
     font-weight: 400;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.5px;
 }
+/*
+ * 未选中：纸面凹槽里的一枚小签——底色比卡片深半档、内阴影收一道，看着「按得下去」。
+ * 边框常驻但透明，hover 只换颜色，不会因为多出一条边而抖一格。
+ */
 .target-pill {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 2px 9px;
-    min-height: 22px;
-    border: 1px solid var(--line-2);
+    padding: 2px 10px;
+    min-height: 23px;
+    border: 1px solid transparent;
     border-radius: 999px;
-    background: var(--paper-2);
-    color: var(--muted);
+    background: var(--panel-3);
+    box-shadow: inset 0 1px 2px color-mix(in srgb, var(--ink) 6%, transparent);
+    color: var(--ink-2);
     font-family: inherit;
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 17px;
     white-space: nowrap;
     cursor: pointer;
     transition:
         border-color 120ms ease,
         background-color 120ms ease,
-        color 120ms ease;
+        color 120ms ease,
+        box-shadow 120ms ease;
 }
 /* 规则与角色之间留一格空档，不画分隔线——一排按钮里多一根竖线反而更碎。 */
 .target-pill.sep {
     margin-left: 7px;
 }
 .target-pill:hover {
-    border-color: var(--gold);
+    border-color: color-mix(in srgb, var(--gold) 55%, transparent);
     color: var(--ink);
+}
+.target-pill:active {
+    background: var(--paper-2);
 }
 .target-pill:focus-visible {
     outline: none;
     border-color: var(--gold);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 22%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 24%, transparent);
 }
-/* 选中：金底描边 + 深字，一眼能看出这笔记给谁。 */
+/*
+ * 选中：整枚灌金、字反过来（浅色下奶白、暗色下深墨），跟主按钮同一套语言。
+ * 不再用「浅金底 + 金边」——那一档只比未选中深一点点，隔着半屏根本分不出来。
+ * 外面加一圈同色柔光，把选中的那枚从纸面上托起来。
+ */
 .target-pill.on {
-    border-color: color-mix(in srgb, var(--gold) 62%, var(--line-2));
-    background: color-mix(in srgb, var(--gold) 16%, var(--paper));
-    color: var(--ink);
+    border-color: color-mix(in srgb, var(--gold) 78%, var(--ink));
+    background: color-mix(in srgb, var(--gold) 74%, var(--ink));
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--gold) 34%, transparent);
+    color: var(--on-accent);
     font-weight: 600;
+}
+.target-pill.on:hover {
+    background: color-mix(in srgb, var(--gold) 66%, var(--ink));
+    color: var(--on-accent);
+}
+.target-pill.on:active {
+    background: color-mix(in srgb, var(--gold) 58%, var(--ink));
+}
+/* 灌金底会把金色焦点环吃掉，选中时改用墨色环——两种底色上都看得见。 */
+.target-pill.on:focus-visible {
+    border-color: color-mix(in srgb, var(--gold) 78%, var(--ink));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 55%, transparent);
 }
 /* 正在计时的号：名字前一颗绿点，比在 title 里写「计时中」看得见。 */
 .target-dot {
@@ -1173,7 +1199,12 @@ async function onlineSaved(dates: string[]) {
     flex: none;
     border-radius: 50%;
     background: var(--green);
-    box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--green) 18%, transparent);
+    box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--green) 20%, transparent);
+}
+/* 金底上绿点会糊成一片，换成反差色——位置不变，仍然表示「这个号在计时」。 */
+.target-pill.on .target-dot {
+    background: var(--on-accent);
+    box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--on-accent) 24%, transparent);
 }
 .section-label {
     display: flex;
