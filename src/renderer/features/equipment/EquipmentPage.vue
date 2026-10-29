@@ -38,7 +38,20 @@ const rules = app.rules();
 const character = ref(app.characters[0]?.id || '');
 const warehouseOpen = ref(false);
 const picking = ref<{ index: number; slot: string } | null>(null);
-const detail = ref<EquipmentItem | null>(null);
+/**
+ * 详情弹窗看的是哪一件：这里只存 id，内容按 id 现取快照。
+ *
+ * 存对象的话，改完档案（`saveEquipment` 是原地 `Object.assign`）再打开详情还是旧内容；
+ * 按 id 派生则每次数据一发布就重取一份，改完立刻能看到新名字、新属性与新的时间线。
+ * 顺带解决「删掉的装备还开着详情」——`equipmentById` 返回空，弹窗自己收起。
+ */
+const detailId = ref('');
+const detail = computed(() => {
+    void app.data;
+    if (!detailId.value) return null;
+    const eq = rules.equipmentById(detailId.value);
+    return eq ? (plain(eq) as EquipmentItem) : null;
+});
 const logTarget = ref<EquipmentItem | null>(null);
 const editor = ref<{
     eq: EquipmentItem | null;
@@ -113,6 +126,10 @@ const characterCards = computed(() => {
 function message(failure: unknown) {
     return failure instanceof Error ? failure.message : String(failure);
 }
+/** 打开详情只看 id，内容由上面的 `detail` 现取，改完档案不必重开弹窗。 */
+function openDetail(eq: EquipmentItem) {
+    detailId.value = eq.id;
+}
 function openPick(slot: string) {
     if (!profile.value) return;
     picking.value = { index: profile.value.viewedEquipmentSet, slot };
@@ -154,7 +171,7 @@ async function assign(slot: string, id: string) {
                 domain.assignEquipment(profile.value!.id, index, slot, id),
             ),
         );
-        detail.value = null;
+        detailId.value = '';
         app.notify(id ? '已更新装备搭配' : '已卸下，档案保留在仓库');
     } catch (failure) {
         app.notify(message(failure), true);
@@ -167,7 +184,7 @@ async function confirmRemove() {
     try {
         await app.execute((domain) => domain.commitEquipment(() => domain.removeEquipment(eq.id)));
         removing.value = null;
-        detail.value = null;
+        detailId.value = '';
         app.notify('装备档案已删除');
     } catch (failure) {
         removeError.value = message(failure);
@@ -286,7 +303,7 @@ function switchCharacter(id: string) {
             <EquipmentBoard
                 :profile="profile"
                 @pick="openPick"
-                @detail="detail = $event"
+                @detail="openDetail($event)"
                 @soul="soulOpen = true"
                 @plan="planDialog = $event"
             />
@@ -306,7 +323,7 @@ function switchCharacter(id: string) {
         v-if="warehouseOpen && profile"
         :profile="profile"
         @close="warehouseOpen = false"
-        @detail="detail = $event"
+        @detail="openDetail($event)"
         @edit="openEditor($event)"
         @log="logTarget = $event"
         @remove="removing = $event"
@@ -317,7 +334,7 @@ function switchCharacter(id: string) {
         :eq="detail"
         :profile="profile"
         :index="profile.viewedEquipmentSet"
-        @close="detail = null"
+        @close="detailId = ''"
         @edit="openEditor(detail)"
         @log="logTarget = detail"
         @remove="removing = detail"

@@ -55,8 +55,16 @@ const own = computed<EquipmentItem[]>(() => {
     void app.data;
     return (app.data?.equipment || []).filter((item) => item.characterId === props.profile.id);
 });
-/** 引用关系每个角色算一次，逐行调用 `equipmentStatus` 会重复建索引。 */
-const references = computed(() => rules.equipmentReferenceIndex(props.profile.id));
+/**
+ * 引用关系每个角色算一次，逐行调用 `equipmentStatus` 会重复建索引。
+ *
+ * 必须 `void app.data` 参与依赖：否则换装之后（数据变了、id 没变）这里不会重算，
+ * 仓库里的「当前穿戴 / 其他方案备用」还停在换装前。
+ */
+const references = computed(() => {
+    void app.data;
+    return rules.equipmentReferenceIndex(props.profile.id);
+});
 const statusOf = (eq: EquipmentItem) =>
     rules.equipmentStatus(eq, references.value.get(eq.id) || []);
 const rows = computed(() => {

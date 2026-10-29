@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { EquipmentItem, EquipmentProfile } from '../../app/types';
+import { plain } from '../../services/desktop';
 import { useApplication } from '../../stores/application';
 import EquipmentSlot from './EquipmentSlot.vue';
 
@@ -47,8 +48,17 @@ async function setViewed(index: number) {
         app.notify(message(failure), true);
     }
 }
+/**
+ * 格子的数据取快照，不直接传领域里的活对象。
+ *
+ * `saveEquipment` 是 `Object.assign(previous, eq)` 原地改，对象引用不变；父组件虽然因为
+ * `profile` 换了引用而重渲染，传给格子的 prop 还是同一个对象，Vue 判定「属性没变」就
+ * 跳过子组件更新——改完名字格子里仍是旧名，切一次方案才刷新。深拷贝一次，引用变了
+ * 才会重画；一件装备几个字段，这点拷贝可以忽略。
+ */
 function equipped(slot: string) {
-    return rules.equipmentById(set.value.slots[slot]) || null;
+    const eq = rules.equipmentById(set.value.slots[slot]);
+    return eq ? (plain(eq) as EquipmentItem) : null;
 }
 /** 玉魄格子未解锁时不给选装入口，点了先去设命魂之玉。 */
 function open(slot: string) {
