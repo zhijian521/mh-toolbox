@@ -206,7 +206,7 @@ function showAll() {
 }
 </script>
 <template>
-    <PageHeader title="账号" description="人民币与梦幻币分账记录 · 快捷入口按类型预设收支">
+    <PageHeader title="账号" description="双币分账 · 快捷记账 · 收支明细">
         <template #actions>
             <button ref="addButton" class="btn primary" :disabled="app.busy" @click="openEditor()">
                 ＋ 记一笔

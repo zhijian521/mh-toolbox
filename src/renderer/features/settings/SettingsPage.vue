@@ -270,7 +270,7 @@ async function wipe() {
 }
 </script>
 <template>
-    <PageHeader title="设置" description="外观、使用帮助、数据与关于" />
+    <PageHeader title="设置" description="外观 · 数据 · 帮助 · 关于" />
     <!--
         两列各自堆叠，不用 grid 按行填：grid 里短卡下方会空出与长卡等高的空白，
         这正是上一版看着乱的原因。flex 列内卡片紧贴，列高只由自己决定。

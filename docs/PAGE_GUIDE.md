@@ -28,7 +28,7 @@
 
 ## 3. 页面骨架
 
-- 顶部用 `PageHeader`：`title`、`description`，操作按钮放 `#actions` 插槽。
+- 顶部用 `PageHeader`：`title`、`description`，操作按钮放 `#actions` 插槽。`description` 是**功能罗列**而不是句子：用 `·` 分隔 3–4 个 2–4 字的名词短语（如「三套搭配 · 命魂之玉 · 装备档案」），不写逗号、不写解释、不带数字——这页有哪几块写清楚就够，具体做法交给页内卡片标题。
 - 主体容器用 `.page-content`；无数据时用 `.empty` 加 `AppIcon`，不要只留一片空白。
 - 列表 `v-for` 的 `:key` 用实体 `id`，不要用下标。
 - 不要再给页面套一层 `try/catch` 或 `errorCaptured`：工作区外层的 `ErrorBoundary` 已经把渲染异常换成替代界面（见 `UI_GUIDE.md`），页面内叠加兜底反而吞掉统一的恢复入口。

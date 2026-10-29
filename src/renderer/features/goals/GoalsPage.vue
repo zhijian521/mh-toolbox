@@ -185,7 +185,7 @@ const sort = useDragSort({
 });
 </script>
 <template>
-    <PageHeader title="目标" description="养成目标跟随档案自动更新 · 存钱与装备目标手动累计">
+    <PageHeader title="目标" description="目标进度 · 自动累计 · 达成记录">
         <template #actions>
             <button ref="addButton" class="btn primary" :disabled="app.busy" @click="editing = {}">
                 ＋ 新建目标

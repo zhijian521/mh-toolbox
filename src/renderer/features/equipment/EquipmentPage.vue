@@ -214,7 +214,7 @@ function switchCharacter(id: string) {
 </script>
 
 <template>
-    <PageHeader title="装备" description="三套搭配 · 命魂之玉 · 全部档案">
+    <PageHeader title="装备" description="三套搭配 · 命魂之玉 · 装备档案">
         <template #actions>
             <button
                 class="btn"

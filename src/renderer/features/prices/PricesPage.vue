@@ -85,13 +85,6 @@ const entries = computed<PriceItem[]>(() => {
         return (b.updatedAt || 0) - (a.updatedAt || 0);
     });
 });
-const logTotal = computed(() =>
-    items.value.reduce((sum, item) => sum + (Array.isArray(item.logs) ? item.logs.length : 0), 0),
-);
-const description = computed(() => {
-    if (!items.value.length) return '记录各服务器物品行情 · 只保存在本机';
-    return `共 ${items.value.length} 件物品 · ${logTotal.value} 条价格记录`;
-});
 const filtered = computed(
     () => !!filters.keyword.trim() || !!filters.category || filters.sort !== 'updated',
 );
@@ -185,7 +178,13 @@ async function remove() {
 </script>
 
 <template>
-    <PageHeader title="物价" :description="description">
+    <!--
+        小标题固定三段，与其它页面同一句式。
+        原来这里按条数现算（「共 N 件物品 · M 条价格记录」）：只有这一页的小标题是数字，
+        新建或删掉一张卡就跳一次，和其他页并排看不成一排。件数在卡片网格里数得出来，
+        「只存本机」这句提示更该留在抬头。
+    -->
+    <PageHeader title="物价" description="物品行情 · 价格记录 · 仅存本机">
         <template #actions>
             <button ref="addButton" class="btn primary" :disabled="app.busy" @click="editing = {}">
                 ＋ 新建卡片

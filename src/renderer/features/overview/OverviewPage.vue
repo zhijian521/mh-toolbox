@@ -35,7 +35,7 @@ const blank = computed(() => !app.characters.length && !(app.data?.transactions?
 </script>
 
 <template>
-    <PageHeader title="总览" description="收益、账号与目标的状态一览">
+    <PageHeader title="总览" description="日常收益 · 账号账本 · 目标进度">
         <template #actions>
             <div class="overview-character">
                 <BaseSelect v-model="character" label="总览角色筛选" :options="characterOptions" />

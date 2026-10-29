@@ -82,10 +82,7 @@ function backToCharacters() {
 <template>
     <slot v-if="!failure" />
     <template v-else>
-        <PageHeader
-            title="页面出错了"
-            description="这个页面在渲染时出现异常，已经停在这里；其他页面和已保存的手账数据不受影响。"
-        >
+        <PageHeader title="页面出错了" description="渲染异常已拦截 · 手账数据未受影响">
             <template #actions>
                 <button class="btn compact" @click="retry">重开此页面</button>
                 <button class="btn compact primary" @click="backToCharacters">返回角色页</button>
