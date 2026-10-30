@@ -328,6 +328,90 @@ details[open] summary {
     color: var(--gold);
     text-decoration: underline;
 }
+/*
+ * 凹槽胶囊 / 铜牌：一种挑选动作一套材质，两种状态。
+ *
+ * 未选中是纸面上按出来的槽，选中是压在槽里的一枚铜牌。收益页的「记给谁」与物价页的
+ * 二级分类都用这一份——同一页里同一种动作不该有两种质感。
+ *
+ * 凹要四样齐：`--well` 底 + 上暗下亮渐变 + 上沿内阴影 + 下沿高光，少一样在 23px 的高度
+ * 里就读不出凹。不能拿 `--panel-3` 当槽底：它在亮色下比卡片深、暗色下比卡片浅，槽会翻
+ * 成凸起。选中反过来做（上亮下暗 + 外投影），于是看起来是从纸面抬起、压着槽边。
+ */
+.bevel-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 2px 10px;
+    min-height: 23px;
+    border: 1px solid color-mix(in srgb, var(--bevel-lo) 72%, transparent);
+    border-radius: 999px;
+    background-color: var(--well);
+    background-image: linear-gradient(180deg, var(--bevel-lo), transparent 62%);
+    box-shadow:
+        inset 0 1px 2px var(--bevel-lo),
+        inset 0 -1px 0 var(--bevel-hi);
+    color: var(--ink-2);
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 17px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        border-color 120ms ease,
+        background-color 120ms ease,
+        color 120ms ease,
+        box-shadow 120ms ease;
+}
+.bevel-pill:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+    background-color: color-mix(in srgb, var(--well) 74%, var(--paper));
+    color: var(--ink);
+}
+.bevel-pill:active:not(:disabled) {
+    background-color: color-mix(in srgb, var(--well) 88%, var(--ink));
+}
+.bevel-pill:focus-visible {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 24%, transparent);
+}
+.bevel-pill:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+/* 选中：整枚灌金、字反过来（浅色下奶白、暗色下深墨），与主按钮同一套语言。 */
+.bevel-pill.on {
+    border-color: color-mix(in srgb, var(--gold) 78%, var(--ink));
+    background-color: color-mix(in srgb, var(--gold) 74%, var(--ink));
+    background-image: linear-gradient(180deg, var(--bevel-hi), transparent 46%, var(--bevel-lo));
+    box-shadow:
+        inset 0 1px 0 var(--bevel-hi),
+        0 1px 1px var(--bevel-lo),
+        0 4px 9px color-mix(in srgb, var(--gold) 34%, transparent);
+    color: var(--on-accent);
+    font-weight: 600;
+}
+.bevel-pill.on:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--gold) 66%, var(--ink));
+    color: var(--on-accent);
+}
+.bevel-pill.on:active:not(:disabled) {
+    /* 按下去：渐变倒过来、投影收紧——同一枚铜牌被压回纸里。 */
+    background-color: color-mix(in srgb, var(--gold) 58%, var(--ink));
+    background-image: linear-gradient(180deg, var(--bevel-lo), transparent 58%);
+    box-shadow:
+        inset 0 1px 3px var(--bevel-lo),
+        0 1px 2px color-mix(in srgb, var(--gold) 24%, transparent);
+}
+/* 灌金底会把金色焦点环吃掉，选中时改用墨色环——两种底色上都看得见。 */
+.bevel-pill.on:focus-visible {
+    border-color: color-mix(in srgb, var(--gold) 78%, var(--ink));
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--ink) 55%, transparent),
+        0 3px 7px color-mix(in srgb, var(--gold) 30%, transparent);
+}
 .hint {
     color: var(--muted);
     font-size: 13px;
