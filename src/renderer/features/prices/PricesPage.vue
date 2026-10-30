@@ -11,6 +11,7 @@ import PriceCard from './PriceCard.vue';
 import PriceHistory from './PriceHistory.vue';
 import PriceItemEditor from './PriceItemEditor.vue';
 import PriceLogEditor from './PriceLogEditor.vue';
+import { priceTone } from './tone';
 
 /**
  * 物价。
@@ -227,11 +228,13 @@ async function remove() {
             <nav class="price-nav" aria-label="物品类型">
                 <button
                     type="button"
-                    class="price-nav-item"
+                    class="price-nav-item price-nav-all"
                     :class="{ on: !filters.group }"
                     :aria-pressed="!filters.group"
+                    style="--tone: var(--gold)"
                     @click="pickGroup('')"
                 >
+                    <i class="nav-dot" aria-hidden="true"></i>
                     <span>全部</span>
                     <b>{{ items.length }}</b>
                 </button>
@@ -242,8 +245,10 @@ async function remove() {
                     class="price-nav-item"
                     :class="{ on: filters.group === group.name, void: !group.count }"
                     :aria-pressed="filters.group === group.name"
+                    :style="{ '--tone': priceTone(group.name) }"
                     @click="pickGroup(group.name)"
                 >
+                    <i class="nav-dot" aria-hidden="true"></i>
                     <span>{{ group.name }}</span>
                     <b>{{ group.count }}</b>
                 </button>
@@ -263,7 +268,7 @@ async function remove() {
                     >
                         <button
                             type="button"
-                            class="sub-chip"
+                            class="bevel-pill sub-chip"
                             :class="{ on: !filters.sub }"
                             :aria-pressed="!filters.sub"
                             @click="filters.sub = ''"
@@ -274,7 +279,7 @@ async function remove() {
                             v-for="name in subChips"
                             :key="name"
                             type="button"
-                            class="sub-chip"
+                            class="bevel-pill sub-chip"
                             :class="{ on: filters.sub === name }"
                             :aria-pressed="filters.sub === name"
                             @click="filters.sub = filters.sub === name ? '' : name"
@@ -388,23 +393,24 @@ async function remove() {
 .price-nav {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
     padding-right: 4px;
     border-right: 1px solid var(--line);
 }
 /*
- * 一级用「左侧一道竖线」标记选中，而不是整块底色：九项挨在一起，全是底色会糊成一片，
- * 竖线只标一条，眼睛顺着线就能找到当前在哪。
+ * 一级目录用「一颗分类色小点 + 淡同色底」标记选中，而不是一道竖线。
+ *
+ * 色点的颜色与右边卡片的分类色是同一份取值（`tone.ts`）：左边点在哪、右边就是哪一片
+ * 颜色的卡，两处对得上，比在九项之间找一根线快得多。选中不用灌金胶囊——那是顶部二级
+ * 的语言，一级也灌金会让「导航」和「筛选」看起来是同一层东西。
  */
 .price-nav-item {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 6px 9px;
-    border: 0;
-    border-left: 2px solid transparent;
-    border-radius: 0 3px 3px 0;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: 4px;
     background: none;
     color: var(--muted);
     font-size: 12.5px;
@@ -412,17 +418,44 @@ async function remove() {
     text-align: left;
     transition:
         color 120ms ease,
-        background-color 120ms ease;
+        background-color 120ms ease,
+        border-color 120ms ease;
+}
+.nav-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--tone);
+    opacity: 0.42;
+    transition:
+        opacity 120ms ease,
+        box-shadow 120ms ease;
+}
+.price-nav-item > span {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .price-nav-item:hover:not(:disabled) {
     background: color-mix(in srgb, var(--paper-2) 70%, transparent);
     color: var(--ink);
 }
+.price-nav-item:hover .nav-dot {
+    opacity: 0.75;
+}
 .price-nav-item.on {
-    border-left-color: var(--gold);
-    background: color-mix(in srgb, var(--gold) 9%, transparent);
+    border-color: color-mix(in srgb, var(--tone) 42%, var(--line));
+    background: color-mix(in srgb, var(--tone) 16%, var(--paper));
     color: var(--ink);
     font-weight: 600;
+}
+/* 选中时色点点亮并带一圈光晕：这一项是「活的」，其余九项是暗的。 */
+.price-nav-item.on .nav-dot {
+    opacity: 1;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 16%, transparent);
 }
 /* 一件都没记的分类压暗但仍可点：点进去是「这一类还没有记录」，而不是从菜单里消失。 */
 .price-nav-item.void {
@@ -435,44 +468,55 @@ async function remove() {
     font-weight: 400;
     font-variant-numeric: tabular-nums;
 }
+.price-nav-item.on b {
+    color: color-mix(in srgb, var(--tone) 78%, var(--ink));
+}
+/* 「全部」不是一类，用一道虚线把它和下面九个分类分开，免得被读成第十类。 */
+.price-nav-all {
+    position: relative;
+    margin-bottom: 6px;
+}
+.price-nav-all::after {
+    content: '';
+    position: absolute;
+    right: 8px;
+    bottom: -4px;
+    left: 8px;
+    height: 0;
+    border-bottom: 1px dashed var(--line);
+}
 .price-main {
     min-width: 0;
 }
 .price-filters {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     margin-bottom: 14px;
 }
+/*
+ * 二级 chips 落在一条纸带上：胶囊的凹槽靠「比承载面暗一档」成立。直接摆在页面底色上时
+ * 两者明度太接近（深色主题下几乎一样），槽就看不出来。用 `--paper` 而不是半透明混色——
+ * 两套主题下它都比 `--well` 亮，凹永远成立。
+ */
 .sub-chips {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     flex-wrap: wrap;
-}
-/* 二级做成小圆头 chip：比一级轻一档，读起来是「这一块里的细分」而不是另一个菜单。 */
-.sub-chip {
-    padding: 2px 11px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
+    align-self: flex-start;
+    padding: 5px 7px;
+    border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+    border-radius: 9px;
     background: var(--paper);
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 19px;
-    transition:
-        color 120ms ease,
-        border-color 120ms ease,
-        background-color 120ms ease;
 }
-.sub-chip:hover:not(:disabled) {
-    border-color: var(--line-2);
-    color: var(--ink);
-}
-.sub-chip.on {
-    border-color: color-mix(in srgb, var(--gold) 52%, var(--line-2));
-    background: color-mix(in srgb, var(--gold) 12%, var(--paper));
-    color: var(--ink);
-    font-weight: 600;
+/*
+ * 二级 chips 直接用全局 `.bevel-pill` 的凹槽 / 铜牌材质，与收益页「记给谁」同一套、
+ * 同一尺寸——两级筛选的区别靠位置与数量，不靠把二级做小一号（压到 22px 时凹槽就
+ * 读不出来了，只剩一圈描边）。
+ */
+.sub-chip {
+    flex: none;
 }
 .filter-row {
     display: flex;
@@ -532,15 +576,22 @@ async function remove() {
     }
     .price-nav-item {
         flex: none;
-        gap: 5px;
         padding: 4px 10px;
-        border-left: 0;
-        border-bottom: 2px solid transparent;
-        border-radius: 3px 3px 0 0;
     }
-    .price-nav-item.on {
-        border-bottom-color: var(--gold);
-        background: none;
+    /* 横向排时「全部」的分隔线跟着转成竖线，放在它右边。 */
+    .price-nav-all {
+        margin-right: 6px;
+        margin-bottom: 0;
+    }
+    .price-nav-all::after {
+        top: 4px;
+        right: -3px;
+        bottom: 4px;
+        left: auto;
+        width: 0;
+        height: auto;
+        border-right: 1px dashed var(--line);
+        border-bottom: 0;
     }
 }
 @media (max-width: 750px) {

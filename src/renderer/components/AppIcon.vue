@@ -26,6 +26,8 @@ const paths: Record<string, string> = {
     settings: 'M4 6h16M4 12h16M4 18h16M8 3v6m8 0v6m-5 0v6',
     edit: 'm15 4 5 5M4 20l5-1L21 7l-5-5L4 14z',
     trash: 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7',
+    // 历史：时钟 + 回转箭头，13px 下靠轮廓就能读出「翻过往记录」。
+    history: 'M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6M12 8v4l2.5 2.5',
     calendar: 'M4 5h16v16H4zM8 2v6m8-6v6M4 10h16m-12 4h2m4 0h2m-8 3h2',
     grip: 'M9 4h.01M15 4h.01M9 9h.01M15 9h.01M9 14h.01M15 14h.01M9 19h.01M15 19h.01',
     'panel-expand': 'M3 4h18v16H3zM9 4v16M13 9l3 3-3 3',

@@ -3,21 +3,25 @@ import { computed } from 'vue';
 import type { PriceChange, PriceItem, PriceLog } from '../../app/types';
 import AppIcon from '../../components/AppIcon.vue';
 import { useApplication } from '../../stores/application';
+import { priceTone } from './tone';
 
 /**
  * 一张物价卡片。
  *
- * 版面按「价签」组织而不是表格行：分类与涨跌徽章在最上，名称与价格是唯一焦点，
- * 底部一行极淡的元信息，走势线铺在卡片下沿当背景——一眼扫过去看到的是价格和方向，
- * 而不是七个字号差不多的行。
+ * 四段：`名称 →分类` / 虚线 / `价格 涨跌 走势` / `日期 … 三个小工具 ＋记价`。
+ * 分类并进名称行、元信息并进操作行，都是为了让 210px 宽的卡从 151px 压到 102px——
+ * 一屏从 4 行变 6 行。名称在前吃掉剩余宽度，分类靠右、到 46% 才截断，宁可截分类不截名字。
+ * 底行只留「最后一次记价的日期」：记录条数在这个宽度里挤到看不见，而它本来也数不出来
+ * 什么——要看几条就点历史。
+ *
+ * 三个物品级工具（编辑 / 删除 / 历史）**常驻但压到 0.45**，鼠标指上去或键盘进到卡内
+ * 才淡到不透明。以前是默认全透明、只在 hover 现身——那时底行要塞下「日期 · 条数」，
+ * 现在条数删了、宽度富裕，藏起来的入口反而不该藏：触屏与新手根本不知道有这三个按钮。
+ * 历史弹窗里也保留编辑与删除，卡片上找不到时仍改得动。
  *
  * 卡片只负责展示与派发操作：当前价、涨跌与显示口径全部来自领域层
  * （`priceCurrent` / `priceChange` / `priceLabel`），卡片里不重算一遍，
  * 否则卡片与历史弹窗迟早给出两个价。
- *
- * 编辑与删除物品在卡片底部左侧有两个小图标（默认半透明，不抢眼），历史弹窗里
- * 也保留同一对入口——只在弹窗里给，卡片上就找不到地方改删了。记价与历史靠右，
- * 记价落在右下角，是最顺手的点击位置。
  */
 const props = defineProps<{
     item: PriceItem;
@@ -39,7 +43,6 @@ const rules = useApplication().rules();
 
 const label = computed(() => rules.priceLabel(props.current ? props.current.price : null));
 const updateText = computed(() => (props.current ? props.current.date.slice(5) : '未记录'));
-const logCount = computed(() => props.item.logs.length);
 
 /**
  * 涨跌幅：10% 以下保留一位小数，再往上取整。
@@ -76,39 +79,9 @@ const badge = computed(() => {
 });
 
 /**
- * 分类色的色调：一级固定，自定义一级（理论上不存在，读取时已兜到「其他」）按名称散列。
- *
- * 颜色跟着一级走、字号跟二级走：同一大类的卡片一眼是同一片色，卡面上写的是最具体的
- * 那一层（「归墟」而不是「任务产出」）。令牌色直接引 var()，卡面自己带的两套取值；
- * 这里几个写死的褐 / 橄榄 / 黛 / 紫用 light-dark() 各给一份——暗底上原来的深色几乎
- * 看不见，卡片会变成没分类的灰块。
+ * 分类色的色调：一级固定，自定义一级按名称散列。取值在 `tone.ts`，与左侧目录共用。
  */
-const tone = computed(() => {
-    const fixed: Record<string, string> = {
-        装备灵饰: 'light-dark(#6b7b52, #9db083)',
-        召唤兽: 'light-dark(#8a6a8a, #b99cc0)',
-        兽决内丹: 'var(--gold)',
-        宝石符石: 'var(--red)',
-        打造材料: 'light-dark(#7a6a53, #b3a184)',
-        消耗补给: 'var(--green)',
-        任务产出: 'light-dark(#8a5a2b, #c49a6a)',
-        通货账号: 'var(--blue)',
-        其他: 'var(--muted)',
-    };
-    const name = props.item.category || '其他';
-    if (fixed[name]) return fixed[name];
-    const pool = [
-        'var(--gold)',
-        'var(--blue)',
-        'var(--red)',
-        'var(--green)',
-        'light-dark(#8a5a2b, #c49a6a)',
-        'light-dark(#8a6a8a, #b99cc0)',
-    ];
-    let hash = 0;
-    for (const char of name) hash = (hash * 31 + char.codePointAt(0)!) % 997;
-    return pool[hash % pool.length];
-});
+const tone = computed(() => priceTone(props.item.category));
 /** 卡面标签取最具体的一层：有子类写子类，没有才退回一级。 */
 const tag = computed(() => props.item.sub || props.item.category);
 const tagTitle = computed(() =>
@@ -145,18 +118,10 @@ const sparkPoints = computed(() => {
         :aria-label="item.name + ' 的物价'"
         :style="{ '--tone': tone }"
     >
-        <!-- 吊牌两侧的挂绳孔：一排卡片看过去就是一片挂签，比纯矩形有实体感。 -->
-        <span class="tag-hole" aria-hidden="true"></span>
-        <span class="tag-hole right" aria-hidden="true"></span>
-
-        <header class="card-top">
+        <header class="card-head">
+            <h2 class="card-name" :title="item.name">{{ item.name }}</h2>
             <span class="card-category" :title="tagTitle">{{ tag }}</span>
-            <span v-if="badge" class="card-badge" :class="badge.dir" :title="badge.title">
-                {{ badge.arrow }} {{ badge.text }}
-            </span>
         </header>
-
-        <h2 class="card-name" :title="item.name">{{ item.name }}</h2>
 
         <!-- 品名区与价格区之间一道虚线：价签上「上半写品名、下半写价钱」的那条分隔。 -->
         <span class="card-rule" aria-hidden="true"></span>
@@ -164,6 +129,9 @@ const sparkPoints = computed(() => {
         <div class="card-price">
             <b>{{ label.value }}</b>
             <small v-if="label.unit">{{ label.unit }}</small>
+            <span v-if="badge" class="card-badge" :class="badge.dir" :title="badge.title">
+                {{ badge.arrow }} {{ badge.text }}
+            </span>
             <svg
                 v-if="sparkPoints"
                 class="price-spark"
@@ -175,19 +143,14 @@ const sparkPoints = computed(() => {
             </svg>
         </div>
 
-        <p class="card-foot">
-            <span>{{ updateText }}</span>
-            <template v-if="logCount">
-                <i>·</i>
-                <span>{{ logCount }} 条</span>
-            </template>
-            <template v-if="item.note">
-                <i>·</i>
-                <span class="foot-note" :title="item.note">{{ item.note }}</span>
-            </template>
-        </p>
-
-        <div class="card-actions">
+        <footer class="card-foot">
+            <span class="foot-meta">
+                <span>{{ updateText }}</span>
+                <template v-if="item.note">
+                    <i>·</i>
+                    <span class="foot-note" :title="item.note">{{ item.note }}</span>
+                </template>
+            </span>
             <span class="card-tools">
                 <button
                     class="icon-button"
@@ -207,19 +170,20 @@ const sparkPoints = computed(() => {
                 >
                     <AppIcon name="trash" :size="13" />
                 </button>
+                <button
+                    class="icon-button"
+                    :disabled="busy"
+                    aria-label="历史"
+                    title="历史"
+                    @click="emit('history')"
+                >
+                    <AppIcon name="history" :size="13" />
+                </button>
             </span>
-            <button
-                class="text-button act quiet"
-                :disabled="busy"
-                aria-label="历史"
-                @click="emit('history')"
-            >
-                历史
-            </button>
             <button class="text-button act" :disabled="busy" aria-label="记价" @click="emit('log')">
                 ＋ 记价
             </button>
-        </div>
+        </footer>
     </article>
 </template>
 
@@ -228,7 +192,7 @@ const sparkPoints = computed(() => {
     position: relative;
     display: flex;
     flex-direction: column;
-    padding: 9px 12px 8px;
+    padding: 8px 12px 7px;
     border: 1px solid color-mix(in srgb, var(--tone) 22%, var(--line));
     border-radius: 5px;
     /* 卡片底色是分类色的极淡版本：同一类的卡片一眼认得出，又不至于盖过价格。 */
@@ -253,9 +217,9 @@ const sparkPoints = computed(() => {
 }
 /* 走势线贴着价格右侧，作为一行内容而不是底纹：底纹会穿过元信息与操作按钮。 */
 .price-spark {
-    width: 60px;
-    height: 18px;
-    margin-left: auto;
+    width: 46px;
+    height: 14px;
+    margin-left: 6px;
     align-self: center;
     flex: none;
     fill: none;
@@ -274,42 +238,22 @@ const sparkPoints = computed(() => {
     stroke: var(--muted);
 }
 /*
- * 两个挂绳孔：左右上角各一个，同行于分类小签与涨跌徽章。
- * 圆心落在第一行的垂直中线上（卡片 padding-top 9 + 行高 16 / 2 = 17，孔 10 高即 top 12），
- * 所以孔、小签、徽章三者的中心是一条线，不会一个偏高一个偏低。
+ * 首行：名称在前、分类贴右。
+ *
+ * 名称是这张卡的主体，先读到它；分类只是索引用的纸签，靠右对齐后不占名称的视线。
+ * 分类 `flex: 0 0 auto` 不参与收缩，名称吃掉剩余宽度——要挤就挤名称自己（带省略号），
+ * 分类到 46% 才截，避免「高级内丹」这类长分类把名称压成两个字。
  */
-.tag-hole {
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--bg);
-    box-shadow:
-        inset 0 1.5px 2px color-mix(in srgb, var(--ink) 34%, transparent),
-        /* 孔下沿的高光：亮色是纸的厚度，暗色下换成一道更黑的边才像凹进去。 */ inset 0 -1px 0
-            light-dark(
-                color-mix(in srgb, #fff 70%, transparent),
-                color-mix(in srgb, #000 55%, transparent)
-            );
-    pointer-events: none;
-}
-.tag-hole.right {
-    left: auto;
-    right: 12px;
-}
-.card-top {
+.card-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 6px;
+    gap: 7px;
     min-height: 16px;
-    /* 两侧各让开一个挂绳孔（12 + 10 + 6，相对卡片 12px 的内边距）。 */
-    padding: 0 16px;
 }
-/* 分类做成小标签：价签左上角那块「品类」的标，两端圆头，像贴在卡面上的纸签。 */
 .card-category {
+    flex: 0 0 auto;
+    max-width: 46%;
+    margin-left: auto;
     padding: 0 7px;
     border-radius: 999px;
     background: color-mix(in srgb, var(--tone) 14%, transparent);
@@ -322,6 +266,8 @@ const sparkPoints = computed(() => {
     white-space: nowrap;
 }
 .card-badge {
+    /* 徽章贴在价格右侧、走势线之前：先说涨跌，再看曲线形状。 */
+    margin-left: auto;
     flex: none;
     padding: 0 4px;
     border-radius: 3px;
@@ -343,9 +289,11 @@ const sparkPoints = computed(() => {
     background: color-mix(in srgb, var(--muted) 12%, transparent);
 }
 .card-name {
-    margin-top: 3px;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
     font-size: 15px;
-    line-height: 1.5;
+    line-height: 1.4;
     letter-spacing: 0.2px;
     color: var(--ink);
     overflow: hidden;
@@ -358,7 +306,7 @@ const sparkPoints = computed(() => {
  */
 .card-rule {
     height: 0;
-    margin: 4px -12px 0;
+    margin: 3px -12px 0;
     border-top: 1px dashed color-mix(in srgb, var(--tone) 32%, transparent);
 }
 .card-price {
@@ -367,7 +315,7 @@ const sparkPoints = computed(() => {
     gap: 3px;
     /* 价格带横贯卡片：左右用负外边距顶到边框，上下两条线把这一栏框住。 */
     margin: 0 -12px;
-    padding: 4px 12px 5px;
+    padding: 3px 12px 4px;
     border-bottom: 1px solid color-mix(in srgb, var(--tone) 22%, transparent);
     background: linear-gradient(
         90deg,
@@ -393,14 +341,27 @@ const sparkPoints = computed(() => {
     font-size: 12px;
     color: color-mix(in srgb, var(--tone) 55%, var(--muted));
 }
+/*
+ * 底行：元信息在左、三个小工具贴着记价、记价压在最右。
+ *
+ * 工具组用 opacity 隐藏而不是 display: none——留着占位，hover 淡入时上面的
+ * 时间块不会被突然挤短。210px 宽的卡里，这点宽度是真的会跳。
+ */
 .card-foot {
     display: flex;
-    align-items: baseline;
-    gap: 4px;
+    align-items: center;
+    gap: 8px;
     margin-top: 3px;
     font-size: 11px;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
+}
+.foot-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: hidden;
     white-space: nowrap;
 }
@@ -412,24 +373,16 @@ const sparkPoints = computed(() => {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.card-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: auto;
-    padding-top: 7px;
-    position: relative;
-}
-/*
- * 物品级操作（编辑 / 删除）靠左，默认半透明：平时不抢镜，指上去或键盘聚焦才变清楚。
- * 记价与历史被推到右侧，记价落在卡片的右下角——鼠标从右下过来就是这个最常用的动作。
- */
 .card-tools {
     display: flex;
     align-items: center;
     gap: 2px;
-    margin-right: auto;
-    opacity: 0.68;
+    flex: none;
+    /*
+     * 底行只剩日期与记价之后，这里空出一大块。三个工具改成常驻淡显而不是 hover 才现身：
+     * 藏起来的入口在触屏与新手那里等于没有，而 0.45 的 13px 图标在底行并不抢眼。
+     */
+    opacity: 0.55;
     transition: opacity 120ms ease;
 }
 .price-card:hover .card-tools,
@@ -446,6 +399,7 @@ const sparkPoints = computed(() => {
  * 主色金，不至于让整页变成一墙金按钮。
  */
 .act {
+    flex: none;
     padding: 2px 10px;
     border: 1px solid color-mix(in srgb, var(--tone) 40%, transparent);
     border-radius: 3px;
@@ -464,20 +418,6 @@ const sparkPoints = computed(() => {
 .act:hover:not(:disabled) {
     border-color: color-mix(in srgb, var(--tone) 66%, transparent);
     background: color-mix(in srgb, var(--tone) 24%, var(--paper));
-    color: var(--ink);
-    text-decoration: none;
-}
-/* 「历史」保持文字形态，与 chip 拉开层级。 */
-.act.quiet {
-    padding: 2px 2px;
-    border-color: transparent;
-    background: none;
-    font-weight: 400;
-    color: var(--muted);
-}
-.act.quiet:hover:not(:disabled) {
-    border-color: transparent;
-    background: none;
     color: var(--ink);
     text-decoration: none;
 }
