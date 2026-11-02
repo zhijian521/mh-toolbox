@@ -32,6 +32,29 @@ test('12 个真实截图的文字按部位拆分，保留负数、重复词条�
     assert.equal(details['玉魄·阳'].jade.chance, 0.5);
     assert.equal(details['玉魄·阴'].extra[1].boost, 18);
 });
+test('标签与数值之间夹了标点也归位：换档复跑出来的那行头盔属性', () => {
+    /*
+     * 真机那张「七彩花环」在 2 倍档下识别成 `魔法+80防御+43`（没有空格）与
+     * `伤害、+48`（多一个顿号）。前者靠 `\s*` 就能过，后者在改之前会让整条词条
+     * 退化成「原有属性」——识别已经对了，不能死在解析上。
+     */
+    const D = domain(),
+        parsed = D.parseEquipmentStats('魔法+80防御+43\n伤害、+48');
+    assert.deepEqual(plain(parsed.rows), [
+        { key: 'mp', value: 80, boost: null },
+        { key: 'defense', value: 43, boost: null },
+        { key: 'damage', value: 48, boost: null },
+    ]);
+    assert.deepEqual(parsed.unknown, []);
+    const detail = D.equipmentDetails({
+        slot: '头盔',
+        level: 80,
+        attributes: '魔法+80防御+43',
+        gems: '锻炼等级 6 镶嵌宝石太阳石',
+    });
+    assert.deepEqual(plain(detail.base.map((row) => row.key)), ['mp', 'defense']);
+    assert.equal(detail.forge, 6);
+});
 test('领域层拒绝错误部位、非法负值、重复双加、互斥特效和三种宝石，数值零有效', () => {
     const D = domain(),
         detail = D.emptyEquipmentDetails();

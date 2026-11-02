@@ -1,5 +1,6 @@
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { planPasses, orphanCount, pickPass } = require('./equipment-ocr-scale.cjs');
 
 /**
  * 装备识别子进程：只做「图片 → 文本」。
@@ -35,6 +36,38 @@ async function initialize() {
     });
 }
 
+/**
+ * 跑一档缩放，产出一份「每框一行」的文本。
+ *
+ * `sharp` 的操作是排队累积的，同一个实例不能连着 resize 两次，所以每档都从原始
+ * buffer 重新开一个。
+ *
+ * @param {Buffer} buffer 原始图片字节
+ * @param {number} width 原图宽
+ * @param {number} scale 缩放倍数
+ */
+async function recognizeAt(buffer, width, scale) {
+    const pixels = await sharp(buffer, { limitInputPixels: 16 * 1024 * 1024 })
+        .resize({ width: Math.max(1, Math.round(width * scale)) })
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+    const { texts } = await ocr.detect({
+        data: pixels.data,
+        width: pixels.info.width,
+        height: pixels.info.height,
+    });
+    const kept = texts.filter((line) => line.text.trim());
+    const lines = kept.map((line) => line.text);
+    return {
+        lines,
+        orphans: orphanCount(lines),
+        confidence: kept.length
+            ? (100 * kept.reduce((sum, line) => sum + line.mean, 0)) / kept.length
+            : 0,
+    };
+}
+
 process.parentPort.on('message', async ({ data }) => {
     try {
         progress(0.05);
@@ -45,29 +78,28 @@ process.parentPort.on('message', async ({ data }) => {
          *
          * 游戏截图常见 2560 宽，原尺寸推理慢且对识别率没有帮助；上限 1600×2600 是
          * 在清晰度与耗时之间试出来的折中，小图不放大（scale 上限 3 是给小截图的）。
+         *
+         * 检测头对缩放相位敏感：同一张小图在 3 倍下可能把「魔法 +80 防御 +43」切成
+         * 两个框、丢掉「魔法」，换 2 倍就完整。所以首档留下断框残段时换一档复跑，
+         * 取更干净的那份——正常图仍然只跑一次。
          */
-        const image = sharp(Buffer.from(data.image), { limitInputPixels: 16 * 1024 * 1024 });
-        const { width, height } = await image.metadata();
-        const scale = Math.min(3, 1600 / width, 2600 / height);
-        const pixels = await image
-            .resize({ width: Math.max(1, Math.round(width * scale)) })
-            .ensureAlpha()
-            .raw()
-            .toBuffer({ resolveWithObject: true });
-        progress(0.4);
-        const { texts } = await ocr.detect({
-            data: pixels.data,
-            width: pixels.info.width,
-            height: pixels.info.height,
-        });
-        const lines = texts.filter((line) => line.text.trim());
+        const buffer = Buffer.from(data.image);
+        const { width, height } = await sharp(buffer, {
+            limitInputPixels: 16 * 1024 * 1024,
+        }).metadata();
+        const scales = planPasses(width, height);
+        let best = null;
+        for (const [index, scale] of scales.entries()) {
+            best = pickPass(best, await recognizeAt(buffer, width, scale));
+            // 一行都没认出来时也值得换一档再试：整张图无文字的情况少见，代价只是慢一倍。
+            if (best.orphans === 0 && best.lines.length) break;
+            if (index === 0 && scales.length > 1) progress(0.6);
+        }
         progress(0.95);
         process.parentPort.postMessage({
             type: 'result',
-            text: lines.map((line) => line.text).join('\n'),
-            confidence: lines.length
-                ? (100 * lines.reduce((sum, line) => sum + line.mean, 0)) / lines.length
-                : 0,
+            text: best.lines.join('\n'),
+            confidence: best.confidence,
         });
     } catch (error) {
         process.parentPort.postMessage({

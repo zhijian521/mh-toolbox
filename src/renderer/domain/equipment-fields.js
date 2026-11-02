@@ -263,12 +263,21 @@ export default function install(D, _U, _gateway, _localStorage) {
                  * 不存在正负号，所以把 `±` 当加号读不会误解任何真实数据。
                  */
                 const value = '([+\\-±]?\\s*\\d+(?:\\.\\d+)?)';
+                /**
+                 * 标签与数值之间可能被塞进一个标点。
+                 *
+                 * 截图识别会把「伤害 +48」读成「伤害、+48」——多出来的顿号让标签与数值
+                 * 断成两截，整条词条就退化成「原有属性」。游戏文本里标签后面只会跟冒号
+                 * 或直接跟数值，所以这几种标点都当分隔符看待没有歧义。
+                 */
+                const sep = '\\s*[:：,、;；]?\\s*';
                 const pattern = new RegExp(
                     '(' +
                         Object.keys(labels)
                             .sort((a, b) => b.length - a.length)
                             .join('|') +
-                        ')\\s*[:：]?\\s*' +
+                        ')' +
+                        sep +
                         value +
                         '(?:\\s*\\[\\s*' +
                         value +
