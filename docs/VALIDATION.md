@@ -1484,3 +1484,22 @@ CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都�
 **验证（13 份文本：12 份真机 + 那张七彩花环）。** 11 份普通装备全部命中自己的部位，最小分差 2（腰带 vs 佩饰），其余 3～12 分；两份玉魄不参与反推（靠名字与「基础属性 / 附加属性」结构判，词条池与灵饰重叠）。把七彩花环的名字换成「测试装备」后仍判为头盔；「防御 +50 / 敏捷 +30」这类两可组合分差只有 1，判空。故意把阈值 2 改成 99，对应用例按预期变红，改回后转绿。门禁 `npm run check` 全绿（152 项，新增 3 条反推用例）；Electron 端到端 `PASS`（文本导入、截图 OCR 两条路径都在内）。
 
 **已知限制：** 只用了词条，没用宝石（黑宝石只在鞋子、光芒石在腰带与衣服……宝石表本身有交叉，加进去要先定权重，这轮没做）。名字与属性冲突时仍以名字为准，不弹确认。
+
+## 安装版识别图片必失败：asar 解包边界（2026-11-02）
+
+现象：本地 `npm run dev` / `npm start` 识别图片一切正常，从 GitHub 下的安装包装上后，一选图片就提示「识别未完成，请重试或裁剪到装备属性区域」。日志（`%APPDATA%\mh-tool-v2\logs\main.log`）里是：
+
+```
+装备识别子进程报告失败：Cannot find package '@techstark/opencv-js'
+  imported from ...\resources\app.asar.unpacked\node_modules\@gutenye\ocr-common\build\backend\splitIntoLineImages.js
+```
+
+**根因是模块解析边界，不是模型或图片。** `asarUnpack` 当时只列了四个包（`@gutenye`、`onnxruntime-node`、`sharp`、`@img`）。被解包的包落在**真实路径**上，Node 从它出发只沿真实目录向上找 `node_modules`，看不到还留在 `app.asar` 里的兄弟包——而 `@gutenye/ocr-common` 的运行时依赖 `@techstark/opencv-js`（分框用的轮廓/clipper 实现）、`js-clipper`、`tiny-invariant` 都不在名单里。开发态所有包都在磁盘上，所以这个问题在源码里永远看不出来。
+
+**影响范围比想象大。** 日志里 08:20（v0.3.0）与 12:46（v0.3.2）是同一条错误，说明 0.2.0 以来的安装版与便携版一直如此，只是本地开发没暴露。
+
+**改法。** `electron-builder.config.cjs` 的 `asarUnpack` 改成 `['node_modules/**/*']`：整个 node_modules 落地，不再要求「手工保证每个被解包包的依赖也在名单里」。代价是约 900 个文件（体积不变），换来新增依赖不用再回来补名单；`.node` 与 onnx 模型本来也必须落地。
+
+**验证（A/B，同一份代码两种配置）。** 各打一个 `--dir`，用探针在 asar 环境里 fork 真实识别子进程（`utilityProcess.fork(<app.asar>/src/main/equipment-ocr-worker.cjs)`，喂 `tests/fixtures/equipment-jade.png`）：旧配置 `opencv 解包=false`，子进程报的正是上面那条 `Cannot find package`；新配置 `opencv 解包=true`，返回 `置信度 97.5`、文本「上古玉魄·阳 / 物理暴击等级+10 / 奇袭法术+0.5% / 灵尘等级2 / 伤害+5[+12] …」，与源码态一致。
+
+**留给以后的教训：** 这类问题只能在装出来的包里复现，`npm test` 与 `npm run dev` 都测不到。以后给 OCR 链路加依赖，别只改 `files`，先想清楚它会不会从解包目录里被 import。

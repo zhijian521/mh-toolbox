@@ -31,17 +31,21 @@ module.exports = {
     /** 安装包用最大压缩：多花一两分钟，NSIS / 便携版能小一成左右。 */
     compression: 'maximum',
     /**
-     * 原生库与模型必须解包。
+     * 整个 node_modules 都解包，不留 asar 里的副本。
      *
-     * `.node` 二进制与 onnx 模型没法从 asar 里 `dlopen`/读取，识别子进程会直接崩；
-     * 这里只解包真正需要的四个包，不像 V1 那样把整个 node_modules 都摊开。
+     * 起因（2026-11-02）：装出来的包识别图片必失败，报
+     * `Cannot find package '@techstark/opencv-js' imported from ...app.asar.unpacked/
+     * node_modules/@gutenye/ocr-common/build/backend/splitIntoLineImages.js`。
+     *
+     * 原因是模块解析的边界：被解包的包是**真实路径**，Node 从它出发只会沿真实目录向上找
+     * `node_modules`，看不到还留在 app.asar 里的兄弟包。只解包 @gutenye / onnxruntime /
+     * sharp / @img 这四个，等于要求「它们的每一个运行时依赖也都在名单里」，漏一个就整条链路
+     * 崩——`@techstark/opencv-js`、`js-clipper`、`tiny-invariant` 就是这么漏的。
+     *
+     * 代价只是文件数（生产依赖解包后约 900 个文件），体积不变，换来的是新增依赖不必再回来
+     * 补名单。`.node` 与 onnx 模型本来也必须落地，这条规则一并覆盖。
      */
-    asarUnpack: [
-        'node_modules/@gutenye/**/*',
-        'node_modules/onnxruntime-node/**/*',
-        'node_modules/sharp/**/*',
-        'node_modules/@img/**/*',
-    ],
+    asarUnpack: ['node_modules/**/*'],
     win: {
         icon: 'build/icon.ico',
         target: [
