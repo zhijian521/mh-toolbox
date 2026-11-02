@@ -318,6 +318,8 @@ interface Domain {
     equipmentRule: (slot: string) => EquipmentRule;
     equipmentStatText: (row: EquipmentRow) => string;
     parseEquipmentStats: (text: string) => { rows: EquipmentRow[]; unknown: string[] };
+    /** 按属性词条反推部位；margin 是次优与最优的分差，调用方据此决定信不信。 */
+    inferEquipmentSlot: (text: string) => { slot: string; score: number; margin: number } | null;
     equipmentDetails: (eq: any) => EquipmentDetail;
     emptyEquipmentDetails: () => EquipmentDetail;
     validateEquipmentDetails: (slot: string, level: any, detail: EquipmentDetail) => void;

@@ -122,3 +122,42 @@ test('结构化批量导入幂等，保存失败整体回滚，重复词条和�
     assert.equal(restored.equipment.find((eq) => eq.slot === '戒指').details.extra.length, 3);
     assert.equal(restored.equipment[0].ocrText, samples[0].text);
 });
+test('按属性词条反推部位：11 份真机文本各自指向自己的部位，分差都不低于 2', () => {
+    /*
+     * 玉魄靠名字与「基础属性/附加属性」的结构判，不参与反推（它的词条池与灵饰重叠），
+     * 所以这里跳过两份玉魄样本。
+     */
+    const D = domain();
+    for (const sample of samples) {
+        if (sample.slot.startsWith('玉魄')) continue;
+        const guess = D.inferEquipmentSlot(sample.text);
+        assert.ok(guess, sample.file);
+        assert.equal(guess.slot, sample.slot, sample.file);
+        assert.ok(guess.margin >= 2, `${sample.file} 分差只有 ${guess.margin}`);
+    }
+});
+test('名字认不出时靠属性认部位：七彩花环换成「测试装备」照样是头盔', () => {
+    const D = domain();
+    const text = [
+        '测试装备',
+        '装备条件 等级80',
+        '装备角色 女',
+        '等级 80',
+        '魔法+80防御+43',
+        '耐久度661',
+        '锻炼等级 6 镶嵌宝石太阳石',
+        '伤害、+48',
+    ].join('\n');
+    const draft = D.parseEquipmentText(text);
+    assert.equal(draft.slot, '头盔', '魔法只在头盔的基础属性里');
+    assert.equal(draft.level, 80);
+    assert.equal(draft.attributes.split('\n').length, 2);
+});
+test('两个部位都解释得通时留空，不拿猜测替用户决定', () => {
+    const D = domain();
+    // 防御 + 敏捷：既是鞋子的基础属性，也可能是衣服的基础属性加一条单加。
+    const guess = D.inferEquipmentSlot('测试装备\n防御 +50\n敏捷 +30');
+    assert.ok(guess.margin < 2, `分差 ${guess.margin} 不该算作确定`);
+    assert.equal(D.parseEquipmentText('测试装备\n防御 +50\n敏捷 +30').slot, '');
+    assert.equal(D.inferEquipmentSlot('随便一行没有数字'), null, '一个词条都没有时不猜');
+});

@@ -220,18 +220,18 @@ export default function install(D, _U, _gateway, _localStorage) {
                     if (!draft.slot && /(?:靴|履|鞋)$/.test(draft.name)) draft.slot = '鞋子';
                     if (!draft.slot && /(?:剑|刀|枪|戟|斧|钺|锤|鞭|爪|扇|弓|杖)$/.test(draft.name))
                         draft.slot = '武器';
-                    if (
-                        !draft.slot &&
-                        /伤害\s*[:+]?\s*\d/.test(joined) &&
-                        /命中\s*[:+]?\s*\d/.test(joined)
-                    )
-                        draft.slot = '武器';
                     if (!draft.slot && /^(?:蝉翼金丝甲)$/.test(draft.name)) draft.slot = '衣服';
-                    if (
-                        !draft.slot &&
-                        /(?:装备角色|装备条件)[\s\S]*(?:防御)[\s\S]*魔法/.test(joined)
-                    )
-                        draft.slot = '头盔';
+                    /*
+                     * 最后一道：名字认不出时按属性词条组合反推。
+                     *
+                     * 游戏 tooltip 不打印「部位」这一行，但各部位的基础属性互不相同（魔法只有
+                     * 头盔、灵力只有项链、封印命中只有手镯……），词条组合本身就是一段指纹。
+                     * 分差不到 2 分说明有两三个部位都解释得通，留空让用户在弹窗里选。
+                     */
+                    if (!draft.slot) {
+                        const guess = this.inferEquipmentSlot(joined);
+                        if (guess && guess.margin >= 2) draft.slot = guess.slot;
+                    }
                 }
                 if (this.isJade(draft.slot) && !draft.jadeBase && attributes.length) {
                     const rows = attributes.filter(

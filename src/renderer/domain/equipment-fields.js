@@ -215,6 +215,55 @@ export default function install(D, _U, _gateway, _localStorage) {
                     }[slot] || [];
                 return rule;
             },
+            /**
+             * 按属性词条反推部位。
+             *
+             * 游戏 tooltip 不打印「部位」这一行，能用的证据只有装备名与属性组合。各部位的
+             * 基础属性互不相同（魔法只在头盔、灵力只在项链、封印命中只在手镯……），所以
+             * 词条组合本身就是一段指纹：拿每个部位去「解释」这些词条，能覆盖的多、覆盖不
+             * 到的少，就是它。
+             *
+             * 打分口径：基础属性 3 分（定义性词条）、附加 2 分、额外 1 分；首行落在基础属性
+             * 里再 +2（tooltip 里基础属性永远排第一）；解释不了的字条每个 −4，一票否决的重量。
+             *
+             * 返回最优与次优的分差 `margin`，由调用方决定信不信：连基础属性都对不上的部位
+             * 不该被猜出来，猜错一次比让用户点一下更贵。
+             *
+             * @param {string} text 原始属性文本（可多行）
+             * @returns {{ slot: string, score: number, margin: number } | null}
+             */
+            inferEquipmentSlot(text) {
+                const rows = this.parseEquipmentStats(text).rows;
+                const keys = [...new Set(rows.map((row) => row.key))];
+                if (!keys.length) return null;
+                const first = rows[0].key;
+                /** @param {string} slot */
+                const rank = (slot) => {
+                    const rule = this.equipmentRule(slot);
+                    const base = new Set(rule.base);
+                    const extra = new Set(rule.extra);
+                    const bonus = new Set(rule.bonus);
+                    let score = base.has(first) ? 2 : 0;
+                    for (const key of keys) {
+                        if (base.has(key)) score += 3;
+                        else if (extra.has(key)) score += 2;
+                        else if (bonus.has(key)) score += 1;
+                        else score -= 4;
+                    }
+                    return { slot, score };
+                };
+                const ranked = [
+                    ...this.equipmentGroups.gear.slots,
+                    ...this.equipmentGroups.accessory.slots,
+                ]
+                    .map(rank)
+                    .sort((a, b) => b.score - a.score);
+                return {
+                    slot: ranked[0].slot,
+                    score: ranked[0].score,
+                    margin: ranked[0].score - ranked[1].score,
+                };
+            },
             emptyEquipmentDetails() {
                 return {
                     version: 1,
