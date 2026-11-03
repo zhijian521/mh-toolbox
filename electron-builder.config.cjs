@@ -3,6 +3,16 @@ module.exports = {
     productName: '梦幻养老助手 V2',
     electronDist: 'node_modules/electron/dist',
     directories: { output: 'release', buildResources: 'build' },
+    /**
+     * VC++ 运行库要放到 `onnxruntime_binding.node` **同目录**，不是安装目录根部。
+     *
+     * `onnxruntime.dll` 与 `onnxruntime_binding.node` 都导入 VCRUNTIME140 / MSVCP140；
+     * Electron 不带、Windows 只自带 UCRT，干净系统上会「应用能开、一识别图片就失败」。
+     * 实测（把同目录的 vcruntime140.dll 换成垃圾文件 → 加载立刻报 not a valid Win32
+     * application；换成根目录则照常工作）说明 Windows 解析依赖时先看 .node 所在目录，
+     * 根目录那份根本不会被用上。这一步由 `scripts/after-pack.cjs` 完成。
+     */
+    afterPack: 'scripts/after-pack.cjs',
     files: [
         'dist/renderer/**/*',
         'src/main/**/*',

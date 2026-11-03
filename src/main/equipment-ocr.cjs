@@ -1,5 +1,6 @@
 const { app, nativeImage, utilityProcess } = require('electron');
 const path = require('node:path');
+const { explainOcrError } = require('./ocr-error.cjs');
 
 /**
  * 装备截图识别（本地 OCR）。
@@ -95,8 +96,9 @@ function createEquipmentOcr({ logger }) {
                 if (!message.text.trim()) finish('未识别到文字，请裁剪到装备文字区域后重试');
                 else finish(null, { text: message.text, confidence: message.confidence });
             } else if (message.type === 'error') {
+                // 原始错误留给日志，用户看到的是一句能照做的话（缺运行库 vs 缺包 vs 图的问题）。
                 logger.warn('装备识别子进程报告失败：' + String(message.error || '').slice(0, 400));
-                finish('识别未完成，请重试或裁剪到装备属性区域');
+                finish(explainOcrError(message.error));
             }
         });
         current.on('exit', () => {

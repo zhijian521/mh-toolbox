@@ -1503,3 +1503,19 @@ CI 与提交规范：节点版本取自 `.nvmrc`（22.22.2），两个 job 都�
 **验证（A/B，同一份代码两种配置）。** 各打一个 `--dir`，用探针在 asar 环境里 fork 真实识别子进程（`utilityProcess.fork(<app.asar>/src/main/equipment-ocr-worker.cjs)`，喂 `tests/fixtures/equipment-jade.png`）：旧配置 `opencv 解包=false`，子进程报的正是上面那条 `Cannot find package`；新配置 `opencv 解包=true`，返回 `置信度 97.5`、文本「上古玉魄·阳 / 物理暴击等级+10 / 奇袭法术+0.5% / 灵尘等级2 / 伤害+5[+12] …」，与源码态一致。
 
 **留给以后的教训：** 这类问题只能在装出来的包里复现，`npm test` 与 `npm run dev` 都测不到。以后给 OCR 链路加依赖，别只改 `files`，先想清楚它会不会从解包目录里被 import。
+
+## 别人的电脑识别不出来：缺 VC++ 运行库（2026-11-03）
+
+现象：0.3.3 发给朋友，应用能开、其它功能都正常，一选图片就失败；作者自己两台机器（开发机 + 另一台）都正常。
+
+**先看依赖，不要先猜图片。** `onnxruntime.dll` 与 `onnxruntime_binding.node` 的导入表里都有 `VCRUNTIME140.dll`、`VCRUNTIME140_1.dll`、`MSVCP140.dll`、`MSVCP140_1.dll`；Electron 的 `dist/` 里没有这四个，Windows 10/11 只自带 UCRT（`ucrtbase.dll` + `api-ms-win-crt-*`）。而 `@img/sharp-win32-x64` 的 libvips 不依赖它们——所以症状恰好是「图片能选、进度条会走、最后一步加载推理引擎时崩」，而不是应用打不开。开发机装过 Visual Studio / Node 编译工具，`System32` 里一直有这四个文件，因此自测永远正常。
+
+**放哪儿比放不放更关键。** 第一版通过 `extraFiles` 放到安装目录根部（与 exe 同级），打包检查文件都在——但把根部那份 `vcruntime140.dll` 换成垃圾文件后，识别照常，说明**根本没被用上**。Windows 解析 DLL 依赖时先看**加载它的那个模块所在目录**（`onnxruntime_binding.node` 自己那层），不是 exe 目录。改成放到同目录后立刻复现失败，问题才被证实。
+
+**改法。** `build/vcrt/` 收四个运行库（14.50.35719.0，来源与许可写在同目录 README）；新增 `scripts/after-pack.cjs`，打包后把它们复制到 `onnxruntime_binding.node` 同目录。目录名不写死 `napi-v6`（ABI 版本会变），改成扫 `bin/napi-<abi>/win32/x64`，一个都找不到就**抛错中断打包**，避免再打出一个「装得上、识别必崩」的包。
+
+**顺带把错误文案分诊。** 新增 `src/main/ocr-error.cjs`：`找不到指定的模块 / ERR_DLOPEN_FAILED / not a valid Win32 application` → 「识别组件缺少运行库，请安装 Microsoft Visual C++ 2015-2022 运行库（x64）后重试」；`Cannot find package` → 「识别组件不完整，请重新安装本程序」；其余仍用原来的通用文案。原始错误照旧进 `main.log`。之前那句「识别未完成，请重试或裁剪到装备属性区域」把缺运行库说成了裁剪问题，这次排查被它带偏过一轮。
+
+**验证（三次对拍，针对「是否真的加载了包内那份」）。** ① 包内运行库就位 → 识别成功、置信度 97.5；② 把同目录的 `vcruntime140.dll` 覆写成垃圾 → 立刻 `onnxruntime_binding.node is not a valid Win32 application`；③ 还原 → 恢复成功。门禁 `npm run check` 全绿（155 项，新增 3 条文案用例）。
+
+**已知限制。** 本机 `System32` 里一直有这四个运行库，没法真正模拟「干净系统」，所以结论建立在导入表 + 目录优先级实验上。若朋友那边日志显示的是别的错误（例如 `识别超时`），还要回头按日志再查。
